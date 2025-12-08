@@ -276,7 +276,7 @@ export const GridView = ({
                 <h3 className="text-lg font-medium text-gray-900 mb-2">No records yet</h3>
                 <p className="text-gray-500 mb-4">Get started by adding your first record</p>
                 <button
-                  onClick={onAddRow}
+                  onClick={() => onAddRow()}
                   className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                 >
                   <Plus size={16} />
@@ -298,7 +298,7 @@ export const GridView = ({
                 </div>
                 <div className="flex-1 min-w-0">
                   <button
-                    onClick={onAddRow}
+                    onClick={() => onAddRow()}
                     className="w-full h-12 flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 transition-colors"
                   >
                     <Plus size={16} />
