@@ -1,5 +1,4 @@
 import { Plus } from "lucide-react";
-import Link from "next/link";
 import { BaseTile } from "../BaseTile";
 import { BaseRow } from "../BaseRow";
 import { EmptyState } from "../EmptyState";

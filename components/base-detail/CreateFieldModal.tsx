@@ -158,13 +158,6 @@ export const CreateFieldModal = ({ isOpen, onClose, onCreateField }: CreateField
     setNewOptionColor(predefinedColors[0].value);
   };
 
-  const handleEditOption = (optionId: string, newLabel: string) => {
-    setOptions(prev => prev.map(option => 
-      option.id === optionId ? { ...option, label: newLabel } : option
-    ));
-    setEditingOption(null);
-  };
-
   const handleUpdateOptionColor = (optionId: string, color: string) => {
     setOptions(prev => prev.map(option => 
       option.id === optionId ? { ...option, color } : option

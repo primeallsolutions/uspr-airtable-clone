@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { BaseDetailService } from '../services/base-detail-service';
 import type { 
@@ -9,7 +9,6 @@ import type {
   Automation,
   CreateTableData,
   CreateFieldData,
-  UpdateCellData,
   SavingCell
 } from '../types/base-detail';
 
@@ -24,6 +23,8 @@ export const useBaseDetail = (baseId: string | null) => {
   const [records, setRecords] = useState<RecordRow[]>([]);
   const [automations, setAutomations] = useState<Automation[]>([]);
   const [allFields, setAllFields] = useState<FieldRow[]>([]);
+  const fieldsCache = useRef<Map<string, FieldRow[]>>(new Map());
+  const recordsCache = useRef<Map<string, RecordRow[]>>(new Map());
   
   // Loading states
   const [loading, setLoading] = useState(true);
@@ -50,8 +51,8 @@ export const useBaseDetail = (baseId: string | null) => {
       setTables(tablesData);
       
       // Select first table if available and no table is currently selected
-      if (tablesData.length > 0 && !selectedTableId) {
-        setSelectedTableId(tablesData[0].id);
+      if (tablesData.length > 0) {
+        setSelectedTableId((current) => current ?? tablesData[0].id);
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load base';
@@ -66,12 +67,19 @@ export const useBaseDetail = (baseId: string | null) => {
   const loadFields = useCallback(async (tableId: string) => {
     try {
       setError(null);
+      // If cached, show immediately for snappy tab switch, then refresh from server
+      const cached = fieldsCache.current.get(tableId);
+      if (cached) {
+        setFields(cached);
+      }
       
       // Check if the selected table is a master list
       const selectedTable = tables.find(t => t.id === tableId);
       if (selectedTable?.is_master_list && baseId) {
         // If it's a master list, load all fields from all tables in the base
         const fieldsData = await BaseDetailService.getAllFields(baseId);
+        const tableMetaMap = new Map(tables.map(t => [t.id, t]));
+        const masterlistTableId = tables.find(t => t.is_master_list)?.id || null;
         
         // Load all records to check which fields have data
         const allRecords = await BaseDetailService.getAllRecordsFromBase(baseId);
@@ -89,35 +97,61 @@ export const useBaseDetail = (baseId: string | null) => {
         }
         
         // Deduplicate fields by name - prioritize fields that have data
-        // When multiple tables have fields with the same name, keep the one with data
+        // When multiple tables have fields with the same name, prefer masterlist, then data, then order_index
         const fieldMapByName = new Map<string, FieldRow>();
         
         for (const field of fieldsData) {
           const normalizedName = field.name.toLowerCase();
           const existingField = fieldMapByName.get(normalizedName);
+          const existingTableMeta = existingField ? tableMetaMap.get(existingField.table_id) : undefined;
+          const currentTableMeta = tableMetaMap.get(field.table_id);
+          const existingPriority = existingTableMeta?.is_master_list ? 0 : 1;
+          const currentPriority = currentTableMeta?.is_master_list ? 0 : 1;
           
           if (!existingField) {
             // First occurrence - always keep it
             fieldMapByName.set(normalizedName, field);
           } else {
-            // Duplicate field name - keep the one with data
+            // Duplicate field name - prefer masterlist, then data, then stable order_index/name
             const existingHasData = fieldsWithData.has(existingField.id);
             const currentHasData = fieldsWithData.has(field.id);
             
-            if (currentHasData && !existingHasData) {
-              // Current field has data, existing doesn't - replace it
+            if (currentPriority < existingPriority) {
               fieldMapByName.set(normalizedName, field);
+            } else if (currentPriority === existingPriority) {
+              if (currentHasData && !existingHasData) {
+                fieldMapByName.set(normalizedName, field);
+              } else if (currentHasData === existingHasData) {
+                const existingOrder = typeof existingField.order_index === 'number' ? existingField.order_index : Number.MAX_SAFE_INTEGER;
+                const currentOrder = typeof field.order_index === 'number' ? field.order_index : Number.MAX_SAFE_INTEGER;
+                if (currentOrder < existingOrder) {
+                  fieldMapByName.set(normalizedName, field);
+                }
+              }
+              // otherwise keep existing
             }
-            // Otherwise, keep the existing field (either both have data or existing has data)
+            // If currentPriority > existingPriority, keep existing masterlist-first choice
           }
         }
         
-        const deduplicatedFields = Array.from(fieldMapByName.values());
+        const deduplicatedFields = Array.from(fieldMapByName.values()).sort((a, b) => {
+          const aMeta = tableMetaMap.get(a.table_id);
+          const bMeta = tableMetaMap.get(b.table_id);
+          const aPriority = aMeta?.is_master_list ? 0 : 1;
+          const bPriority = bMeta?.is_master_list ? 0 : 1;
+          if (aPriority !== bPriority) return aPriority - bPriority;
+          const aOrder = typeof a.order_index === 'number' ? a.order_index : 0;
+          const bOrder = typeof b.order_index === 'number' ? b.order_index : 0;
+          if (aOrder !== bOrder) return aOrder - bOrder;
+          return a.name.localeCompare(b.name);
+        });
         
+        fieldsCache.current.set(tableId, deduplicatedFields);
         setFields(deduplicatedFields);
       } else {
         // Otherwise, load fields only from the selected table
         const fieldsData = await BaseDetailService.getFields(tableId);
+        fieldsCache.current.set(tableId, fieldsData);
         setFields(fieldsData);
       }
     } catch (err) {
@@ -132,16 +166,21 @@ export const useBaseDetail = (baseId: string | null) => {
     try {
       setLoadingRecords(true);
       setError(null);
+      const cached = recordsCache.current.get(tableId);
+      if (cached) {
+        setRecords(cached);
+      }
       
       // Check if the selected table is a master list
       const selectedTable = tables.find(t => t.id === tableId);
       if (selectedTable?.is_master_list && baseId) {
-        // If it's a master list, load all records from all tables in the base
-        const recordsData = await BaseDetailService.getAllRecordsFromBase(baseId);
+        const recordsData = await BaseDetailService.getRecords(selectedTable.id);
+        recordsCache.current.set(tableId, recordsData);
         setRecords(recordsData);
       } else {
         // Otherwise, load records only from the selected table
         const recordsData = await BaseDetailService.getRecords(tableId);
+        recordsCache.current.set(tableId, recordsData);
         setRecords(recordsData);
       }
     } catch (err) {
@@ -203,7 +242,7 @@ export const useBaseDetail = (baseId: string | null) => {
     
     try {
       setError(null);
-      await BaseDetailService.deleteBase(base.id);
+      await BaseDetailService.deleteBaseCascade(base.id);
       router.push('/dashboard');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to delete base';
@@ -261,7 +300,11 @@ export const useBaseDetail = (baseId: string | null) => {
     try {
       setError(null);
       const newField = await BaseDetailService.createField(fieldData);
-      setFields(prev => [...prev, newField]);
+      setFields(prev => {
+        const next = [...prev, newField];
+        fieldsCache.current.set(fieldData.table_id, next);
+        return next;
+      });
       return newField;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to create field';
@@ -274,7 +317,14 @@ export const useBaseDetail = (baseId: string | null) => {
     try {
       setError(null);
       await BaseDetailService.updateField(fieldId, updates);
-      setFields(prev => prev.map(f => f.id === fieldId ? { ...f, ...updates } : f));
+      setFields(prev => {
+        const next = prev.map(f => f.id === fieldId ? { ...f, ...updates } : f);
+        if (next.length && next[0].table_id) {
+          const tableId = next[0].table_id;
+          fieldsCache.current.set(tableId, next);
+        }
+        return next;
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to update field';
       setError(message);
@@ -286,7 +336,14 @@ export const useBaseDetail = (baseId: string | null) => {
     try {
       setError(null);
       await BaseDetailService.deleteField(fieldId);
-      setFields(prev => prev.filter(f => f.id !== fieldId));
+      setFields(prev => {
+        const next = prev.filter(f => f.id !== fieldId);
+        if (next.length && next[0].table_id) {
+          const tableId = next[0].table_id;
+          fieldsCache.current.set(tableId, next);
+        }
+        return next;
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to delete field';
       setError(message);
@@ -301,6 +358,7 @@ export const useBaseDetail = (baseId: string | null) => {
       // After deletion, reload fields for the specific table only
       // This ensures we get the correct fields even if it's a masterlist
       const fieldsData = await BaseDetailService.getFields(tableId);
+      fieldsCache.current.set(tableId, fieldsData);
       setFields(fieldsData);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to delete all fields';
@@ -316,7 +374,11 @@ export const useBaseDetail = (baseId: string | null) => {
     try {
       setError(null);
       const newRecord = await BaseDetailService.createRecord(selectedTableId, values);
-      setRecords(prev => [...prev, newRecord]);
+      setRecords(prev => {
+        const next = [...prev, newRecord];
+        recordsCache.current.set(selectedTableId, next);
+        return next;
+      });
       return newRecord;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to create record';
@@ -329,38 +391,56 @@ export const useBaseDetail = (baseId: string | null) => {
     try {
       setError(null);
       await BaseDetailService.updateRecord(recordId, values);
-      setRecords(prev => prev.map(r => r.id === recordId ? { ...r, values } : r));
+      setRecords(prev => {
+        const next = prev.map(r => r.id === recordId ? { ...r, values } : r);
+        if (selectedTableId) {
+          recordsCache.current.set(selectedTableId, next);
+        }
+        return next;
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to update record';
       setError(message);
       throw err;
     }
-  }, []);
+  }, [selectedTableId]);
 
   const deleteRecord = useCallback(async (recordId: string) => {
     try {
       setError(null);
       await BaseDetailService.deleteRecord(recordId);
-      setRecords(prev => prev.filter(r => r.id !== recordId));
+      setRecords(prev => {
+        const next = prev.filter(r => r.id !== recordId);
+        if (selectedTableId) {
+          recordsCache.current.set(selectedTableId, next);
+        }
+        return next;
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to delete record';
       setError(message);
       throw err;
     }
-  }, []);
+  }, [selectedTableId]);
 
   const bulkDeleteRecords = useCallback(async (recordIds: string[]) => {
     try {
       setError(null);
       // Delete all records in parallel
       await Promise.all(recordIds.map(id => BaseDetailService.deleteRecord(id)));
-      setRecords(prev => prev.filter(r => !recordIds.includes(r.id)));
+      setRecords(prev => {
+        const next = prev.filter(r => !recordIds.includes(r.id));
+        if (selectedTableId) {
+          recordsCache.current.set(selectedTableId, next);
+        }
+        return next;
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to delete records';
       setError(message);
       throw err;
     }
-  }, []);
+  }, [selectedTableId]);
 
   const updateCell = useCallback(async (recordId: string, fieldId: string, value: unknown) => {
     try {
@@ -370,11 +450,17 @@ export const useBaseDetail = (baseId: string | null) => {
       await BaseDetailService.updateCell(recordId, fieldId, value);
       
       // Update local state
-      setRecords(prev => prev.map(record => 
-        record.id === recordId 
-          ? { ...record, values: { ...record.values, [fieldId]: value } }
-          : record
-      ));
+      setRecords(prev => {
+        const next = prev.map(record => 
+          record.id === recordId 
+            ? { ...record, values: { ...record.values, [fieldId]: value } }
+            : record
+        );
+        if (selectedTableId) {
+          recordsCache.current.set(selectedTableId, next);
+        }
+        return next;
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to update cell';
       setError(message);
@@ -382,7 +468,7 @@ export const useBaseDetail = (baseId: string | null) => {
     } finally {
       setSavingCell(null);
     }
-  }, []);
+  }, [selectedTableId]);
 
   // Automation operations
   const createAutomation = useCallback(async (automation: Omit<Automation, 'id' | 'created_at'>) => {

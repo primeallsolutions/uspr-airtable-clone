@@ -4,35 +4,95 @@ import type { Automation } from '../types/base-detail';
 import { BaseDetailService } from './base-detail-service';
 
 export class BaseService {
+  /**
+   * Build an access filter for bases limited to the current user:
+   * - Bases the user owns
+   * - Bases where the user has a base_memberships entry
+   * - Bases that belong to workspaces where the user is a workspace member
+   *
+   * Returns null if the user is not authenticated.
+   */
+  private static async getBaseAccessFilter(): Promise<string | null> {
+    const { data: userResp, error: userError } = await supabase.auth.getUser();
+    if (userError || !userResp.user?.id) {
+      return null;
+    }
+    const uid = userResp.user.id;
+
+    // Collect base_ids from base_memberships
+    const { data: memberships, error: membershipError } = await supabase
+      .from('base_memberships')
+      .select('base_id')
+      .eq('user_id', uid);
+
+    if (membershipError) {
+      throw membershipError;
+    }
+
+    // Collect workspace_ids from workspace_memberships
+    const { data: workspaceMemberships, error: workspaceMembershipError } = await supabase
+      .from('workspace_memberships')
+      .select('workspace_id')
+      .eq('user_id', uid);
+
+    if (workspaceMembershipError) {
+      throw workspaceMembershipError;
+    }
+
+    const baseIds = (memberships ?? []).map((m) => m.base_id).filter(Boolean);
+    const workspaceIds = (workspaceMemberships ?? []).map((m) => m.workspace_id).filter(Boolean);
+    const filters = [`owner.eq.${uid}`];
+    if (workspaceIds.length > 0) {
+      filters.push(`workspace_id.in.(${workspaceIds.join(',')})`);
+    }
+    if (baseIds.length > 0) {
+      filters.push(`id.in.(${baseIds.join(',')})`);
+    }
+
+    return filters.length > 0 ? filters.join(',') : null;
+  }
+
   static async getRecentBases(limit = 12): Promise<BaseRecord[]> {
+    const accessFilter = await this.getBaseAccessFilter();
+    if (!accessFilter) return [];
+
     const { data, error } = await supabase
       .from("bases")
       .select("id, name, description, created_at, last_opened_at, is_starred")
+      .or(accessFilter)
       .order("last_opened_at", { ascending: false, nullsFirst: false })
       .limit(limit);
-    
+
     if (error) throw error;
     return (data ?? []) as BaseRecord[];
   }
 
   static async getWorkspaceBases(workspaceId: string): Promise<BaseRecord[]> {
+    const accessFilter = await this.getBaseAccessFilter();
+    if (!accessFilter) return [];
+
     const { data, error } = await supabase
       .from('bases')
       .select('id, name, description, created_at, last_opened_at, is_starred')
       .eq('workspace_id', workspaceId)
+      .or(accessFilter)
       .order('last_opened_at', { ascending: false, nullsFirst: false });
-    
+
     if (error) throw error;
     return (data ?? []) as BaseRecord[];
   }
 
   static async getStarredBases(): Promise<BaseRecord[]> {
+    const accessFilter = await this.getBaseAccessFilter();
+    if (!accessFilter) return [];
+
     const { data, error } = await supabase
       .from('bases')
       .select('id, name, description, created_at, last_opened_at, is_starred')
       .eq('is_starred', true)
+      .or(accessFilter)
       .order('last_opened_at', { ascending: false, nullsFirst: false });
-    
+
     if (error) throw error;
     return (data ?? []) as BaseRecord[];
   }
@@ -157,12 +217,7 @@ export class BaseService {
   }
 
   static async deleteBase(baseId: string): Promise<void> {
-    const { error } = await supabase
-      .from("bases")
-      .delete()
-      .eq("id", baseId);
-
-    if (error) throw error;
+    await BaseDetailService.deleteBaseCascade(baseId);
   }
 
   static async duplicateBase(baseId: string): Promise<string> {
@@ -268,7 +323,7 @@ export class BaseService {
     try {
       allAutomations = await BaseDetailService.getAutomations(baseId);
     } catch (error) {
-      console.warn(`No automations found for base ${baseId}`);
+      console.warn(`No automations found for base ${baseId}`, error);
     }
 
     // Create new automations with updated references

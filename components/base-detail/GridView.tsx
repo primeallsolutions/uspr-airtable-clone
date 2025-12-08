@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useRef } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { TableHeader } from "./TableHeader";
 import { TableRow } from "./TableRow";
@@ -17,7 +17,7 @@ interface GridViewProps {
   onUpdateCell: (recordId: string, fieldId: string, value: unknown) => void;
   onDeleteRow: (recordId: string) => void;
   onBulkDelete: (recordIds: string[]) => void;
-  onAddRow: () => void;
+  onAddRow: (values?: Record<string, unknown>) => void | Promise<void>;
   onAddField: () => void;
   onFieldContextMenu: (e: React.MouseEvent, field: FieldRow) => void;
   onRowContextMenu: (e: React.MouseEvent, record: RecordRow) => void;
@@ -50,10 +50,34 @@ export const GridView = ({
   colorAssignments = {}
 }: GridViewProps) => {
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
+  const orderRef = useRef<Map<string, number>>(new Map());
+
+  // Preserve stable row ordering based on first appearance to avoid jumpiness after edits
+  const displayRecords = useMemo(() => {
+    const order = orderRef.current;
+    const idSet = new Set(records.map(r => r.id));
+    // Clean up removed ids
+    for (const key of Array.from(order.keys())) {
+      if (!idSet.has(key)) {
+        order.delete(key);
+      }
+    }
+    // Assign order to new records
+    for (const rec of records) {
+      if (!order.has(rec.id)) {
+        order.set(rec.id, order.size);
+      }
+    }
+    return [...records].sort((a, b) => {
+      const aIdx = order.get(a.id) ?? 0;
+      const bIdx = order.get(b.id) ?? 0;
+      return aIdx - bIdx;
+    });
+  }, [records]);
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedRows(new Set(records.map(r => r.id)));
+      setSelectedRows(new Set(displayRecords.map(r => r.id)));
     } else {
       setSelectedRows(new Set());
     }
@@ -79,8 +103,8 @@ export const GridView = ({
     }
   };
 
-  const allSelected = records.length > 0 && selectedRows.size === records.length;
-  const someSelected = selectedRows.size > 0 && selectedRows.size < records.length;
+  const allSelected = displayRecords.length > 0 && selectedRows.size === displayRecords.length;
+  const someSelected = selectedRows.size > 0 && selectedRows.size < displayRecords.length;
 
   type GroupSection = {
     id: string;
@@ -132,8 +156,8 @@ export const GridView = ({
         }));
     };
 
-    return buildSections(records, validIds);
-  }, [records, groupFieldIds, allFields, fields]);
+    return buildSections(displayRecords, validIds);
+  }, [displayRecords, groupFieldIds, allFields, fields]);
 
   let rowCounter = 0;
 
@@ -183,11 +207,12 @@ export const GridView = ({
 
   const rowContent = groupedSections
     ? renderGroupSections(groupedSections)
-    : records.map((record, index) => (
+    : displayRecords.map((record, index) => (
         <TableRow
           key={record.id}
           record={record}
           fields={fields}
+          allFields={allFields} // Pass all fields for masterlist field matching
           tables={tables}
           selectedTableId={selectedTableId}
           rowIndex={index}
@@ -261,23 +286,7 @@ export const GridView = ({
             </div>
           ) : (
             <>
-              {records.map((record, index) => (
-                <TableRow
-                  key={record.id}
-                  record={record}
-                  fields={fields}
-                  allFields={allFields} // Pass all fields for masterlist field matching
-                  tables={tables}
-                  selectedTableId={selectedTableId}
-                  rowIndex={index}
-                  savingCell={savingCell}
-                  isSelected={selectedRows.has(record.id)}
-                  onUpdateCell={onUpdateCell}
-                  onDeleteRow={onDeleteRow}
-                  onRowContextMenu={onRowContextMenu}
-                  onSelectRow={handleSelectRow}
-                />
-              ))}
+              {rowContent}
               
               {/* Add Row button spanning entire row */}
               <div className="flex border-b border-gray-200 hover:bg-gray-50">

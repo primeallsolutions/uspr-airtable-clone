@@ -1,4 +1,4 @@
-import { ChevronDown, Plus, MoreVertical, Minus } from "lucide-react";
+import { ChevronDown, Plus, MoreVertical } from "lucide-react";
 import type { FieldRow, SortDirection } from "@/lib/types/base-detail";
 
 interface TableHeaderProps {
@@ -27,7 +27,7 @@ export const TableHeader = ({
   return (
     <div className="flex border-b border-gray-200 bg-gray-50 min-w-max">
       {/* Checkbox column */}
-      <div className="w-10 flex-shrink-0 border-r border-gray-200 bg-gray-100 flex items-center justify-start pl-3">
+      <div className="w-10 flex-shrink-0 border-r border-gray-200 bg-white flex items-center justify-start pl-3 sticky left-0 z-30">
         <input
           type="checkbox"
           checked={allSelected}
@@ -43,17 +43,21 @@ export const TableHeader = ({
       </div>
       
       {/* Row number column */}
-      <div className="w-12 flex-shrink-0 border-r border-gray-200 bg-gray-100 flex items-center justify-center">
+      <div className="w-12 flex-shrink-0 border-r border-gray-200 bg-white flex items-center justify-center sticky left-10 z-30">
         <span className="text-xs text-gray-500 font-medium">#</span>
       </div>
       
       {/* Field columns */}
-      {fields.map((field) => (
-        <div
-          key={field.id}
-          className="flex-1 min-w-[150px] max-w-[300px] border-r border-gray-200 bg-gray-50 group relative"
-        >
-          <div className="flex items-center justify-between p-3 min-w-0">
+      {fields.map((field, idx) => {
+        const isSticky = idx === 0; // keep first data column visible
+        const leftOffset = idx === 0 ? '5.5rem' : undefined; // 10 + 12 widths
+        return (
+          <div
+            key={field.id}
+            className={`flex-1 min-w-[150px] max-w-[300px] border-r border-gray-200 bg-gray-50 group relative ${isSticky ? 'sticky z-20 bg-white shadow-[4px_0_6px_-4px_rgba(0,0,0,0.1)]' : ''}`}
+            style={isSticky ? { left: leftOffset } : undefined}
+          >
+            <div className="flex items-center justify-between p-3 min-w-0">
             <button
               onClick={() => onSort(field.id)}
               className="flex items-center gap-2 hover:text-blue-600 transition-colors min-w-0 flex-1"
@@ -79,8 +83,9 @@ export const TableHeader = ({
               <MoreVertical size={14} />
             </button>
           </div>
-        </div>
-      ))}
+          </div>
+        );
+      })}
       
       {/* Add field column */}
       <div className="w-32 flex-shrink-0 bg-gray-50">

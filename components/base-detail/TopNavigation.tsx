@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, Plus, MoreVertical, Zap, Share2, Rocket, Crown, Edit, Trash2, ArrowLeft } from "lucide-react";
+import { MoreVertical, Zap, Crown, Edit, Trash2, ArrowLeft } from "lucide-react";
 import type { BaseRow, TableRow, TopTab } from "@/lib/types/base-detail";
 
 interface TopNavigationProps {

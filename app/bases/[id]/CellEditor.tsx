@@ -2,16 +2,16 @@
 import { useMemo, useState } from "react";
 import type { FieldRow } from "@/lib/types/base-detail";
 
+const DEFAULT_CHOICE_COLORS = ['#1E40AF', '#C2410C', '#B91C1C']; // dark blue, dark orange, dark red
+
 export default function CellEditor({
   field,
   value,
-  recordId,
   onUpdate,
   isSaving,
 }: {
   field: FieldRow;
   value: unknown;
-  recordId: string;
   onUpdate: (val: unknown) => void;
   isSaving?: boolean;
 }) {
@@ -20,8 +20,6 @@ export default function CellEditor({
   const [phoneError, setPhoneError] = useState<string | null>(null);
 
   type SelectOptions = { choices?: string[] } | Record<string, { label: string; color: string }>;
-
-  const defaultChoiceColors = ['#1E40AF', '#C2410C', '#B91C1C']; // dark blue, dark orange, dark red
 
   const selectChoices = useMemo(() => {
     if (field.type === 'single_select' || field.type === 'multi_select') {
@@ -51,7 +49,7 @@ export default function CellEditor({
         return choices.map((choice, idx) => ({
           key: choice,
           label: choice,
-          color: defaultChoiceColors[idx % defaultChoiceColors.length]
+          color: DEFAULT_CHOICE_COLORS[idx % DEFAULT_CHOICE_COLORS.length]
         }));
       }
     }
@@ -149,11 +147,9 @@ export default function CellEditor({
 
   const baseInputClass = "w-full px-2 py-1 text-sm border-0 bg-transparent focus:outline-none focus:ring-1 focus:ring-blue-400 focus:bg-white rounded transition-all disabled:opacity-60";
   const centeredInputClass = baseInputClass + " text-center";
-  const leftAlignedInputClass = baseInputClass + " text-left";
 
   if (field.type === 'single_select') {
     const selectedColor = value == null ? undefined : choiceColors[String(value)];
-    const selectedChoice = selectChoices.find(choice => choice.key === String(value));
 
     return (
       <select

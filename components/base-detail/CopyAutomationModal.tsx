@@ -232,7 +232,6 @@ export const CopyAutomationModal = ({
               <div className="space-y-2 max-h-64 overflow-y-auto border border-gray-200 rounded-lg p-3">
                 {fieldMappings.map((mapping, index) => {
                   const sourceField = sourceFields.find(f => f.id === mapping.source_field_id);
-                  const targetField = targetFields.find(f => f.id === mapping.target_field_id);
                   
                   return (
                     <div key={index} className="flex items-center gap-3 p-2 bg-gray-50 rounded">
