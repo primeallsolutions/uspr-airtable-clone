@@ -24,7 +24,7 @@ interface TableControlsProps {
   tables: TableRow[];
   selectedTableId: string | null;
   onTableSelect: (tableId: string) => void;
-  onAddRecord: () => void;
+  onAddRecord: () => void | Promise<void>;
   onImportCsv: () => void;
   onCreateTable: () => void;
   onRenameTable: (tableId: string) => void;

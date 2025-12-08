@@ -458,7 +458,7 @@ export const ImportCsvModal = ({
       console.log('📊 Clearing all mappings');
       setFieldMappings({});
     }
-  }, [csvColumns]);
+  }, [csvColumns, fields]);
 
   const handleImport = useCallback(async () => {
     if (!file) return;
@@ -489,7 +489,7 @@ export const ImportCsvModal = ({
     } finally {
       setIsProcessing(false);
     }
-  }, [file, fieldMappings, onImport]);
+  }, [createAllFields, csvColumns, fieldMappings, file, onImport]);
 
   const handleClose = useCallback(() => {
     setFile(null);

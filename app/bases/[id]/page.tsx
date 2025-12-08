@@ -1,7 +1,6 @@
 "use client";
 import { useMemo, useState, useEffect, useRef } from "react";
 import { useParams } from "next/navigation";
-import { Crown } from "lucide-react";
 import { ContextMenu, useContextMenu } from "@/components/ui/context-menu";
 import { RenameModal } from "@/components/ui/rename-modal";
 
@@ -283,14 +282,6 @@ export default function BaseDetailPage() {
     }
   };
 
-  const handleRemoveMasterList = async (tableId: string) => {
-    try {
-      await updateTable(tableId, { is_master_list: false });
-    } catch (err) {
-      console.error('Error removing master list:', err);
-    }
-  };
-
   const handleRenameTable = async (tableId: string) => {
     // Store the tableId for the modal to use
     setContextMenu(prev => ({ ...prev, tableId }));
@@ -346,11 +337,70 @@ export default function BaseDetailPage() {
     }
   };
 
-  const handleAddRow = async () => {
+  const handleAddRow = async (initialValues: Record<string, unknown> = {}) => {
     try {
-      await createRecord();
+      await createRecord(initialValues);
     } catch (err) {
       console.error('Error creating record:', err);
+    }
+  };
+
+  const getRandomKanbanColor = () => {
+    const palette = [
+      '#2563eb',
+      '#0ea5e9',
+      '#22c55e',
+      '#eab308',
+      '#f59e0b',
+      '#f97316',
+      '#ef4444',
+      '#ec4899',
+      '#a855f7',
+      '#6366f1',
+      '#10b981',
+      '#14b8a6',
+      '#f43f5e',
+      '#8b5cf6',
+      '#64748b'
+    ];
+    return palette[Math.floor(Math.random() * palette.length)];
+  };
+
+  const handleAddStackValue = async (fieldId: string, label: string) => {
+    const targetField = fields.find(f => f.id === fieldId && f.type === 'single_select');
+    if (!targetField) return;
+
+    const existingOptions = targetField.options || {};
+    let nextOptions: Record<string, unknown>;
+
+    if (typeof existingOptions === 'object' && !Array.isArray(existingOptions)) {
+      const entries = Object.entries(existingOptions);
+      const hasLabelObjects = entries.some(([, val]) => val && typeof val === 'object' && 'label' in (val as Record<string, unknown>));
+
+      if (hasLabelObjects || entries.length === 0) {
+        const key = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+          ? crypto.randomUUID()
+          : Math.random().toString(36).slice(2);
+        nextOptions = {
+          ...existingOptions,
+          [key]: { label, color: getRandomKanbanColor() }
+        };
+      } else {
+        const choices = (existingOptions as { choices?: string[] }).choices;
+        if (Array.isArray(choices)) {
+          nextOptions = { choices: [...choices, label] };
+        } else {
+          nextOptions = { ...existingOptions, [label]: label };
+        }
+      }
+    } else {
+      nextOptions = { choices: [label] };
+    }
+
+    try {
+      await updateField(fieldId, { options: nextOptions });
+    } catch (err) {
+      console.error('Error adding kanban column:', err);
     }
   };
 
@@ -917,9 +967,11 @@ export default function BaseDetailPage() {
                 <KanbanView
                   records={processedRecords}
                   fields={fields}
+                  tables={tables}
                   onUpdateCell={updateCell}
                   onDeleteRow={deleteRecord}
                   onAddRow={handleAddRow}
+                  onAddStackValue={handleAddStackValue}
                   savingCell={savingCell}
                   canDeleteRow={can.delete ?? true}
                 />

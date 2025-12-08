@@ -1,39 +1,152 @@
-import { useState, useMemo, useEffect, useRef } from "react";
-import { ChevronDown } from "lucide-react";
-import type { RecordRow, FieldRow } from "@/lib/types/base-detail";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ChevronDown, Loader2, Plus, X } from "lucide-react";
+import type { RecordRow, FieldRow, TableRow } from "@/lib/types/base-detail";
 
 interface KanbanViewProps {
   records: RecordRow[];
   fields: FieldRow[];
-  onUpdateCell: (recordId: string, fieldId: string, value: unknown) => void;
-  onDeleteRow: (recordId: string) => void;
-  onAddRow: () => void;
-  savingCell: {recordId: string; fieldId: string} | null;
+  tables: TableRow[];
+  onUpdateCell: (recordId: string, fieldId: string, value: unknown) => Promise<void> | void;
+  onDeleteRow: (recordId: string) => Promise<void> | void;
+  onAddRow: (values?: Record<string, unknown>) => void | Promise<void>;
+  onAddStackValue?: (fieldId: string, label: string) => void | Promise<void>;
+  savingCell: { recordId: string; fieldId: string } | null;
   canDeleteRow?: boolean;
 }
+
+type StackOption = {
+  key: string;
+  label: string;
+  color?: string;
+};
+
+type KanbanColumn = {
+  id: string;
+  label: string;
+  color: string;
+  persistValue: string | null;
+  isUncategorized?: boolean;
+  isAdhoc?: boolean;
+};
+
+const colorPalette = [
+  "#2563eb",
+  "#0ea5e9",
+  "#22c55e",
+  "#eab308",
+  "#f59e0b",
+  "#f97316",
+  "#ef4444",
+  "#ec4899",
+  "#a855f7",
+  "#6366f1",
+  "#10b981",
+  "#14b8a6",
+  "#f43f5e",
+  "#8b5cf6",
+  "#64748b"
+];
+
+const pickColor = (seed: string) => {
+  const hash = seed.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  return colorPalette[Math.abs(hash) % colorPalette.length];
+};
+
+const normalizeStackOptions = (field?: FieldRow | null): StackOption[] => {
+  if (!field || field.type !== "single_select" || !field.options) return [];
+
+  const options = field.options;
+
+  if (typeof options === "object" && !Array.isArray(options)) {
+    const entries = Object.entries(options);
+    const hasLabelObjects = entries.some(([, val]) => val && typeof val === "object" && "label" in (val as Record<string, unknown>));
+
+    if (hasLabelObjects) {
+      return entries.map(([key, option]) => {
+        const opt = option as { label: string; color?: string };
+        return { key, label: opt.label, color: opt.color };
+      });
+    }
+
+    const choices = (options as { choices?: string[] }).choices;
+    if (Array.isArray(choices)) {
+      return choices.map(choice => ({ key: choice, label: choice }));
+    }
+
+    return entries.map(([key, val]) => ({
+      key,
+      label: typeof val === "string" ? val : key
+    }));
+  }
+
+  return [];
+};
 
 export const KanbanView = ({ 
   records, 
   fields, 
+  tables,
   onUpdateCell, 
   onDeleteRow, 
   onAddRow, 
   savingCell,
+  onAddStackValue,
   canDeleteRow = true 
 }: KanbanViewProps) => {
   const [draggedCard, setDraggedCard] = useState<string | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
   const [selectedStackFieldId, setSelectedStackFieldId] = useState<string | null>(null);
   const [isFieldDropdownOpen, setIsFieldDropdownOpen] = useState(false);
+  const [pendingMoveId, setPendingMoveId] = useState<string | null>(null);
+  const [selectedRecord, setSelectedRecord] = useState<RecordRow | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   
+  // Prefer non-master tables for stages; fall back to all tables
+  const pipelineTables = useMemo(
+    () => {
+      const nonMaster = tables.filter(t => !t.is_master_list);
+      return nonMaster.length > 0 ? nonMaster : tables;
+    },
+    [tables]
+  );
+
   // Get all single_select fields for stacking options
-  const singleSelectFields = fields.filter(f => f.type === 'single_select');
-  
-  // Use selected field or default to first single_select field
-  const stackField = selectedStackFieldId 
-    ? fields.find(f => f.id === selectedStackFieldId)
-    : singleSelectFields[0];
+  const singleSelectFields = useMemo(
+    () => fields.filter(f => f.type === "single_select"),
+    [fields]
+  );
+
+  // Auto-pick the single select that best matches the table names
+  const bestMatchingStackFieldId = useMemo(() => {
+    if (singleSelectFields.length === 0 || pipelineTables.length === 0) return null;
+    const tableNames = pipelineTables.map(t => t.name.toLowerCase());
+    let bestField: string | null = null;
+    let bestScore = 0;
+
+    singleSelectFields.forEach(field => {
+      const options = normalizeStackOptions(field);
+      const score = options.reduce((acc, opt) => acc + (tableNames.includes(opt.label.toLowerCase()) ? 1 : 0), 0);
+      if (score > bestScore) {
+        bestScore = score;
+        bestField = field.id;
+      }
+    });
+
+    return bestScore > 0 ? bestField : null;
+  }, [pipelineTables, singleSelectFields]);
+
+  // Use selected field or default to first single_select field (Airtable-style "stacked by")
+  const stackField = useMemo(() => {
+    if (selectedStackFieldId) {
+      const found = fields.find(f => f.id === selectedStackFieldId);
+      if (found) return found;
+    }
+    if (bestMatchingStackFieldId) {
+      const best = fields.find(f => f.id === bestMatchingStackFieldId);
+      if (best) return best;
+    }
+    return singleSelectFields[0];
+  }, [bestMatchingStackFieldId, fields, selectedStackFieldId, singleSelectFields]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -49,113 +162,118 @@ export const KanbanView = ({
     };
   }, []);
 
-  // Get available options from the stack field
-  const stackOptions = useMemo(() => {
-    if (!stackField) return [];
-    
-    const options = stackField.options;
-    
-    // Handle new format: { optionId: { label: string, color: string } }
-    if (options && typeof options === 'object' && !Array.isArray(options)) {
-      const hasNewFormat = Object.values(options).some(val => 
-        typeof val === 'object' && val !== null && 'label' in val
-      );
-      
-      if (hasNewFormat) {
-        return Object.entries(options).map(([key, option]) => {
-          const opt = option as { label: string; color?: string };
-          return {
-            key,
-            label: opt.label
-          };
-        });
+  const stackOptions = useMemo(() => normalizeStackOptions(stackField), [stackField]);
+
+  // Default stack field to best match when the component mounts
+  useEffect(() => {
+    if (!selectedStackFieldId && bestMatchingStackFieldId) {
+      setSelectedStackFieldId(bestMatchingStackFieldId);
+    }
+  }, [bestMatchingStackFieldId, selectedStackFieldId]);
+
+  // Build Kanban columns from options + any ad-hoc values found in data
+  const { columns, columnLookup, uncategorizedColumn } = useMemo(() => {
+    const optionLookup = new Map<string, StackOption>();
+    stackOptions.forEach(option => {
+      optionLookup.set(option.label.toLowerCase(), option);
+    });
+
+    const baseColumns: KanbanColumn[] = pipelineTables.map(table => {
+      const match = optionLookup.get(table.name.toLowerCase());
+      const persistValue = match?.key ?? match?.label ?? table.name;
+      return {
+        id: table.id,
+        label: table.name,
+        color: match?.color || pickColor(table.name),
+        persistValue
+      };
+    });
+
+    const uncategorized: KanbanColumn = {
+      id: "uncategorized",
+      label: "Uncategorized",
+      color: "#9ca3af",
+      persistValue: null,
+      isUncategorized: true
+    };
+
+    const finalColumns = [uncategorized, ...baseColumns];
+
+    const lookup = new Map<string, string>();
+    finalColumns.forEach(col => {
+      lookup.set(col.label, col.id);
+      lookup.set(col.label.toLowerCase(), col.id);
+      if (col.persistValue !== null) {
+        lookup.set(String(col.persistValue), col.id);
+        lookup.set(String(col.persistValue).toLowerCase(), col.id);
       }
-    }
-    
-    // Handle old format: { choices: string[] }
-    const choices = (options as { choices?: string[] })?.choices;
-    if (Array.isArray(choices)) {
-      return choices.map(choice => ({ key: choice, label: choice }));
-    }
-    
-    return [];
-  }, [stackField]);
-  
+      const tableMatch = pipelineTables.find(t => t.name === col.label);
+      if (tableMatch) {
+        lookup.set(tableMatch.id, col.id);
+      }
+    });
+
+    return { columns: finalColumns, columnLookup: lookup, uncategorizedColumn: uncategorized };
+  }, [pipelineTables, stackOptions]);
+
   // Group records by the selected stack field
   const groupedRecords = useMemo(() => {
-    const groups: Record<string, RecordRow[]> = {};
-    
-    // Initialize all stack options as empty groups (using labels, not keys)
-    stackOptions.forEach(option => {
-      groups[option.label] = [];
-    });
-    
-    // Add an "Uncategorized" group for records without a value
-    groups['Uncategorized'] = [];
-    
-    // Group records by their stack field value
-    records.forEach(record => {
-      const stackValue = stackField ? record.values?.[stackField.id] : null;
-      
-      // Find matching option - prioritize finding by key (since values are often stored as keys)
-      const matchingOption = stackOptions.find(option => 
-        option.key === stackValue
-      ) || stackOptions.find(option => 
-        option.label === stackValue
-      );
-      
-      // Always use the label for the group name, never the key
-      const group = matchingOption ? matchingOption.label : 'Uncategorized';
-      groups[group].push(record);
-    });
-    
-    // If no stack options are defined, create columns based on actual values found
-    if (stackOptions.length === 0) {
-      const uniqueValues = new Set<string>();
-      records.forEach(record => {
-        const stackValue = stackField ? record.values?.[stackField.id] : null;
-        if (stackValue && typeof stackValue === 'string') {
-          uniqueValues.add(stackValue);
-        }
-      });
-      
-      // Create groups for unique values - try to find labels if they exist as options elsewhere
-      uniqueValues.forEach(value => {
-        // Try to find if this value matches an option key, use label if found
-        const matchingOption = stackOptions.find(option => option.key === value);
-        const displayName = matchingOption ? matchingOption.label : value;
-        if (!groups[displayName]) {
-          groups[displayName] = [];
-        }
-      });
-      
-      // Re-group records using display names
-      records.forEach(record => {
-        const stackValue = stackField ? record.values?.[stackField.id] : null;
-        if (stackValue && typeof stackValue === 'string') {
-          const matchingOption = stackOptions.find(option => option.key === stackValue);
-          const displayName = matchingOption ? matchingOption.label : stackValue;
-          if (groups[displayName]) {
-            groups[displayName].push(record);
-          } else {
-            groups['Uncategorized'].push(record);
-          }
-        } else {
-          groups['Uncategorized'].push(record);
-        }
-      });
-    }
-    
-    // Only show "Uncategorized" column if it has records
-    if (groups['Uncategorized'].length === 0) {
-      delete groups['Uncategorized'];
-    }
-    
-    return groups;
-  }, [records, stackField?.id, stackOptions]);
+    const groups = new Map<string, RecordRow[]>();
+    columns.forEach(col => groups.set(col.id, []));
 
-  // Get other fields to display in cards (excluding the stack field)
-  const displayFields = fields.filter(f => stackField && f.id !== stackField.id).slice(0, 3); // Show max 3 fields
+    const fallbackColumnId = uncategorizedColumn?.id || columns[0]?.id || "default";
+
+    records.forEach(record => {
+      const rawValue = stackField ? record.values?.[stackField.id] : null;
+      const valueString = rawValue === null || rawValue === undefined || rawValue === "" ? null : String(rawValue);
+      const normalized = valueString ? valueString.toLowerCase() : null;
+      const matchedColumnId = normalized ? columnLookup.get(normalized) || (valueString ? columnLookup.get(valueString) : undefined) : undefined;
+      const tableColumnId = columnLookup.get(record.table_id) || columnLookup.get(String(record.table_id).toLowerCase());
+      const groupId = matchedColumnId || tableColumnId || fallbackColumnId;
+      if (!groups.has(groupId)) {
+        groups.set(groupId, []);
+      }
+      groups.get(groupId)?.push(record);
+    });
+
+    return groups;
+  }, [columnLookup, columns, records, stackField, uncategorizedColumn]);
+
+  // Determine primary / secondary fields for card display
+  const primaryDisplayField = useMemo(
+    () =>
+      fields.find(f => f.id !== stackField?.id && f.type === "text") ||
+      fields.find(f => f.id !== stackField?.id && f.type === "single_select") ||
+      fields.find(f => f.id !== stackField?.id),
+    [fields, stackField?.id]
+  );
+
+  const secondaryDisplayFields = useMemo(
+    () =>
+      fields
+        .filter(f => f.id !== stackField?.id && f.id !== primaryDisplayField?.id)
+        .slice(0, 2),
+    [fields, stackField?.id, primaryDisplayField?.id]
+  );
+
+  const getSingleSelectLabel = (field: FieldRow | undefined, value: unknown) => {
+    if (!field || field.type !== "single_select") return null;
+    const opts = normalizeStackOptions(field);
+    const stringVal = value === null || value === undefined ? null : String(value);
+    if (!stringVal) return null;
+    const match = opts.find(o => o.key === stringVal || o.label === stringVal);
+    return match?.label || stringVal;
+  };
+
+  const formatValue = (field: FieldRow | undefined, value: unknown) => {
+    if (value === null || value === undefined || value === "") return "Empty";
+    if (field?.type === "single_select") {
+      return getSingleSelectLabel(field, value) ?? "Empty";
+    }
+    if (Array.isArray(value)) return value.join(", ");
+    if (typeof value === "object") return JSON.stringify(value);
+    return String(value);
+  };
 
   if (!stackField) {
     return (
@@ -176,6 +294,7 @@ export const KanbanView = ({
   // Drag and drop handlers
   const handleDragStart = (e: React.DragEvent, recordId: string) => {
     setDraggedCard(recordId);
+    setSelectedRecord(null);
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', recordId);
   };
@@ -183,53 +302,76 @@ export const KanbanView = ({
   const handleDragEnd = () => {
     setDraggedCard(null);
     setDragOverColumn(null);
+    setPendingMoveId(null);
   };
 
-  const handleDragOver = (e: React.DragEvent, columnStatus: string) => {
+  const handleDragOver = (e: React.DragEvent, columnId: string) => {
     e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    setDragOverColumn(columnStatus);
+    e.dataTransfer.dropEffect = "move";
+    setDragOverColumn(columnId);
   };
 
   const handleDragLeave = () => {
     setDragOverColumn(null);
   };
 
-  const handleDrop = (e: React.DragEvent, newValue: string) => {
+  const handleDrop = async (e: React.DragEvent, column: KanbanColumn) => {
     e.preventDefault();
-    const recordId = e.dataTransfer.getData('text/plain');
-    
-    if (recordId && draggedCard === recordId) {
-      // Find the option key for the label
-      const matchingOption = stackOptions.find(option => option.label === newValue);
-      const valueToSet = matchingOption ? matchingOption.key : newValue;
-      
-      // Update the record's stack field
-      onUpdateCell(recordId, stackField.id, valueToSet);
+    const recordId = draggedCard || e.dataTransfer.getData("text/plain");
+    if (!recordId || !stackField) return;
+
+    const valueToSet = column.persistValue;
+    const hasOption = stackOptions.some(opt => {
+      const normalizedLabel = opt.label.toLowerCase();
+      return opt.key === valueToSet || normalizedLabel === column.label.toLowerCase();
+    });
+    setPendingMoveId(recordId);
+
+    try {
+      if (!hasOption && onAddStackValue && valueToSet !== null) {
+        await onAddStackValue(stackField.id, column.label);
+      }
+      await onUpdateCell(recordId, stackField.id, valueToSet);
+    } catch (err) {
+      console.error("Failed to move card", err);
+    } finally {
+      setPendingMoveId(null);
+      setDraggedCard(null);
+      setDragOverColumn(null);
     }
-    
-    setDraggedCard(null);
-    setDragOverColumn(null);
+  };
+
+  const handleCreateCard = async (column: KanbanColumn) => {
+    if (!stackField) return;
+    const defaultValues = column.persistValue !== null ? { [stackField.id]: column.persistValue } : {};
+
+    try {
+      await onAddRow(defaultValues);
+    } catch (err) {
+      console.error("Failed to add card", err);
+    }
   };
 
   return (
     <div className="h-full flex flex-col">
       {/* Field Selection Header */}
       <div className="px-6 py-4 border-b border-gray-200 bg-white">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <span className="text-sm font-medium text-gray-700">Group by:</span>
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-medium text-gray-700">Stacked by</span>
             <div className="relative" ref={dropdownRef}>
               <button
-                onClick={() => setIsFieldDropdownOpen(!isFieldDropdownOpen)}
+                onClick={() => singleSelectFields.length > 1 && setIsFieldDropdownOpen(!isFieldDropdownOpen)}
                 className="flex items-center gap-2 px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                <span>{stackField?.name || 'Select field'}</span>
-                <ChevronDown size={16} className={`transition-transform ${isFieldDropdownOpen ? 'rotate-180' : ''}`} />
+                <span>{stackField?.name || "Select field"}</span>
+                {singleSelectFields.length > 1 && (
+                  <ChevronDown size={16} className={`transition-transform ${isFieldDropdownOpen ? "rotate-180" : ""}`} />
+                )}
               </button>
               
-              {isFieldDropdownOpen && (
-                <div className="absolute top-full left-0 mt-1 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
+              {isFieldDropdownOpen && singleSelectFields.length > 1 && (
+                <div className="absolute top-full left-0 mt-1 w-56 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
                   {singleSelectFields.map((field) => (
                     <button
                       key={field.id}
@@ -238,7 +380,7 @@ export const KanbanView = ({
                         setIsFieldDropdownOpen(false);
                       }}
                       className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 first:rounded-t-lg last:rounded-b-lg ${
-                        selectedStackFieldId === field.id ? 'bg-blue-50 text-blue-700' : 'text-gray-700'
+                        stackField?.id === field.id ? "bg-blue-50 text-blue-700" : "text-gray-700"
                       }`}
                     >
                       {field.name}
@@ -255,98 +397,149 @@ export const KanbanView = ({
       </div>
 
       <div className="flex-1 overflow-x-auto">
-        <div className="flex gap-6 p-6 min-w-max h-full">
-          {Object.entries(groupedRecords).map(([value, valueRecords]) => (
-            <div key={value} className="flex-shrink-0 w-80">
-              {/* Column Header */}
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
+        <div className="flex gap-4 p-4 min-w-max h-full items-start">
+          {columns.map((column) => {
+            const recordsForColumn = groupedRecords.get(column.id) ?? [];
+            return (
+              <div key={column.id} className="flex-shrink-0 w-80">
+                {/* Column Header */}
+                <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
-                    {/* Value indicator dot */}
-                    <div className={`w-3 h-3 rounded-full ${
-                      value === 'Uncategorized' ? 'bg-gray-400' :
-                      // Generate colors based on value hash for consistent coloring
-                      (() => {
-                        const colors = ['bg-blue-500', 'bg-green-500', 'bg-orange-500', 'bg-purple-500', 'bg-red-500', 'bg-yellow-500', 'bg-indigo-500', 'bg-pink-500'];
-                        const hash = value.split('').reduce((a, b) => a + b.charCodeAt(0), 0);
-                        return colors[Math.abs(hash) % colors.length];
-                      })()
-                    }`}></div>
-                    <h3 className="font-medium text-gray-900">{value}</h3>
+                    <span
+                      className="w-2.5 h-2.5 rounded-full"
+                      style={{ backgroundColor: column.color }}
+                    />
+                    <h3 className="font-semibold text-gray-900">{column.label}</h3>
                   </div>
-                  <span className="text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
-                    {valueRecords.length}
+                  <span className="text-xs text-gray-600 bg-gray-100 px-2 py-1 rounded-full">
+                    {recordsForColumn.length}
                   </span>
                 </div>
-              </div>
 
-              {/* Column Content */}
-              <div 
-                className={`min-h-[200px] p-2 rounded-lg border-2 border-dashed transition-colors ${
-                  dragOverColumn === value 
-                    ? 'border-blue-400 bg-blue-50' 
-                    : 'border-gray-200 hover:border-gray-300'
-                }`}
-                onDragOver={(e) => handleDragOver(e, value)}
-                onDragLeave={handleDragLeave}
-                onDrop={(e) => handleDrop(e, value)}
-              >
-                {valueRecords.map((record, index) => (
-                  <div
-                    key={`${value}-${record.id}-${index}`}
-                    draggable
-                    onDragStart={(e) => handleDragStart(e, record.id)}
-                    onDragEnd={handleDragEnd}
-                    className={`bg-white rounded-lg border border-gray-200 p-3 mb-3 cursor-move hover:shadow-md transition-shadow ${
-                      draggedCard === record.id ? 'opacity-50' : ''
-                    }`}
-                  >
-                    {/* Display other fields */}
-                    {displayFields.map((field) => {
-                      const value = record.values?.[field.id];
-                      return (
-                        <div key={field.id} className="mb-2 last:mb-0">
-                          <div className="text-xs text-gray-500 font-medium mb-1">{field.name}</div>
-                          <div className="text-sm text-gray-900">
-                            {value ? String(value) : <span className="text-gray-400 italic">Empty</span>}
-                          </div>
-                        </div>
-                      );
-                    })}
-                    
-                    {/* Actions */}
-                    <div className="flex justify-end gap-2 mt-3 pt-2 border-t border-gray-100">
-                      {canDeleteRow && (
-                        <button
-                          onClick={() => onDeleteRow(record.id)}
-                          className="text-xs text-red-600 hover:text-red-800"
-                        >
-                          Delete
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-                
-                {/* Add new record button */}
-                <button
-                  onClick={onAddRow}
-                  className="w-full p-3 text-sm text-gray-500 border border-dashed border-gray-300 rounded-lg hover:border-gray-400 hover:text-gray-700 transition-colors"
+                {/* Column Content */}
+                <div 
+                  className={`min-h-[220px] p-3 rounded-xl border transition-colors ${
+                    dragOverColumn === column.id 
+                      ? "border-blue-400 bg-blue-50" 
+                      : "border-gray-200 bg-white/60 hover:border-gray-300"
+                  }`}
+                  onDragOver={(e) => handleDragOver(e, column.id)}
+                  onDragLeave={handleDragLeave}
+                  onDrop={(e) => handleDrop(e, column)}
                 >
-                  + Add record
-                </button>
-                
-                {/* Quick set value for existing records */}
-                {valueRecords.length === 0 && value !== 'Uncategorized' && (
-                  <div className="mt-2 p-2 text-xs text-gray-400 text-center">
-                    Drag records here to set as &quot;{value}&quot;
-                  </div>
-                )}
+                  {recordsForColumn.map((record) => {
+                    const isDragging = draggedCard === record.id;
+                    const isSaving = pendingMoveId === record.id || (savingCell?.recordId === record.id && savingCell.fieldId === stackField?.id);
+                    const titleValue = primaryDisplayField ? record.values?.[primaryDisplayField.id] : record.id;
+
+                    return (
+                      <div
+                        key={record.id}
+                        draggable
+                        onDragStart={(e) => handleDragStart(e, record.id)}
+                        onDragEnd={handleDragEnd}
+                        className={`bg-white rounded-lg border border-gray-200 p-3 mb-3 cursor-move shadow-sm hover:shadow-md transition-all ${
+                          isDragging ? "opacity-60" : ""
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="text-sm font-semibold text-gray-900 truncate">
+                            {formatValue(primaryDisplayField, titleValue)}
+                          </div>
+                          {isSaving && <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />}
+                        </div>
+
+                        {secondaryDisplayFields.map((field) => {
+                          const value = record.values?.[field.id];
+                          return (
+                            <div key={field.id} className="mt-2">
+                              <div className="text-[11px] uppercase tracking-wide text-gray-400 font-medium">{field.name}</div>
+                              <div className="text-sm text-gray-800 truncate">{formatValue(field, value)}</div>
+                            </div>
+                          );
+                        })}
+                        
+                        {canDeleteRow && (
+                          <div className="flex justify-end gap-2 mt-3 pt-2 border-t border-gray-100">
+                            <button
+                              onClick={() => onDeleteRow(record.id)}
+                              className="text-xs text-red-600 hover:text-red-800"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        )}
+                        <button
+                          onClick={() => !draggedCard && setSelectedRecord(record)}
+                          className="mt-2 text-xs text-blue-600 hover:text-blue-800"
+                        >
+                          View details
+                        </button>
+                      </div>
+                    );
+                  })}
+                  
+                  {/* Add new record button */}
+                  <button
+                    onClick={() => handleCreateCard(column)}
+                    className="w-full mt-1 p-2 text-sm text-gray-600 border border-dashed border-gray-300 rounded-lg hover:border-gray-400 hover:text-gray-800 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add card
+                  </button>
+                  
+                  {recordsForColumn.length === 0 && (
+                    <div className="mt-2 p-2 text-xs text-gray-400 text-center">
+                      Drag records here to set as {column.label}
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
+
         </div>
       </div>
+
+      {selectedRecord && (
+        <div
+          className="fixed inset-0 z-40 bg-black/40 flex items-center justify-center px-4"
+          onClick={() => setSelectedRecord(null)}
+        >
+          <div
+            className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[80vh] overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
+              <div>
+                <div className="text-xs uppercase tracking-wide text-gray-500">Record</div>
+                <div className="text-lg font-semibold text-gray-900">
+                  {formatValue(
+                    primaryDisplayField,
+                    primaryDisplayField ? selectedRecord.values?.[primaryDisplayField.id] : selectedRecord.id
+                  )}
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedRecord(null)}
+                className="p-2 rounded-full hover:bg-gray-100"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="overflow-y-auto max-h-[70vh] divide-y divide-gray-100">
+              {fields.map((field) => (
+                <div key={field.id} className="px-5 py-3">
+                  <div className="text-[11px] uppercase tracking-wide text-gray-500 mb-1">{field.name}</div>
+                  <div className="text-sm text-gray-900 break-words">
+                    {formatValue(field, selectedRecord.values?.[field.id])}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

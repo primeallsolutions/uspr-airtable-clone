@@ -1,6 +1,5 @@
 import { MoreVertical, Trash2 } from "lucide-react";
 import CellEditor from "../../app/bases/[id]/CellEditor";
-import { StatusLabel } from "./StatusLabel";
 import type { RecordRow, FieldRow, SavingCell, TableRow as TableRowType } from "@/lib/types/base-detail";
 
 interface TableRowProps {
@@ -56,7 +55,7 @@ export const TableRow = ({
       style={{ borderLeftColor: rowColor || 'transparent' }}
     >
       {/* Checkbox column */}
-      <div className="w-10 flex-shrink-0 border-r border-gray-200 flex items-center justify-start pl-3">
+      <div className="w-10 flex-shrink-0 border-r border-gray-200 flex items-center justify-start pl-3 sticky left-0 z-30 bg-white">
         <input
           type="checkbox"
           checked={isSelected}
@@ -67,13 +66,13 @@ export const TableRow = ({
       </div>
       
       {/* Row number and table indicator */}
-      <div className="w-12 flex-shrink-0 border-r border-gray-200 bg-gray-100 flex flex-col items-center justify-center py-1">
+      <div className="w-12 flex-shrink-0 border-r border-gray-200 bg-white flex flex-col items-center justify-center py-1 sticky left-10 z-30">
         <span className="text-xs text-gray-500">{rowIndex + 1}</span>
         
       </div>
       
       {/* Field cells */}
-      {fields.map((field) => {
+      {fields.map((field, idx) => {
         // When viewing masterlist, we need to find the value for this field name
         // Records have values keyed by field IDs from their own table
         // But deduplicated fields might have IDs from different tables
@@ -110,34 +109,24 @@ export const TableRow = ({
         
         const isCellSaving = savingCell?.recordId === record.id && savingCell?.fieldId === actualFieldId;
         
-        // Determine if this field should render as a status label
-        const shouldRenderAsLabel = (fieldName: string, fieldType: string) => {
-          const name = fieldName.toLowerCase();
-          return (
-            (name.includes('urgency') || name.includes('priority')) ||
-            (name.includes('source') && name.includes('lead')) ||
-            (name.includes('status')) ||
-            (name.includes('deal') && name.includes('type')) ||
-            fieldType === 'single_select' || fieldType === 'multi_select'
-          );
-        };
-
         const renderCellContent = () => {
           return (
             <CellEditor
               field={field}
               value={value}
-              recordId={record.id}
               onUpdate={(newValue) => onUpdateCell(record.id, actualFieldId, newValue)}
               isSaving={isCellSaving}
             />
           );
         };
         
+        const isSticky = idx === 0; // keep first data column visible
+        const leftOffset = idx === 0 ? '5.5rem' : undefined; // checkbox + row number widths
         return (
           <div
             key={field.id}
-            className="flex-1 min-w-[150px] max-w-[300px] border-r border-gray-200 relative p-3 flex items-center"
+            className={`flex-1 min-w-[150px] max-w-[300px] border-r border-gray-200 relative p-3 flex items-center ${isSticky ? 'sticky z-20 bg-white shadow-[4px_0_6px_-4px_rgba(0,0,0,0.08)]' : ''}`}
+            style={isSticky ? { left: leftOffset } : undefined}
           >
             {renderCellContent()}
           </div>

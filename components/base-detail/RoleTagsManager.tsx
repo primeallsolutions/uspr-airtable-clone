@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
 type RoleTag = { id: string; name: string; color: string | null };
@@ -15,7 +15,7 @@ export const RoleTagsManager = ({ scopeType, scopeId }: RoleTagsManagerProps) =>
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const loadTags = async () => {
+  const loadTags = useCallback(async () => {
     setLoading(true);
     setError(null);
     const { data, error } = await supabase
@@ -27,9 +27,9 @@ export const RoleTagsManager = ({ scopeType, scopeId }: RoleTagsManagerProps) =>
     if (error) setError(error.message);
     setTags((data ?? []) as RoleTag[]);
     setLoading(false);
-  };
+  }, [scopeId, scopeType]);
 
-  useEffect(() => { void loadTags(); }, [scopeType, scopeId]);
+  useEffect(() => { void loadTags(); }, [loadTags]);
 
   const addTag = async () => {
     if (!name.trim()) return;

@@ -5,7 +5,6 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { 
   ChevronDown, 
-  Folder, 
   Search, 
   Filter, 
   SortAsc, 
@@ -17,7 +16,6 @@ import {
   X,
   List,
   Grid3X3,
-  Printer,
   Upload,
   Edit3,
   Check,
@@ -105,7 +103,6 @@ export default function WorkspacePage() {
   const [user, setUser] = useState<SupabaseUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
-  const [isPreviewMode, setIsPreviewMode] = useState(true);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);

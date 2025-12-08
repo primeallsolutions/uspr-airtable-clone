@@ -1,6 +1,5 @@
-import { supabase } from '../supabaseClient';
 import { BaseDetailService } from './base-detail-service';
-import type { BaseRow, TableRow, FieldRow, RecordRow, Automation } from '../types/base-detail';
+import type { Automation } from '../types/base-detail';
 
 export type ExportedBase = {
   version: string;
@@ -94,7 +93,7 @@ export class BaseExportService {
         allAutomations.push({ automation, tableName });
       }
     } catch (error) {
-      console.warn(`No automations found for base ${base.name}`);
+      console.warn(`No automations found for base ${base.name}`, error);
     }
     
     // 5. Optionally get all records
@@ -175,12 +174,6 @@ export class BaseExportService {
           const triggerFieldInfo = fieldIdToName.get(automation.trigger.field_id);
           triggerFieldName = triggerFieldInfo?.name;
         }
-        
-        // Map target table_name to table object (target_table_name is already a name, not an ID)
-        const targetTable = automation.action?.target_table_name
-          ? tables.find(t => t.name === automation.action.target_table_name)
-          : undefined;
-        
         // Map field mappings - safely handle missing field_mappings
         const fieldMappings = (automation.action?.field_mappings || []).map(mapping => {
           // For source field - prefer field name resolution from field_id

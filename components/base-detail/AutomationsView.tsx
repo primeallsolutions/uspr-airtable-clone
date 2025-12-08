@@ -243,6 +243,7 @@ export const AutomationsView = ({
           baseId={baseId}
           onClose={() => setCopyingAutomation(null)}
           onCopy={(automation, fieldMappings) => {
+            void fieldMappings;
             onCreateAutomation(automation);
             setCopyingAutomation(null);
           }}
