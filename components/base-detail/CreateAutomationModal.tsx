@@ -147,9 +147,17 @@ export const CreateAutomationModal = ({
   const sourceFields = sourceTable 
     ? fields.filter(f => f.table_id === sourceTable.id).sort(sortByMasterOrder)
     : Array.from(fieldsByName.values());
-  
-  // Field mappings should use the same list as the source selector to avoid missing options when IDs differ across tables
-  const globalSourceFields = sourceFields;
+
+  // Always include fields that are already referenced in mappings, even if they were filtered out
+  // (e.g., when new tables/fields reorder the deduped source list).
+  const sourceFieldsById = new Map(sourceFields.map(f => [f.id, f]));
+  for (const mapping of formData.action.field_mappings) {
+    const mappedSource = fields.find(f => f.id === mapping.source_field_id);
+    if (mappedSource && !sourceFieldsById.has(mappedSource.id)) {
+      sourceFieldsById.set(mappedSource.id, mappedSource);
+    }
+  }
+  const globalSourceFields = Array.from(sourceFieldsById.values()).sort(sortByMasterOrder);
 
   // Reset trigger field when source table changes
   useEffect(() => {
@@ -188,6 +196,16 @@ export const CreateAutomationModal = ({
   const targetFields = targetTable
     ? fields.filter(f => f.table_id === targetTable.id).sort(sortByMasterOrder)
     : [];
+
+  // Keep target fields that are already mapped even if they no longer appear in the filtered list
+  const targetFieldsById = new Map(targetFields.map(f => [f.id, f]));
+  for (const mapping of formData.action.field_mappings) {
+    const mappedTarget = fields.find(f => f.id === mapping.target_field_id);
+    if (mappedTarget && !targetFieldsById.has(mappedTarget.id)) {
+      targetFieldsById.set(mappedTarget.id, mappedTarget);
+    }
+  }
+  const targetFieldsWithMappings = Array.from(targetFieldsById.values()).sort(sortByMasterOrder);
   
   // Get the selected field to determine appropriate operators
   // Support both field_id (backward compatibility) and field_name (new way)
@@ -842,7 +860,7 @@ export const CreateAutomationModal = ({
 
               {formData.action.field_mappings.map((mapping, index) => {
                 const selectedSourceField = globalSourceFields.find(f => f.id === mapping.source_field_id);
-                const selectedTargetField = targetFields.find(f => f.id === mapping.target_field_id);
+                const selectedTargetField = targetFieldsWithMappings.find(f => f.id === mapping.target_field_id);
                 
                 return (
                 <div key={index} className="flex items-center gap-3 mb-3 p-3 bg-gray-50 rounded-lg border">
@@ -885,7 +903,7 @@ export const CreateAutomationModal = ({
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
                       <option value="">Select target field</option>
-                      {targetFields.map(field => (
+                      {targetFieldsWithMappings.map(field => (
                         <option key={field.id} value={field.id}>{field.name}</option>
                       ))}
                       <option value="__create_field__">+ Create new field</option>

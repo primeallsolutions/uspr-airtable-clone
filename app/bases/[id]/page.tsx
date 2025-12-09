@@ -830,6 +830,8 @@ export default function BaseDetailPage() {
           onDeleteTable={handleDeleteTable}
           canDeleteTable={can.delete}
           onExportBase={openExportBaseModal}
+          showInterfacesTab={false}
+          showFormsTab={false}
         />
 
         {/* Table Controls */}
@@ -840,6 +842,7 @@ export default function BaseDetailPage() {
               selectedTableId={selectedTableId}
               onTableSelect={setSelectedTableId}
               onAddRecord={handleAddRow}
+              showTableTabs={viewMode === 'grid'}
               onImportCsv={openImportModal}
               onCreateTable={openCreateTableModal}
               onRenameTable={handleRenameTable}

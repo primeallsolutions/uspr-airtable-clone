@@ -25,6 +25,7 @@ interface TableControlsProps {
   selectedTableId: string | null;
   onTableSelect: (tableId: string) => void;
   onAddRecord: () => void | Promise<void>;
+  showTableTabs?: boolean;
   onImportCsv: () => void;
   onCreateTable: () => void;
   onRenameTable: (tableId: string) => void;
@@ -55,6 +56,7 @@ export const TableControls = ({
   selectedTableId,
   onTableSelect,
   onAddRecord,
+  showTableTabs = true,
   onImportCsv,
   onCreateTable,
   onRenameTable,
@@ -195,128 +197,130 @@ export const TableControls = ({
   return (
     <div className="bg-white border-b border-gray-200">
       {/* Table Tabs */}
-      <div className="flex items-center justify-between px-6 py-3 border-b border-gray-200">
-        <div className="flex items-center gap-2 overflow-x-auto">
-          {sortedTables.map((table, index) => (
-            <div 
-              key={table.id} 
-              className="flex items-center gap-1 group relative"
-              onDragOver={(e) => handleDragOver(e, index)}
-              onDragLeave={handleDragLeave}
-              onDrop={(e) => handleDrop(e, index)}
-            >
+      {showTableTabs && (
+        <div className="flex items-center justify-between px-6 py-3 border-b border-gray-200">
+          <div className="flex items-center gap-2 overflow-x-auto">
+            {sortedTables.map((table, index) => (
               <div 
-                className={`absolute left-0 w-1 h-8 bg-blue-500 rounded transition-opacity z-10 ${
-                  dragOverIndex === index ? 'opacity-100' : 'opacity-0'
-                }`}
-                style={{ transform: 'translateX(-8px)' }}
-              />
-              <button
-                type="button"
-                draggable
-                onDragStart={(e) => handleDragStart(e, table.id)}
-                onDragEnd={handleDragEnd}
-                onClick={() => onTableSelect(table.id)}
-                onContextMenu={(e) => handleTableContextMenu(e, table.id)}
-                className={`flex items-center gap-1 px-3 py-2 text-sm font-medium rounded-lg transition-colors whitespace-nowrap ${
-                  selectedTableId === table.id
-                    ? 'bg-blue-100 text-blue-700'
-                    : 'text-gray-600 hover:bg-gray-100'
-                } ${draggedTableId === table.id ? 'opacity-50' : ''}`}
-                style={{ cursor: 'grab' }}
+                key={table.id} 
+                className="flex items-center gap-1 group relative"
+                onDragOver={(e) => handleDragOver(e, index)}
+                onDragLeave={handleDragLeave}
+                onDrop={(e) => handleDrop(e, index)}
               >
-                {table.name}
-                {selectedTableId === table.id && (
-                  <ChevronRight size={14} className="text-blue-700" />
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleTableContextMenu(e, table.id);
-                }}
-                onMouseDown={(e) => e.stopPropagation()}
-                className="opacity-0 group-hover:opacity-100 p-1 hover:bg-gray-200 rounded transition-all"
-                title="Table options"
-                style={{ cursor: 'pointer' }}
-              >
-                <MoreVertical size={12} />
-              </button>
-            </div>
-          ))}
-          <button
-            type="button"
-            onClick={onCreateTable}
-            className="flex items-center justify-center w-8 h-8 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-            title="Create new table"
-          >
-            <Plus size={16} />
-          </button>
-        </div>
-
-        {/* Table Navigation */}
-        <div className="flex items-center gap-2">
-          <button type="button" className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
-            <ChevronLeft size={16} className="text-gray-400" />
-          </button>
-          <button type="button" className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
-            <ChevronRight size={16} className="text-gray-400" />
-          </button>
-          <button
-            type="button"
-            onClick={onAddRecord}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-            title="Add record"
-          >
-            <Plus size={16} className="text-gray-400" />
-          </button>
-          <button
-            type="button"
-            onClick={onImportCsv}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-            title="Import CSV"
-          >
-            <Upload size={16} className="text-gray-400" />
-          </button>
-          <div className="relative">
-            <button
-              ref={settingsButtonRef}
-              type="button"
-              onClick={() => setSettingsMenuOpen(!settingsMenuOpen)}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              title="Settings"
-            >
-              <Settings size={16} className="text-gray-400" />
-            </button>
-            {settingsMenuOpen && onDeleteAllFields && (
-              <>
-                {/* Backdrop to close menu */}
                 <div 
-                  className="fixed inset-0 z-40" 
-                  onClick={() => setSettingsMenuOpen(false)}
+                  className={`absolute left-0 w-1 h-8 bg-blue-500 rounded transition-opacity z-10 ${
+                    dragOverIndex === index ? 'opacity-100' : 'opacity-0'
+                  }`}
+                  style={{ transform: 'translateX(-8px)' }}
                 />
-                <div
-                  ref={settingsMenuRef}
-                  className="absolute right-0 mt-2 w-56 bg-white border border-gray-200 rounded-lg shadow-xl py-1 z-50"
+                <button
+                  type="button"
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, table.id)}
+                  onDragEnd={handleDragEnd}
+                  onClick={() => onTableSelect(table.id)}
+                  onContextMenu={(e) => handleTableContextMenu(e, table.id)}
+                  className={`flex items-center gap-1 px-3 py-2 text-sm font-medium rounded-lg transition-colors whitespace-nowrap ${
+                    selectedTableId === table.id
+                      ? 'bg-blue-100 text-blue-700'
+                      : 'text-gray-600 hover:bg-gray-100'
+                  } ${draggedTableId === table.id ? 'opacity-50' : ''}`}
+                  style={{ cursor: 'grab' }}
                 >
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onDeleteAllFields();
-                      setSettingsMenuOpen(false);
-                    }}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors text-left"
+                  {table.name}
+                  {selectedTableId === table.id && (
+                    <ChevronRight size={14} className="text-blue-700" />
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleTableContextMenu(e, table.id);
+                  }}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  className="opacity-0 group-hover:opacity-100 p-1 hover:bg-gray-200 rounded transition-all"
+                  title="Table options"
+                  style={{ cursor: 'pointer' }}
+                >
+                  <MoreVertical size={12} />
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={onCreateTable}
+              className="flex items-center justify-center w-8 h-8 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              title="Create new table"
+            >
+              <Plus size={16} />
+            </button>
+          </div>
+
+          {/* Table Navigation */}
+          <div className="flex items-center gap-2">
+            <button type="button" className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+              <ChevronLeft size={16} className="text-gray-400" />
+            </button>
+            <button type="button" className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+              <ChevronRight size={16} className="text-gray-400" />
+            </button>
+            <button
+              type="button"
+              onClick={onAddRecord}
+              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              title="Add record"
+            >
+              <Plus size={16} className="text-gray-400" />
+            </button>
+            <button
+              type="button"
+              onClick={onImportCsv}
+              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              title="Import CSV"
+            >
+              <Upload size={16} className="text-gray-400" />
+            </button>
+            <div className="relative">
+              <button
+                ref={settingsButtonRef}
+                type="button"
+                onClick={() => setSettingsMenuOpen(!settingsMenuOpen)}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                title="Settings"
+              >
+                <Settings size={16} className="text-gray-400" />
+              </button>
+              {settingsMenuOpen && onDeleteAllFields && (
+                <>
+                  {/* Backdrop to close menu */}
+                  <div 
+                    className="fixed inset-0 z-40" 
+                    onClick={() => setSettingsMenuOpen(false)}
+                  />
+                  <div
+                    ref={settingsMenuRef}
+                    className="absolute right-0 mt-2 w-56 bg-white border border-gray-200 rounded-lg shadow-xl py-1 z-50"
                   >
-                    <Trash2 size={14} />
-                    <span>Delete All Fields</span>
-                  </button>
-                </div>
-              </>
-            )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onDeleteAllFields();
+                        setSettingsMenuOpen(false);
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors text-left"
+                    >
+                      <Trash2 size={14} />
+                      <span>Delete All Fields</span>
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* View Controls */}
       <div className="flex items-center justify-between px-6 py-3">
