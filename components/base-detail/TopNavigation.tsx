@@ -17,6 +17,8 @@ interface TopNavigationProps {
   onDeleteTable: (tableId: string) => void;
   canDeleteTable?: boolean;
   onExportBase?: () => void;
+  showInterfacesTab?: boolean;
+  showFormsTab?: boolean;
 }
 
 export const TopNavigation = ({
@@ -32,7 +34,9 @@ export const TopNavigation = ({
   onRenameTable,
   onDeleteTable,
   canDeleteTable = true,
-  onExportBase
+  onExportBase,
+  showInterfacesTab = true,
+  showFormsTab = true
 }: TopNavigationProps) => {
   const router = useRouter();
   const [isTableDropdownOpen, setIsTableDropdownOpen] = useState(false);
@@ -59,9 +63,14 @@ export const TopNavigation = ({
   const tabs: { id: TopTab; label: string }[] = [
     { id: 'data', label: 'Data' },
     { id: 'automations', label: 'Automations' },
-    { id: 'interfaces', label: 'Interfaces' },
-    { id: 'forms', label: 'Forms' },
   ];
+
+  if (showInterfacesTab) {
+    tabs.push({ id: 'interfaces', label: 'Interfaces' });
+  }
+  if (showFormsTab) {
+    tabs.push({ id: 'forms', label: 'Forms' });
+  }
 
   return (
     <div className="border-b border-gray-200 bg-white">

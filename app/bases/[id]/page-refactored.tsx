@@ -226,6 +226,8 @@ export default function BaseDetailPage() {
         onToggleMasterList={handleToggleMasterList}
         onRenameTable={handleRenameTable}
         onDeleteTable={handleDeleteTable}
+        showInterfacesTab={false}
+        showFormsTab={false}
       />
 
       {/* Main Content */}
