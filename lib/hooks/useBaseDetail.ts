@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { BaseDetailService } from '../services/base-detail-service';
 import type { 
@@ -25,6 +25,7 @@ export const useBaseDetail = (baseId: string | null) => {
   const [allFields, setAllFields] = useState<FieldRow[]>([]);
   const fieldsCache = useRef<Map<string, FieldRow[]>>(new Map());
   const recordsCache = useRef<Map<string, RecordRow[]>>(new Map());
+  const masterlistTableId = useMemo(() => tables.find(t => t.is_master_list)?.id ?? null, [tables]);
   
   // Loading states
   const [loading, setLoading] = useState(true);
@@ -447,15 +448,78 @@ export const useBaseDetail = (baseId: string | null) => {
       setSavingCell({ recordId, fieldId });
       setError(null);
       
-      await BaseDetailService.updateCell(recordId, fieldId, value);
+      const result = await BaseDetailService.updateCell(recordId, fieldId, value);
+      const selectedTableMeta = tables.find(t => t.id === selectedTableId);
+
+      // If we're updating from the masterlist (Kanban view), any move could have removed a copy
+      // from a non-master table. Clear those caches so grid view reloads with the new location.
+      if (result?.movedToTableId && selectedTableMeta?.is_master_list) {
+        tables
+          .filter(table => !table.is_master_list && table.id !== result.movedToTableId)
+          .forEach(table => recordsCache.current.delete(table.id));
+      }
       
       // Update local state
       setRecords(prev => {
-        const next = prev.map(record => 
+        let next = prev.map(record => 
           record.id === recordId 
             ? { ...record, values: { ...record.values, [fieldId]: value } }
             : record
         );
+
+        const movedAwayFromSelected =
+          !!result?.movedToTableId &&
+          !!selectedTableId &&
+          selectedTableMeta &&
+          !selectedTableMeta.is_master_list &&
+          result.movedToTableId !== selectedTableId;
+
+        if (movedAwayFromSelected) {
+          next = next.filter(record => record.id !== recordId);
+        }
+
+        if (result?.movedToTableId) {
+          // Invalidate and refresh target table cache without switching the current view
+          recordsCache.current.delete(result.movedToTableId);
+          BaseDetailService.getRecords(result.movedToTableId)
+            .then((targetRecords) => {
+              recordsCache.current.set(result.movedToTableId!, targetRecords);
+              if (selectedTableId === result.movedToTableId) {
+                setRecords(targetRecords);
+              }
+            })
+            .catch((err) => {
+              console.error('Failed to refresh target table after move', err);
+            });
+        }
+
+        // Always refresh masterlist cache so Kanban (masterlist view) stays in sync after grid edits/moves
+        if (masterlistTableId) {
+          // Use returned merged values if available to avoid flash of stale data
+          if (result?.masterlistRecordId && result.masterlistValues) {
+            const cachedMaster = recordsCache.current.get(masterlistTableId) || [];
+            const updatedMaster = cachedMaster.some(r => r.id === result.masterlistRecordId)
+              ? cachedMaster.map(r => r.id === result.masterlistRecordId ? { ...r, values: result.masterlistValues! } : r)
+              : cachedMaster;
+            recordsCache.current.set(masterlistTableId, updatedMaster);
+            if (selectedTableId === masterlistTableId) {
+              setRecords(updatedMaster);
+            }
+          }
+
+          recordsCache.current.delete(masterlistTableId);
+          BaseDetailService.getRecords(masterlistTableId)
+            .then((masterRecords) => {
+              recordsCache.current.set(masterlistTableId, masterRecords);
+              if (selectedTableId === masterlistTableId) {
+                setRecords(masterRecords);
+              }
+            })
+            .catch((err) => {
+              console.error('Failed to refresh masterlist after update', err);
+            });
+        }
+
         if (selectedTableId) {
           recordsCache.current.set(selectedTableId, next);
         }
@@ -468,7 +532,7 @@ export const useBaseDetail = (baseId: string | null) => {
     } finally {
       setSavingCell(null);
     }
-  }, [selectedTableId]);
+  }, [selectedTableId, tables, masterlistTableId]);
 
   // Automation operations
   const createAutomation = useCallback(async (automation: Omit<Automation, 'id' | 'created_at'>) => {

@@ -160,6 +160,15 @@ export default function BaseDetailPage() {
   // State for editing field
   const [editingField, setEditingField] = useState<FieldRow | null>(null);
 
+  // State for table selection per view (removed separate kanban/grid logic)
+  // Both views now work with the same selected table
+  const [viewTableId, setViewTableId] = useState<string | null>(null);
+
+  const masterlistTableId = useMemo(
+    () => tables.find(t => t.is_master_list)?.id ?? null,
+    [tables]
+  );
+
   // View control states
   const [hiddenFieldIds, setHiddenFieldIds] = useState<string[]>([]);
   const [activeViewPanel, setActiveViewPanel] = useState<ViewControlPanel | null>(null);
@@ -204,6 +213,24 @@ export default function BaseDetailPage() {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [activeViewPanel]);
+
+  // Initialize view table selection - both Grid and Kanban use the same table
+  useEffect(() => {
+    if (!viewTableId) {
+      if (selectedTableId) {
+        setViewTableId(selectedTableId);
+      } else if (tables.length > 0) {
+        setViewTableId(tables[0].id);
+      }
+    }
+  }, [viewTableId, selectedTableId, tables]);
+
+  // Keep the hook's selectedTableId in sync with viewTableId
+  useEffect(() => {
+    if (viewTableId && viewTableId !== selectedTableId) {
+      setSelectedTableId(viewTableId);
+    }
+  }, [viewTableId, selectedTableId, setSelectedTableId]);
 
   // Event handlers
   const handleRenameBase = async (newName: string) => {
@@ -491,6 +518,12 @@ export default function BaseDetailPage() {
     setColorFieldId(fieldId);
   };
 
+  const handleTableSelect = (tableId: string) => {
+    // Both views can now switch tables freely
+    setViewTableId(tableId);
+    setSelectedTableId(tableId);
+  };
+
   const toggleViewPanel = (panel: ViewControlPanel, anchorEl: HTMLElement) => {
     if (activeViewPanel === panel) {
       setActiveViewPanel(null);
@@ -689,6 +722,9 @@ export default function BaseDetailPage() {
   const primarySortFieldId = primarySortRule?.fieldId ?? null;
   const primarySortDirection = primarySortRule?.direction ?? 'asc';
 
+  const activeTableId = viewTableId ?? selectedTableId;
+  const hasActiveTable = Boolean(activeTableId);
+
   // Context menu options
   const getContextMenuOptions = () => {
     if (!contextMenu.isVisible) return [];
@@ -816,12 +852,12 @@ export default function BaseDetailPage() {
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Top Navigation */}
-          <TopNavigation
+        <TopNavigation
           base={base}
           tables={tables}
-          selectedTableId={selectedTableId}
+          selectedTableId={activeTableId}
           topTab={topTab}
-          onTableSelect={setSelectedTableId}
+          onTableSelect={handleTableSelect}
           onTabChange={setTopTab}
           onBaseContextMenu={handleBaseContextMenu}
           onCreateTable={openCreateTableModal}
@@ -839,10 +875,10 @@ export default function BaseDetailPage() {
           <div className="relative" ref={viewControlsRef}>
             <TableControls
               tables={tables}
-              selectedTableId={selectedTableId}
-              onTableSelect={setSelectedTableId}
+              selectedTableId={activeTableId}
+              onTableSelect={handleTableSelect}
               onAddRecord={handleAddRow}
-              showTableTabs={viewMode === 'grid'}
+              showTableTabs={true}
               onImportCsv={openImportModal}
               onCreateTable={openCreateTableModal}
               onRenameTable={handleRenameTable}
@@ -940,7 +976,7 @@ export default function BaseDetailPage() {
 
         {/* Data View */}
         <div className="flex-1 flex flex-col min-h-0">
-          {topTab === 'data' && selectedTableId && (
+          {topTab === 'data' && hasActiveTable && (
             <div className="flex-1 flex flex-col min-h-0">
               
               {viewMode === 'grid' ? (
@@ -949,7 +985,7 @@ export default function BaseDetailPage() {
                   fields={visibleFields}
                   allFields={fields}
                   tables={tables}
-                  selectedTableId={selectedTableId}
+                  selectedTableId={activeTableId}
                   sortFieldId={primarySortFieldId}
                   sortDirection={primarySortDirection}
                   savingCell={savingCell}
@@ -969,7 +1005,7 @@ export default function BaseDetailPage() {
               ) : (
                 <KanbanView
                   records={processedRecords}
-                  fields={fields}
+                  fields={visibleFields}
                   tables={tables}
                   onUpdateCell={updateCell}
                   onDeleteRow={deleteRecord}
@@ -977,6 +1013,7 @@ export default function BaseDetailPage() {
                   onAddStackValue={handleAddStackValue}
                   savingCell={savingCell}
                   canDeleteRow={can.delete ?? true}
+                  onFieldContextMenu={handleFieldContextMenu}
                 />
               )}
             </div>

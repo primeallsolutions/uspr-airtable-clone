@@ -330,6 +330,114 @@ export class BaseDetailService {
     return value;
   }
 
+  // Resolve a human-readable label for a single select value so we can match it to table names
+  private static resolveSingleSelectLabel(
+    value: unknown,
+    field?: { type?: string | null; options?: Record<string, unknown> | null }
+  ): string | null {
+    if (!field || field.type !== 'single_select') return null;
+    const raw = value === null || value === undefined ? null : String(value);
+    if (!raw) return null;
+
+    const options = field.options;
+    if (options && typeof options === 'object' && !Array.isArray(options)) {
+      // Common map-of-options shape (option_id -> { label/name })
+      for (const [optionKey, optionVal] of Object.entries(options)) {
+        const label =
+          typeof optionVal === 'object' && optionVal !== null
+            ? (optionVal as { label?: string; name?: string }).label ?? (optionVal as { label?: string; name?: string }).name
+            : undefined;
+
+        if (optionKey === raw) {
+          return label ?? raw;
+        }
+        if (label && label.toLowerCase() === raw.toLowerCase()) {
+          return label;
+        }
+      }
+
+      // "choices" array shape
+      const choices = (options as { choices?: unknown[] }).choices;
+      if (Array.isArray(choices)) {
+        const match = choices.find((choice) => String(choice).toLowerCase() === raw.toLowerCase());
+        if (match !== undefined) {
+          return String(match);
+        }
+      }
+    }
+
+    // Fallback to raw string
+    return raw;
+  }
+
+  // Ensure a single select field has an option for the given value (id or label). Returns a safe value to store.
+  private static async ensureSingleSelectOption(
+    field: { id: string; options?: Record<string, unknown> | null },
+    value: unknown
+  ): Promise<string | unknown> {
+    const raw = value === null || value === undefined ? null : String(value);
+    if (!raw) return value;
+
+    const options = (field.options || {}) as Record<string, { name?: string; label?: string; color?: string }>;
+    const existingOption = options[raw];
+    if (existingOption) {
+      return raw; // already an option id
+    }
+
+    // Check if an option with the same label exists
+    const label = this.resolveSingleSelectLabel(raw, { type: 'single_select', options });
+    if (label) {
+      const found = Object.entries(options).find(([, opt]) => {
+        const optLabel = (opt?.label || opt?.name || '').toLowerCase();
+        return optLabel === label.toLowerCase();
+      });
+      if (found) {
+        return found[0]; // use existing option id
+      }
+    }
+
+    // Need to create a new option keyed by label
+    const key =
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `option_${Math.random().toString(36).slice(2)}`;
+    const colorPalette = [
+      '#2563eb',
+      '#0ea5e9',
+      '#22c55e',
+      '#eab308',
+      '#f59e0b',
+      '#f97316',
+      '#ef4444',
+      '#ec4899',
+      '#a855f7',
+      '#6366f1',
+      '#10b981',
+      '#14b8a6',
+      '#f43f5e',
+      '#8b5cf6',
+      '#64748b'
+    ];
+    const color = colorPalette[Math.floor(Math.random() * colorPalette.length)];
+
+    const nextOptions = {
+      ...options,
+      [key]: { label: label ?? raw, color }
+    };
+
+    try {
+      await supabase
+        .from('fields')
+        .update({ options: nextOptions })
+        .eq('id', field.id);
+      return key;
+    } catch (err) {
+      console.error('Failed to add single select option', err);
+      // Fallback to raw value to avoid losing the update
+      return raw;
+    }
+  }
+
   // Remove non-masterlist copies of a master record when moving it elsewhere
   private static async removeExistingCopiesForMasterRecord(
     baseId: string,
@@ -750,8 +858,14 @@ export class BaseDetailService {
     if (error) throw error;
   }
 
-  static async updateCell(recordId: string, fieldId: string, value: unknown): Promise<void> {
-    console.log(`🔄 CELL UPDATE: Updating cell for record ${recordId}, field ${fieldId}, value:`, value);
+  static async updateCell(recordId: string, fieldId: string, value: unknown): Promise<{
+    movedToTableId: string | null;
+    masterlistRecordId?: string | null;
+    masterlistValues?: Record<string, unknown> | null;
+  }> {
+    console.log(`CELL UPDATE: Updating cell for record ${recordId}, field ${fieldId}, value:`, value);
+
+    let movedToTableId: string | null = null;
 
     // Get current record values
     const { data: record, error: fetchError } = await supabase
@@ -774,6 +888,17 @@ export class BaseDetailService {
     const isMasterlist = table.is_master_list;
     const baseId = table.base_id;
 
+    // Fetch field metadata once for reuse in sync logic
+    const { data: fieldMeta, error: fieldMetaError } = await supabase
+      .from("fields")
+      .select("id, name, type, options")
+      .eq("id", fieldId)
+      .maybeSingle();
+
+    if (fieldMetaError) {
+      console.error('Failed to load field metadata for cell update', fieldMetaError);
+    }
+
     // Determine canonical master record id (for copies, use _source_record_id)
     const sourceMasterRecordId =
       typeof record.values?._source_record_id === 'string' && record.values._source_record_id
@@ -781,20 +906,29 @@ export class BaseDetailService {
         : recordId;
 
     // Field name (used for propagation)
-    let masterFieldName: string | null = null;
-    if (baseId) {
-      const { data: fieldMeta } = await supabase
+    let masterFieldName: string | null = fieldMeta?.name ?? null;
+    if (!masterFieldName && baseId) {
+      const { data: fallbackField } = await supabase
         .from("fields")
         .select("name")
         .eq("id", fieldId)
         .maybeSingle();
-      masterFieldName = fieldMeta?.name || null;
+      masterFieldName = fallbackField?.name || null;
+    }
+
+    // Normalize single select value to a valid option before saving
+    let valueToStore = value;
+    if (fieldMeta?.type === 'single_select') {
+      valueToStore = await this.ensureSingleSelectOption(
+        fieldMeta as { id: string; options?: Record<string, unknown> | null },
+        value
+      );
     }
 
     // Update the specific field value
     const updatedValues = {
       ...record.values,
-      [fieldId]: value
+      [fieldId]: valueToStore
     };
 
     // Ensure non-masterlist records always keep a pointer to their master record
@@ -838,13 +972,19 @@ export class BaseDetailService {
         if (!masterlistError && masterlistTable) {
           masterlistTableId = masterlistTable.id;
           // Get the field that was updated to find its name and options
-          const { data: updatedField, error: fieldError } = await supabase
-            .from("fields")
-            .select("id, name, type, options")
-            .eq("id", fieldId)
-            .single();
+          let resolvedFieldError: unknown = null;
+          let updatedField = fieldMeta || null;
+          if (!updatedField) {
+            const { data: fetchedField, error: fieldError } = await supabase
+              .from("fields")
+              .select("id, name, type, options")
+              .eq("id", fieldId)
+              .single();
+            resolvedFieldError = fieldError;
+            updatedField = fetchedField ?? null;
+          }
 
-          if (!fieldError && updatedField) {
+          if (!resolvedFieldError && updatedField) {
             // Find the corresponding field in masterlist with the same name
             const { data: masterlistFields, error: masterlistFieldsError } = await supabase
               .from("fields")
@@ -856,9 +996,9 @@ export class BaseDetailService {
             if (!masterlistFieldsError && masterlistFields.length > 0) {
               const masterlistFieldMeta = masterlistFields[0];
               const masterlistFieldId = masterlistFieldMeta.id;
-              masterlistChangedFieldId = masterlistFieldId;
-              
-              // Get or create masterlist record
+                masterlistChangedFieldId = masterlistFieldId;
+                
+                // Get or create masterlist record
           const { data: masterlistRecord, error: masterlistRecordError } = await supabase
             .from("records")
             .select("values")
@@ -875,10 +1015,22 @@ export class BaseDetailService {
                   updatedField,
                   masterlistFieldMeta
                 );
-                masterlistChangedValue = mappedValue;
+                // Prefer the human-readable label when creating missing options so Kanban/grouping works
+                const masterlistDisplayValue =
+                  this.resolveSingleSelectLabel(value, updatedField) ??
+                  this.resolveSingleSelectLabel(mappedValue, masterlistFieldMeta) ??
+                  mappedValue;
+                const safeMasterlistValue =
+                  masterlistFieldMeta.type === 'single_select'
+                    ? await this.ensureSingleSelectOption(
+                        masterlistFieldMeta as { id: string; options?: Record<string, unknown> | null },
+                        masterlistDisplayValue
+                      )
+                    : mappedValue;
+                masterlistChangedValue = safeMasterlistValue;
                 const updatedMasterlistValues = {
                   ...masterlistValues,
-                  [masterlistFieldId]: mappedValue
+                  [masterlistFieldId]: safeMasterlistValue
                 };
 
                 // Update or create masterlist record (always check first, then update or create)
@@ -985,9 +1137,25 @@ export class BaseDetailService {
               .maybeSingle();
             if (!targetField?.id) continue;
 
+            const mappedCopyValue = this.mapSelectValueBetweenFields(
+              value,
+              masterFieldMeta || undefined,
+              targetField
+            );
+            const targetDisplayValue =
+              this.resolveSingleSelectLabel(value, masterFieldMeta || undefined) ??
+              this.resolveSingleSelectLabel(mappedCopyValue, targetField) ??
+              mappedCopyValue;
+            const safeCopyValue =
+              targetField.type === 'single_select'
+                ? await this.ensureSingleSelectOption(
+                    targetField as { id: string; options?: Record<string, unknown> | null },
+                    targetDisplayValue
+                  )
+                : mappedCopyValue;
             const newCopyValues = {
               ...(copy.values || {}),
-              [targetField.id]: this.mapSelectValueBetweenFields(value, masterFieldMeta || undefined, targetField),
+              [targetField.id]: safeCopyValue,
               _source_record_id: recordId
             };
             await supabase
@@ -999,6 +1167,42 @@ export class BaseDetailService {
         }
       } catch (propError) {
         console.error('Failed to propagate masterlist change to copies:', propError);
+      }
+    }
+
+    // Auto-sync records to non-master tables when a single select value matches a table name
+    if (baseId && fieldMeta?.type === 'single_select') {
+      try {
+        const resolvedLabel = this.resolveSingleSelectLabel(value, fieldMeta);
+        if (resolvedLabel) {
+          const normalizedLabel = resolvedLabel.trim().toLowerCase();
+          const { data: baseTables, error: fetchTablesError } = await supabase
+            .from("tables")
+            .select("id, name, is_master_list")
+            .eq("base_id", baseId);
+
+          if (!fetchTablesError && baseTables) {
+            const masterlistTableId = baseTables.find((t) => t.is_master_list)?.id ?? null;
+            const targetTable = baseTables.find(
+              (t) => !t.is_master_list && typeof t.name === 'string' && t.name.trim().toLowerCase() === normalizedLabel
+            );
+
+            if (targetTable && masterlistTableId) {
+              await this.executeMoveToTable(
+                recordId,
+                { type: 'move_to_table', target_table_name: targetTable.name, field_mappings: [], preserve_original: false } as AutomationAction,
+                targetTable.id,
+                masterlistTableId,
+                baseId,
+                record.table_id,
+                { [fieldId]: value }
+              );
+              movedToTableId = targetTable.id;
+            }
+          }
+        }
+      } catch (syncError) {
+        console.error('Failed to sync record to matching table via single select', syncError);
       }
     }
 
@@ -1017,8 +1221,9 @@ export class BaseDetailService {
       console.error('❌ AUTOMATION EXECUTION FAILED:', automationError);
       // Don't throw here as the cell update was successful
     }
-  }
 
+    return { movedToTableId, masterlistRecordId: masterlistTableId ? canonicalMasterRecordId : null, masterlistValues: mergedMasterlistValues };
+  }
   // CSV Import operations
   static async importCsvData(
     tableId: string,
@@ -2701,8 +2906,19 @@ export class BaseDetailService {
               targetField,
               masterFieldMeta
             );
-            mergedMasterlistValues[masterlistFieldId] = mappedVal;
-            console.log(`  ✅ Mapped ${targetField.name} to masterlist: ${targetFieldId} -> ${masterlistFieldId} = ${mappedVal}`);
+            const masterDisplayValue =
+              this.resolveSingleSelectLabel(value, targetField) ??
+              this.resolveSingleSelectLabel(mappedVal, masterFieldMeta || undefined) ??
+              mappedVal;
+            const safeMasterVal =
+              masterFieldMeta?.type === 'single_select'
+                ? await this.ensureSingleSelectOption(
+                    masterFieldMeta as { id: string; options?: Record<string, unknown> | null },
+                    masterDisplayValue
+                  )
+                : mappedVal;
+            mergedMasterlistValues[masterlistFieldId] = safeMasterVal;
+            console.log(`  ✅ Mapped ${targetField.name} to masterlist: ${targetFieldId} -> ${masterlistFieldId} = ${safeMasterVal}`);
           }
         }
       }
@@ -2844,7 +3060,18 @@ export class BaseDetailService {
           sourceField,
           targetField
         );
-        targetValues[targetField.id] = mappedVal;
+        const targetDisplayValue =
+          this.resolveSingleSelectLabel(sourceVal, sourceField) ??
+          this.resolveSingleSelectLabel(mappedVal, targetField) ??
+          mappedVal;
+        const finalVal =
+          targetField.type === 'single_select'
+            ? await this.ensureSingleSelectOption(
+                targetField as { id: string; options?: Record<string, unknown> | null },
+                targetDisplayValue
+              )
+            : mappedVal;
+        targetValues[targetField.id] = finalVal;
       }
 
       if (Object.keys(targetValues).length === 0) {
@@ -2866,7 +3093,18 @@ export class BaseDetailService {
               newValueField,
               targetField
             );
-            mergedTargetValues[targetField.id] = mappedVal;
+            const targetDisplayValue =
+              this.resolveSingleSelectLabel(newValue, newValueField) ??
+              this.resolveSingleSelectLabel(mappedVal, targetField) ??
+              mappedVal;
+            const finalVal =
+              targetField.type === 'single_select'
+                ? await this.ensureSingleSelectOption(
+                    targetField as { id: string; options?: Record<string, unknown> | null },
+                    targetDisplayValue
+                  )
+                : mappedVal;
+            mergedTargetValues[targetField.id] = finalVal;
           }
         }
       }
@@ -2882,7 +3120,19 @@ export class BaseDetailService {
             sourceField,
             targetField
           );
-          mergedTargetValues[targetField.id] = mappedVal;
+          // Ensure single select options exist on target before assigning
+          const targetDisplayValue =
+            this.resolveSingleSelectLabel(sourceValue, sourceField) ??
+            this.resolveSingleSelectLabel(mappedVal, targetField) ??
+            mappedVal;
+          const finalVal =
+            targetField.type === 'single_select'
+              ? await this.ensureSingleSelectOption(
+                  targetField as { id: string; options?: Record<string, unknown> | null },
+                  targetDisplayValue
+                )
+              : mappedVal;
+          mergedTargetValues[targetField.id] = finalVal;
         }
       }
 
@@ -3669,6 +3919,7 @@ export class BaseDetailService {
     }
   }
 }
+
 
 
 

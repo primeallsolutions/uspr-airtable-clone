@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, Loader2, Plus, X } from "lucide-react";
+import { ChevronDown, Loader2, Plus, X, Edit2, Trash2 } from "lucide-react";
 import type { RecordRow, FieldRow, TableRow } from "@/lib/types/base-detail";
 
 interface KanbanViewProps {
@@ -12,6 +12,7 @@ interface KanbanViewProps {
   onAddStackValue?: (fieldId: string, label: string) => void | Promise<void>;
   savingCell: { recordId: string; fieldId: string } | null;
   canDeleteRow?: boolean;
+  onFieldContextMenu?: (e: React.MouseEvent, field: FieldRow) => void;
 }
 
 type StackOption = {
@@ -26,7 +27,6 @@ type KanbanColumn = {
   color: string;
   persistValue: string | null;
   isUncategorized?: boolean;
-  isAdhoc?: boolean;
 };
 
 const colorPalette = [
@@ -91,7 +91,8 @@ export const KanbanView = ({
   onAddRow, 
   savingCell,
   onAddStackValue,
-  canDeleteRow = true 
+  canDeleteRow = true,
+  onFieldContextMenu 
 }: KanbanViewProps) => {
   const [draggedCard, setDraggedCard] = useState<string | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
@@ -99,41 +100,16 @@ export const KanbanView = ({
   const [isFieldDropdownOpen, setIsFieldDropdownOpen] = useState(false);
   const [pendingMoveId, setPendingMoveId] = useState<string | null>(null);
   const [selectedRecord, setSelectedRecord] = useState<RecordRow | null>(null);
+  const [editingCell, setEditingCell] = useState<{ recordId: string; fieldId: string } | null>(null);
+  const [editingValue, setEditingValue] = useState<string>("");
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const editInputRef = useRef<HTMLInputElement>(null);
   
-  // Prefer non-master tables for stages; fall back to all tables
-  const pipelineTables = useMemo(
-    () => {
-      const nonMaster = tables.filter(t => !t.is_master_list);
-      return nonMaster.length > 0 ? nonMaster : tables;
-    },
-    [tables]
-  );
-
   // Get all single_select fields for stacking options
   const singleSelectFields = useMemo(
     () => fields.filter(f => f.type === "single_select"),
     [fields]
   );
-
-  // Auto-pick the single select that best matches the table names
-  const bestMatchingStackFieldId = useMemo(() => {
-    if (singleSelectFields.length === 0 || pipelineTables.length === 0) return null;
-    const tableNames = pipelineTables.map(t => t.name.toLowerCase());
-    let bestField: string | null = null;
-    let bestScore = 0;
-
-    singleSelectFields.forEach(field => {
-      const options = normalizeStackOptions(field);
-      const score = options.reduce((acc, opt) => acc + (tableNames.includes(opt.label.toLowerCase()) ? 1 : 0), 0);
-      if (score > bestScore) {
-        bestScore = score;
-        bestField = field.id;
-      }
-    });
-
-    return bestScore > 0 ? bestField : null;
-  }, [pipelineTables, singleSelectFields]);
 
   // Use selected field or default to first single_select field (Airtable-style "stacked by")
   const stackField = useMemo(() => {
@@ -141,12 +117,8 @@ export const KanbanView = ({
       const found = fields.find(f => f.id === selectedStackFieldId);
       if (found) return found;
     }
-    if (bestMatchingStackFieldId) {
-      const best = fields.find(f => f.id === bestMatchingStackFieldId);
-      if (best) return best;
-    }
     return singleSelectFields[0];
-  }, [bestMatchingStackFieldId, fields, selectedStackFieldId, singleSelectFields]);
+  }, [fields, selectedStackFieldId, singleSelectFields]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -164,34 +136,19 @@ export const KanbanView = ({
 
   const stackOptions = useMemo(() => normalizeStackOptions(stackField), [stackField]);
 
-  // Default stack field to best match when the component mounts
-  useEffect(() => {
-    if (!selectedStackFieldId && bestMatchingStackFieldId) {
-      setSelectedStackFieldId(bestMatchingStackFieldId);
-    }
-  }, [bestMatchingStackFieldId, selectedStackFieldId]);
-
-  // Build Kanban columns from options + any ad-hoc values found in data
+  // Build Kanban columns purely from single-select field options (Airtable-style)
   const { columns, columnLookup, uncategorizedColumn } = useMemo(() => {
-    const optionLookup = new Map<string, StackOption>();
-    stackOptions.forEach(option => {
-      optionLookup.set(option.label.toLowerCase(), option);
-    });
-
-    const baseColumns: KanbanColumn[] = pipelineTables.map(table => {
-      const match = optionLookup.get(table.name.toLowerCase());
-      const persistValue = match?.key ?? match?.label ?? table.name;
-      return {
-        id: table.id,
-        label: table.name,
-        color: match?.color || pickColor(table.name),
-        persistValue
-      };
-    });
+    // Build columns from single-select field options
+    const baseColumns: KanbanColumn[] = stackOptions.map((option, index) => ({
+      id: `option-${option.key}`,
+      label: option.label,
+      color: option.color || pickColor(option.label),
+      persistValue: option.key
+    }));
 
     const uncategorized: KanbanColumn = {
       id: "uncategorized",
-      label: "Uncategorized",
+      label: "No Status",
       color: "#9ca3af",
       persistValue: null,
       isUncategorized: true
@@ -207,16 +164,12 @@ export const KanbanView = ({
         lookup.set(String(col.persistValue), col.id);
         lookup.set(String(col.persistValue).toLowerCase(), col.id);
       }
-      const tableMatch = pipelineTables.find(t => t.name === col.label);
-      if (tableMatch) {
-        lookup.set(tableMatch.id, col.id);
-      }
     });
 
     return { columns: finalColumns, columnLookup: lookup, uncategorizedColumn: uncategorized };
-  }, [pipelineTables, stackOptions]);
+  }, [stackOptions]);
 
-  // Group records by the selected stack field
+  // Group records by the selected stack field value
   const groupedRecords = useMemo(() => {
     const groups = new Map<string, RecordRow[]>();
     columns.forEach(col => groups.set(col.id, []));
@@ -224,12 +177,38 @@ export const KanbanView = ({
     const fallbackColumnId = uncategorizedColumn?.id || columns[0]?.id || "default";
 
     records.forEach(record => {
-      const rawValue = stackField ? record.values?.[stackField.id] : null;
-      const valueString = rawValue === null || rawValue === undefined || rawValue === "" ? null : String(rawValue);
-      const normalized = valueString ? valueString.toLowerCase() : null;
-      const matchedColumnId = normalized ? columnLookup.get(normalized) || (valueString ? columnLookup.get(valueString) : undefined) : undefined;
-      const tableColumnId = columnLookup.get(record.table_id) || columnLookup.get(String(record.table_id).toLowerCase());
-      const groupId = matchedColumnId || tableColumnId || fallbackColumnId;
+      if (!stackField) {
+        groups.get(fallbackColumnId)?.push(record);
+        return;
+      }
+
+      const rawValue = record.values?.[stackField.id];
+      
+      // Handle empty/null values
+      if (rawValue === null || rawValue === undefined || rawValue === "") {
+        groups.get(fallbackColumnId)?.push(record);
+        return;
+      }
+
+      // Find matching column by the persisted value
+      const valueString = String(rawValue);
+      const normalized = valueString.toLowerCase();
+      
+      let matchedColumnId = columnLookup.get(valueString) || columnLookup.get(normalized);
+      
+      // If no direct match, try finding by label
+      if (!matchedColumnId) {
+        const matchingOption = stackOptions.find(opt => 
+          opt.key === valueString || 
+          opt.label === valueString || 
+          opt.label.toLowerCase() === normalized
+        );
+        if (matchingOption) {
+          matchedColumnId = columnLookup.get(matchingOption.key);
+        }
+      }
+
+      const groupId = matchedColumnId || fallbackColumnId;
       if (!groups.has(groupId)) {
         groups.set(groupId, []);
       }
@@ -237,7 +216,7 @@ export const KanbanView = ({
     });
 
     return groups;
-  }, [columnLookup, columns, records, stackField, uncategorizedColumn]);
+  }, [columnLookup, columns, records, stackField, uncategorizedColumn, stackOptions]);
 
   // Determine primary / secondary fields for card display
   const primaryDisplayField = useMemo(
@@ -352,6 +331,44 @@ export const KanbanView = ({
     }
   };
 
+  const handleStartEdit = (recordId: string, fieldId: string, currentValue: unknown) => {
+    setEditingCell({ recordId, fieldId });
+    setEditingValue(currentValue === null || currentValue === undefined ? "" : String(currentValue));
+    // Focus the input after a brief delay to allow rendering
+    setTimeout(() => {
+      editInputRef.current?.focus();
+      editInputRef.current?.select();
+    }, 50);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingCell) return;
+    
+    try {
+      await onUpdateCell(editingCell.recordId, editingCell.fieldId, editingValue);
+    } catch (err) {
+      console.error("Failed to update cell", err);
+    } finally {
+      setEditingCell(null);
+      setEditingValue("");
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingCell(null);
+    setEditingValue("");
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleSaveEdit();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      handleCancelEdit();
+    }
+  };
+
   return (
     <div className="h-full flex flex-col">
       {/* Field Selection Header */}
@@ -435,46 +452,82 @@ export const KanbanView = ({
                     return (
                       <div
                         key={record.id}
-                        draggable
+                        draggable={!editingCell}
                         onDragStart={(e) => handleDragStart(e, record.id)}
                         onDragEnd={handleDragEnd}
-                        className={`bg-white rounded-lg border border-gray-200 p-3 mb-3 cursor-move shadow-sm hover:shadow-md transition-all ${
-                          isDragging ? "opacity-60" : ""
-                        }`}
+                        className={`bg-white rounded-lg border border-gray-200 p-3 mb-3 shadow-sm hover:shadow-md transition-all ${
+                          isDragging ? "opacity-60 cursor-move" : "cursor-grab"
+                        } ${editingCell ? "cursor-default" : ""}`}
                       >
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="text-sm font-semibold text-gray-900 truncate">
-                            {formatValue(primaryDisplayField, titleValue)}
-                          </div>
-                          {isSaving && <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />}
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          {editingCell?.recordId === record.id && editingCell?.fieldId === primaryDisplayField?.id ? (
+                            <input
+                              ref={editInputRef}
+                              type="text"
+                              value={editingValue}
+                              onChange={(e) => setEditingValue(e.target.value)}
+                              onKeyDown={handleKeyDown}
+                              onBlur={handleSaveEdit}
+                              className="flex-1 text-sm font-semibold text-gray-900 px-2 py-1 border border-blue-500 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                          ) : (
+                            <div 
+                              className="flex-1 text-sm font-semibold text-gray-900 truncate cursor-text hover:bg-gray-50 px-2 py-1 rounded"
+                              onClick={() => primaryDisplayField && handleStartEdit(record.id, primaryDisplayField.id, titleValue)}
+                            >
+                              {formatValue(primaryDisplayField, titleValue)}
+                            </div>
+                          )}
+                          {isSaving && <Loader2 className="w-4 h-4 text-blue-500 animate-spin flex-shrink-0" />}
                         </div>
 
                         {secondaryDisplayFields.map((field) => {
                           const value = record.values?.[field.id];
+                          const isEditing = editingCell?.recordId === record.id && editingCell?.fieldId === field.id;
+                          
                           return (
                             <div key={field.id} className="mt-2">
                               <div className="text-[11px] uppercase tracking-wide text-gray-400 font-medium">{field.name}</div>
-                              <div className="text-sm text-gray-800 truncate">{formatValue(field, value)}</div>
+                              {isEditing ? (
+                                <input
+                                  ref={editInputRef}
+                                  type="text"
+                                  value={editingValue}
+                                  onChange={(e) => setEditingValue(e.target.value)}
+                                  onKeyDown={handleKeyDown}
+                                  onBlur={handleSaveEdit}
+                                  className="w-full text-sm text-gray-800 px-2 py-1 border border-blue-500 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                              ) : (
+                                <div 
+                                  className="text-sm text-gray-800 truncate cursor-text hover:bg-gray-50 px-2 py-1 rounded"
+                                  onClick={() => handleStartEdit(record.id, field.id, value)}
+                                >
+                                  {formatValue(field, value)}
+                                </div>
+                              )}
                             </div>
                           );
                         })}
                         
-                        {canDeleteRow && (
-                          <div className="flex justify-end gap-2 mt-3 pt-2 border-t border-gray-100">
+                        <div className="flex justify-between items-center gap-2 mt-3 pt-2 border-t border-gray-100">
+                          <button
+                            onClick={() => !draggedCard && setSelectedRecord(record)}
+                            className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                          >
+                            <Edit2 className="w-3 h-3" />
+                            View all
+                          </button>
+                          {canDeleteRow && (
                             <button
                               onClick={() => onDeleteRow(record.id)}
-                              className="text-xs text-red-600 hover:text-red-800"
+                              className="text-xs text-red-600 hover:text-red-800 flex items-center gap-1"
                             >
+                              <Trash2 className="w-3 h-3" />
                               Delete
                             </button>
-                          </div>
-                        )}
-                        <button
-                          onClick={() => !draggedCard && setSelectedRecord(record)}
-                          className="mt-2 text-xs text-blue-600 hover:text-blue-800"
-                        >
-                          View details
-                        </button>
+                          )}
+                        </div>
                       </div>
                     );
                   })}
@@ -512,7 +565,7 @@ export const KanbanView = ({
           >
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
               <div>
-                <div className="text-xs uppercase tracking-wide text-gray-500">Record</div>
+                <div className="text-xs uppercase tracking-wide text-gray-500">Record Details</div>
                 <div className="text-lg font-semibold text-gray-900">
                   {formatValue(
                     primaryDisplayField,
@@ -522,20 +575,44 @@ export const KanbanView = ({
               </div>
               <button
                 onClick={() => setSelectedRecord(null)}
-                className="p-2 rounded-full hover:bg-gray-100"
+                className="p-2 rounded-full hover:bg-gray-100 transition-colors"
               >
-                <X className="w-4 h-4" />
+                <X className="w-5 h-5 text-gray-500" />
               </button>
             </div>
             <div className="overflow-y-auto max-h-[70vh] divide-y divide-gray-100">
-              {fields.map((field) => (
-                <div key={field.id} className="px-5 py-3">
-                  <div className="text-[11px] uppercase tracking-wide text-gray-500 mb-1">{field.name}</div>
-                  <div className="text-sm text-gray-900 break-words">
-                    {formatValue(field, selectedRecord.values?.[field.id])}
+              {fields.map((field) => {
+                const value = selectedRecord.values?.[field.id];
+                const isEditing = editingCell?.recordId === selectedRecord.id && editingCell?.fieldId === field.id;
+                const isSaving = savingCell?.recordId === selectedRecord.id && savingCell?.fieldId === field.id;
+                
+                return (
+                  <div key={field.id} className="px-5 py-3 hover:bg-gray-50 transition-colors">
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="text-[11px] uppercase tracking-wide text-gray-500 font-medium">{field.name}</div>
+                      {isSaving && <Loader2 className="w-3 h-3 text-blue-500 animate-spin" />}
+                    </div>
+                    {isEditing ? (
+                      <input
+                        ref={editInputRef}
+                        type="text"
+                        value={editingValue}
+                        onChange={(e) => setEditingValue(e.target.value)}
+                        onKeyDown={handleKeyDown}
+                        onBlur={handleSaveEdit}
+                        className="w-full text-sm text-gray-900 px-2 py-1.5 border border-blue-500 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    ) : (
+                      <div 
+                        className="text-sm text-gray-900 break-words cursor-text hover:bg-gray-100 px-2 py-1.5 rounded transition-colors"
+                        onClick={() => handleStartEdit(selectedRecord.id, field.id, value)}
+                      >
+                        {formatValue(field, value)}
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>
