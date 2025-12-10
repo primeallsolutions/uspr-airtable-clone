@@ -577,12 +577,21 @@ export class BaseDetailService {
   }
 
   static async deleteAllFields(tableId: string): Promise<void> {
-    const { error } = await supabase
+    // First, delete all field definitions
+    const { error: fieldsError } = await supabase
       .from("fields")
       .delete()
       .eq("table_id", tableId);
 
-    if (error) throw error;
+    if (fieldsError) throw fieldsError;
+
+    // Then, clear all data from records in this table by setting values to empty object
+    const { error: recordsError } = await supabase
+      .from("records")
+      .update({ values: {} })
+      .eq("table_id", tableId);
+
+    if (recordsError) throw recordsError;
   }
 
   // Record operations
