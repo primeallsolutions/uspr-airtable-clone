@@ -528,8 +528,7 @@ export default function BaseDetailPage() {
 
     try {
       await deleteAllFields(selectedTableId);
-      // The deleteAllFields function already reloads fields, so we just need to reload records
-      await loadRecords(selectedTableId);
+      // The deleteAllFields function now handles reloading both fields and records
       closeDeleteAllFieldsModal();
     } catch (err) {
       console.error('Error deleting all fields:', err);
@@ -565,87 +564,116 @@ export default function BaseDetailPage() {
     return result;
   };
 
+  // === Masterlist Detection for Kanban ===
+  const masterlistTable = useMemo(
+    () => tables.find(t => t.is_master_list) || tables[0],
+    [tables]
+  );
+
+  // When in Kanban view, always use masterlist table
+  const activeTableIdForData = useMemo(() => {
+    if (viewMode === 'kanban') {
+      return masterlistTable?.id || selectedTableId;
+    }
+    return selectedTableId;
+  }, [viewMode, masterlistTable, selectedTableId]);
+
+  // Load masterlist data when switching to Kanban
+  useEffect(() => {
+    if (viewMode === 'kanban' && masterlistTable && masterlistTable.id !== selectedTableId) {
+      setSelectedTableId(masterlistTable.id);
+    }
+  }, [viewMode, masterlistTable, selectedTableId, setSelectedTableId]);
+
+  // === Shared Data Processing (applies to both Grid and Kanban) ===
+  const processedRecords = useMemo(() => {
+    console.log("🔄 processedRecords recomputing, raw records count:", records.length);
+    let result = records;
+
+    // 1. Apply filters
+    const activeConditions = filterState.conditions.filter(condition => condition.fieldId && condition.value.trim());
+    if (activeConditions.length > 0) {
+      result = result.filter(record => {
+        const evaluations = activeConditions.map(condition => {
+          const field = fields.find(f => f.id === condition.fieldId);
+          if (!field) return false;
+          const rawValue = record.values?.[field.id];
+          const value = rawValue === null || rawValue === undefined ? '' : String(rawValue).toLowerCase();
+          const query = condition.value.toLowerCase();
+          switch (condition.operator) {
+            case 'equals':
+              return value === query;
+            case 'starts_with':
+              return value.startsWith(query);
+            case 'is_not':
+              return value !== query;
+            default:
+              return value.includes(query);
+          }
+        });
+        return filterState.match === 'all' ? evaluations.every(Boolean) : evaluations.some(Boolean);
+      });
+    }
+
+    // 2. Apply search
+    const query = searchQuery.trim().toLowerCase();
+    if (query) {
+      result = result.filter(record => {
+        const values = Object.values(record.values || {});
+        return values.some(value =>
+          value !== null &&
+          value !== undefined &&
+          String(value).toLowerCase().includes(query)
+        );
+      });
+    }
+
+    // 3. Apply sorts
+    const validRules = sortRules.filter(rule => rule.fieldId);
+    if (validRules.length > 0) {
+      result = [...result].sort((a, b) => {
+        for (const rule of validRules) {
+          const fieldId = rule.fieldId!;
+          const field = fields.find(f => f.id === fieldId);
+          if (!field) continue;
+          const aValue = a.values?.[fieldId];
+          const bValue = b.values?.[fieldId];
+          if (aValue == null && bValue == null) continue;
+          if (aValue == null) return rule.direction === 'asc' ? 1 : -1;
+          if (bValue == null) return rule.direction === 'asc' ? -1 : 1;
+
+          let comparison = 0;
+          if (typeof aValue === 'number' && typeof bValue === 'number') {
+            comparison = aValue - bValue;
+          } else if (field.type === 'date' || field.type === 'datetime') {
+            comparison = new Date(aValue as string).getTime() - new Date(bValue as string).getTime();
+          } else {
+            comparison = String(aValue).localeCompare(String(bValue), undefined, { numeric: true, sensitivity: 'base' });
+          }
+
+          if (comparison !== 0) {
+            return rule.direction === 'asc' ? comparison : -comparison;
+          }
+        }
+        return 0;
+      });
+    }
+
+    return result;
+  }, [records, fields, filterState, searchQuery, sortRules]);
+
+  // === Grid-Specific Configurations ===
   const visibleFields = useMemo(() => {
     if (hiddenFieldIds.length === 0) return fields;
     return fields.filter(field => !hiddenFieldIds.includes(field.id));
   }, [fields, hiddenFieldIds]);
-
-  const filteredRecords = useMemo(() => {
-    const activeConditions = filterState.conditions.filter(condition => condition.fieldId && condition.value.trim());
-    if (activeConditions.length === 0) return records;
-    return records.filter(record => {
-      const evaluations = activeConditions.map(condition => {
-        const field = fields.find(f => f.id === condition.fieldId);
-        if (!field) return false;
-        const rawValue = record.values?.[field.id];
-        const value = rawValue === null || rawValue === undefined ? '' : String(rawValue).toLowerCase();
-        const query = condition.value.toLowerCase();
-        switch (condition.operator) {
-          case 'equals':
-            return value === query;
-          case 'starts_with':
-            return value.startsWith(query);
-          case 'is_not':
-            return value !== query;
-          default:
-            return value.includes(query);
-        }
-      });
-      return filterState.match === 'all' ? evaluations.every(Boolean) : evaluations.some(Boolean);
-    });
-  }, [records, fields, filterState]);
-
-  const searchFilteredRecords = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-    if (!query) return filteredRecords;
-    return filteredRecords.filter(record => {
-      const values = Object.values(record.values || {});
-      return values.some(value =>
-        value !== null &&
-        value !== undefined &&
-        String(value).toLowerCase().includes(query)
-      );
-    });
-  }, [filteredRecords, searchQuery]);
-
-  const sortedRecords = useMemo(() => {
-    if (sortRules.length === 0) return searchFilteredRecords;
-    const validRules = sortRules.filter(rule => rule.fieldId);
-    if (validRules.length === 0) return searchFilteredRecords;
-    return [...searchFilteredRecords].sort((a, b) => {
-      for (const rule of validRules) {
-        const fieldId = rule.fieldId!;
-        const field = fields.find(f => f.id === fieldId);
-        if (!field) continue;
-        const aValue = a.values?.[fieldId];
-        const bValue = b.values?.[fieldId];
-        if (aValue == null && bValue == null) continue;
-        if (aValue == null) return rule.direction === 'asc' ? 1 : -1;
-        if (bValue == null) return rule.direction === 'asc' ? -1 : 1;
-
-        let comparison = 0;
-        if (typeof aValue === 'number' && typeof bValue === 'number') {
-          comparison = aValue - bValue;
-        } else if (field.type === 'date' || field.type === 'datetime') {
-          comparison = new Date(aValue as string).getTime() - new Date(bValue as string).getTime();
-        } else {
-          comparison = String(aValue).localeCompare(String(bValue), undefined, { numeric: true, sensitivity: 'base' });
-        }
-
-        if (comparison !== 0) {
-          return rule.direction === 'asc' ? comparison : -comparison;
-        }
-      }
-      return 0;
-    });
-  }, [searchFilteredRecords, sortRules, fields]);
 
   const colorAssignments = useMemo(() => {
     if (!colorFieldId) return {};
     const palette = ['#2563eb', '#16a34a', '#db2777', '#f97316', '#0ea5e9', '#a855f7', '#059669', '#be185d', '#d97706', '#2563eb33'];
     const assignments: Record<string, string> = {};
     let paletteIndex = 0;
-    sortedRecords.forEach(record => {
+    processedRecords.forEach(record => {
       const rawValue = record.values?.[colorFieldId];
       const key = rawValue === null || rawValue === undefined || rawValue === '' ? '__empty' : String(rawValue);
       if (!assignments[key]) {
@@ -654,9 +682,7 @@ export default function BaseDetailPage() {
       }
     });
     return assignments;
-  }, [colorFieldId, sortedRecords]);
-
-  const processedRecords = sortedRecords;
+  }, [colorFieldId, processedRecords]);
 
   const hiddenFieldsCount = hiddenFieldIds.length;
   const activeFilterCount = filterState.conditions.filter(condition => condition.fieldId && condition.value.trim()).length;
@@ -843,6 +869,7 @@ export default function BaseDetailPage() {
               onTableSelect={setSelectedTableId}
               onAddRecord={handleAddRow}
               showTableTabs={viewMode === 'grid'}
+              viewMode={viewMode}
               onImportCsv={openImportModal}
               onCreateTable={openCreateTableModal}
               onRenameTable={handleRenameTable}
@@ -855,7 +882,7 @@ export default function BaseDetailPage() {
               onColor={(el) => toggleViewPanel('color', el)}
               onShare={(el) => toggleViewPanel('share', el)}
               onDeleteAllFields={openDeleteAllFieldsModal}
-            canDeleteTable={can.delete}
+              canDeleteTable={can.delete}
               viewState={viewControlState}
               activePanel={activeViewPanel}
               searchQuery={searchQuery}
@@ -974,7 +1001,6 @@ export default function BaseDetailPage() {
                   onUpdateCell={updateCell}
                   onDeleteRow={deleteRecord}
                   onAddRow={handleAddRow}
-                  onAddStackValue={handleAddStackValue}
                   savingCell={savingCell}
                   canDeleteRow={can.delete ?? true}
                 />

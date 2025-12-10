@@ -360,6 +360,11 @@ export const useBaseDetail = (baseId: string | null) => {
       const fieldsData = await BaseDetailService.getFields(tableId);
       fieldsCache.current.set(tableId, fieldsData);
       setFields(fieldsData);
+      
+      // Also reload records since their values have been cleared
+      const recordsData = await BaseDetailService.getRecords(tableId);
+      recordsCache.current.set(tableId, recordsData);
+      setRecords(recordsData);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to delete all fields';
       setError(message);
@@ -447,6 +452,14 @@ export const useBaseDetail = (baseId: string | null) => {
       setSavingCell({ recordId, fieldId });
       setError(null);
       
+      console.log("🔄 useBaseDetail.updateCell:", {
+        recordId,
+        fieldId,
+        value,
+        valueType: typeof value,
+        isArray: Array.isArray(value)
+      });
+      
       await BaseDetailService.updateCell(recordId, fieldId, value);
       
       // Update local state
@@ -456,6 +469,12 @@ export const useBaseDetail = (baseId: string | null) => {
             ? { ...record, values: { ...record.values, [fieldId]: value } }
             : record
         );
+        
+        console.log("✅ Records state updated:", {
+          totalRecords: next.length,
+          updatedRecord: next.find(r => r.id === recordId)?.values?.[fieldId]
+        });
+        
         if (selectedTableId) {
           recordsCache.current.set(selectedTableId, next);
         }
@@ -464,6 +483,7 @@ export const useBaseDetail = (baseId: string | null) => {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to update cell';
       setError(message);
+      console.error("❌ updateCell error:", err);
       throw err;
     } finally {
       setSavingCell(null);
