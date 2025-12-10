@@ -345,6 +345,26 @@ export default function BaseDetailPage() {
     }
   };
 
+  const handleReorderFields = async (reorderedFields: FieldRow[]) => {
+    try {
+      // Create updates with new order indices
+      const updates = reorderedFields.map((field, index) => ({
+        id: field.id,
+        order_index: index
+      }));
+      
+      // Update order in database
+      await BaseDetailService.updateFieldOrder(updates);
+      
+      // Reload fields to reflect new order
+      if (selectedTableId) {
+        await loadFields(selectedTableId);
+      }
+    } catch (err) {
+      console.error('Error reordering fields:', err);
+    }
+  };
+
   const getRandomKanbanColor = () => {
     const palette = [
       '#2563eb',
@@ -988,6 +1008,7 @@ export default function BaseDetailPage() {
                   onAddField={handleAddField}
                   onFieldContextMenu={handleFieldContextMenu}
                   onRowContextMenu={handleRowContextMenu}
+                  onReorderFields={handleReorderFields}
                   canDeleteRow={can.delete ?? true}
                   groupFieldIds={groupFieldIds}
                   colorFieldId={colorFieldId}

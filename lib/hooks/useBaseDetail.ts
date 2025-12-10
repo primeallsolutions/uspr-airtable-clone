@@ -316,7 +316,22 @@ export const useBaseDetail = (baseId: string | null) => {
   const updateField = useCallback(async (fieldId: string, updates: Partial<FieldRow>) => {
     try {
       setError(null);
+      
+      // Check if this is a masterlist field being updated with options
+      const updatingField = fields.find(f => f.id === fieldId);
+      const isSelectField = updatingField && (updatingField.type === 'single_select' || updatingField.type === 'multi_select');
+      const isUpdatingOptions = updates.options !== undefined;
+      const isMasterlistField = updatingField && tables.find(t => t.id === updatingField.table_id)?.is_master_list;
+      
       await BaseDetailService.updateField(fieldId, updates);
+      
+      // If updating options on a masterlist select field, clear all field caches
+      // so other tables will reload with the updated options
+      if (isMasterlistField && isSelectField && isUpdatingOptions) {
+        console.log('🔄 Clearing all field caches due to masterlist field options update');
+        fieldsCache.current.clear();
+      }
+      
       setFields(prev => {
         const next = prev.map(f => f.id === fieldId ? { ...f, ...updates } : f);
         if (next.length && next[0].table_id) {
@@ -330,7 +345,7 @@ export const useBaseDetail = (baseId: string | null) => {
       setError(message);
       throw err;
     }
-  }, []);
+  }, [fields, tables]);
 
   const deleteField = useCallback(async (fieldId: string) => {
     try {

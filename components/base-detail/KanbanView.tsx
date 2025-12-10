@@ -23,7 +23,7 @@ interface KanbanColumn {
 interface DropdownOption {
   key: string;
   label: string;
-  color?: string;
+  color: string;
 }
 
 // Simple color palette for columns
@@ -385,8 +385,8 @@ export const KanbanView = ({
           <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-left text-sm">
             <p className="font-medium text-gray-900 mb-2">How to set up:</p>
             <ol className="list-decimal list-inside space-y-1 text-gray-600">
-              <li>Create a Single Select field (e.g., "Status")</li>
-              <li>Add dropdown options (e.g., "Buylist", "Waiting For Documents", "Pre Qualified")</li>
+              <li>Create a Single Select field (e.g., &ldquo;Status&rdquo;)</li>
+              <li>Add dropdown options (e.g., &ldquo;Buylist&rdquo;, &ldquo;Waiting For Documents&rdquo;, &ldquo;Pre Qualified&rdquo;)</li>
               <li>Each option will become a Kanban board column</li>
               <li>Drag cards between boards to update their status</li>
             </ol>
@@ -555,7 +555,7 @@ export const KanbanView = ({
                 {column.records.length === 0 && (
                   <div className="mt-8 text-center text-xs text-gray-400">
                     <p>No contacts yet</p>
-                    <p className="mt-1">Drag contacts here or click "Add contact"</p>
+                    <p className="mt-1">Drag contacts here or click &ldquo;Add contact&rdquo;</p>
                   </div>
                 )}
               </div>

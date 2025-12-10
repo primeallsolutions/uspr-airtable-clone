@@ -21,6 +21,7 @@ interface GridViewProps {
   onAddField: () => void;
   onFieldContextMenu: (e: React.MouseEvent, field: FieldRow) => void;
   onRowContextMenu: (e: React.MouseEvent, record: RecordRow) => void;
+  onReorderFields?: (reorderedFields: FieldRow[]) => void;
   canDeleteRow?: boolean;
   groupFieldIds?: string[];
   colorFieldId?: string | null;
@@ -44,35 +45,42 @@ export const GridView = ({
   onAddField,
   onFieldContextMenu,
   onRowContextMenu,
+  onReorderFields,
   canDeleteRow = true,
   groupFieldIds,
   colorFieldId,
   colorAssignments = {}
 }: GridViewProps) => {
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
-  const orderRef = useRef<Map<string, number>>(new Map());
+  const initialOrderRef = useRef<string[] | null>(null);
 
-  // Preserve stable row ordering based on first appearance to avoid jumpiness after edits
+  // Preserve stable row ordering based on initial load to prevent reordering on updates
   const displayRecords = useMemo(() => {
-    const order = orderRef.current;
-    const idSet = new Set(records.map(r => r.id));
-    // Clean up removed ids
-    for (const key of Array.from(order.keys())) {
-      if (!idSet.has(key)) {
-        order.delete(key);
-      }
+    // On first render or when records change significantly, capture the initial order
+    if (initialOrderRef.current === null || initialOrderRef.current.length === 0) {
+      initialOrderRef.current = records.map(r => r.id);
+      return records;
     }
-    // Assign order to new records
-    for (const rec of records) {
-      if (!order.has(rec.id)) {
-        order.set(rec.id, order.size);
-      }
+
+    // Build a map of current record IDs for quick lookup
+    const recordsById = new Map(records.map(r => [r.id, r]));
+    
+    // Maintain the initial order, filtering out deleted records
+    const orderedRecords = initialOrderRef.current
+      .map(id => recordsById.get(id))
+      .filter((r): r is RecordRow => r !== undefined);
+    
+    // Add any new records that weren't in the initial order (append to end)
+    const existingIds = new Set(initialOrderRef.current);
+    const newRecords = records.filter(r => !existingIds.has(r.id));
+    
+    if (newRecords.length > 0) {
+      // Update the initial order ref to include new records
+      initialOrderRef.current = [...initialOrderRef.current.filter(id => recordsById.has(id)), ...newRecords.map(r => r.id)];
+      return [...orderedRecords, ...newRecords];
     }
-    return [...records].sort((a, b) => {
-      const aIdx = order.get(a.id) ?? 0;
-      const bIdx = order.get(b.id) ?? 0;
-      return aIdx - bIdx;
-    });
+    
+    return orderedRecords;
   }, [records]);
 
   const handleSelectAll = (checked: boolean) => {
@@ -261,6 +269,7 @@ export const GridView = ({
               onAddField={onAddField}
               onFieldContextMenu={onFieldContextMenu}
               onSelectAll={handleSelectAll}
+              onReorderFields={onReorderFields}
             />
           </div>
           

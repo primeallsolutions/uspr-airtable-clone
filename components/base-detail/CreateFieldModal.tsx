@@ -98,6 +98,8 @@ export const CreateFieldModal = ({ isOpen, onClose, onCreateField }: CreateField
   const [selectedType, setSelectedType] = useState<FieldType>('text');
   const [options, setOptions] = useState<OptionItem[]>([]);
   const [editingOption, setEditingOption] = useState<string | null>(null);
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [newOptionLabel, setNewOptionLabel] = useState("");
   const [newOptionColor, setNewOptionColor] = useState(predefinedColors[0].value);
 
@@ -173,6 +175,54 @@ export const CreateFieldModal = ({ isOpen, onClose, onCreateField }: CreateField
       e.preventDefault();
       handleAddOption();
     }
+  };
+
+  // Drag and drop handlers for reordering options
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    setDraggedIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+    // Set a transparent drag image for better UX
+    const dragImage = document.createElement('div');
+    dragImage.style.opacity = '0';
+    document.body.appendChild(dragImage);
+    e.dataTransfer.setDragImage(dragImage, 0, 0);
+    setTimeout(() => document.body.removeChild(dragImage), 0);
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (draggedIndex !== null && draggedIndex !== index) {
+      setDragOverIndex(index);
+    }
+  };
+
+  const handleDragLeave = () => {
+    setDragOverIndex(null);
+  };
+
+  const handleDrop = (e: React.DragEvent, dropIndex: number) => {
+    e.preventDefault();
+    
+    if (draggedIndex === null || draggedIndex === dropIndex) {
+      setDraggedIndex(null);
+      setDragOverIndex(null);
+      return;
+    }
+
+    // Reorder the options array
+    const reorderedOptions = [...options];
+    const [movedOption] = reorderedOptions.splice(draggedIndex, 1);
+    reorderedOptions.splice(dropIndex, 0, movedOption);
+
+    setOptions(reorderedOptions);
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null);
+    setDragOverIndex(null);
   };
 
   if (!isOpen) return null;
@@ -253,9 +303,24 @@ export const CreateFieldModal = ({ isOpen, onClose, onCreateField }: CreateField
               
               {/* Existing Options */}
               <div className="space-y-2 mb-4">
-                {options.map((option) => (
-                  <div key={option.id} className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg group">
-                    <GripVertical size={16} className="text-gray-400 cursor-move" />
+                {options.map((option, index) => {
+                  const isDragging = draggedIndex === index;
+                  const isDragOver = dragOverIndex === index;
+                  
+                  return (
+                  <div 
+                    key={option.id} 
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, index)}
+                    onDragOver={(e) => handleDragOver(e, index)}
+                    onDragLeave={handleDragLeave}
+                    onDrop={(e) => handleDrop(e, index)}
+                    onDragEnd={handleDragEnd}
+                    className={`flex items-center gap-2 p-3 bg-gray-50 rounded-lg group transition-all ${
+                      isDragging ? 'opacity-50' : ''
+                    } ${isDragOver ? 'border-l-4 border-l-blue-500' : ''}`}
+                  >
+                    <GripVertical size={16} className="text-gray-400 cursor-grab active:cursor-grabbing" />
                     
                     {/* Color Preview */}
                     <div 
@@ -325,7 +390,8 @@ export const CreateFieldModal = ({ isOpen, onClose, onCreateField }: CreateField
                       </button>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
               
               {/* Add New Option */}
