@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { MoreVertical, Zap, Crown, Edit, Trash2, ArrowLeft } from "lucide-react";
 import type { BaseRow, TableRow, TopTab } from "@/lib/types/base-detail";
+import { GHLSyncStatus } from "./GHLSyncStatus";
 
 interface TopNavigationProps {
   base: BaseRow | null;
@@ -19,6 +20,8 @@ interface TopNavigationProps {
   onExportBase?: () => void;
   showInterfacesTab?: boolean;
   showFormsTab?: boolean;
+  baseId?: string;
+  onConnectGHL?: () => void;
 }
 
 export const TopNavigation = ({
@@ -36,7 +39,9 @@ export const TopNavigation = ({
   canDeleteTable = true,
   onExportBase,
   showInterfacesTab = true,
-  showFormsTab = true
+  showFormsTab = true,
+  baseId,
+  onConnectGHL
 }: TopNavigationProps) => {
   const router = useRouter();
   const [isTableDropdownOpen, setIsTableDropdownOpen] = useState(false);
@@ -185,6 +190,15 @@ export const TopNavigation = ({
 
         {/* Actions */}
         <div className="flex items-center gap-2">
+          {/* GHL Integration */}
+          {baseId && (
+            <GHLSyncStatus 
+              baseId={baseId} 
+              onOpenSettings={onConnectGHL}
+              showConnectButton={onConnectGHL !== undefined}
+            />
+          )}
+
           {onExportBase && (
             <button
               type="button"

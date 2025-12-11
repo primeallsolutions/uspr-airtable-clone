@@ -1,5 +1,5 @@
-import { useMemo, useState, useRef } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { useMemo, useState, useRef, useEffect } from "react";
+import { Plus, Trash2, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 import { TableHeader } from "./TableHeader";
 import { TableRow } from "./TableRow";
 import type { RecordRow, FieldRow, SavingCell, TableRow as TableRowType } from "@/lib/types/base-detail";
@@ -53,6 +53,26 @@ export const GridView = ({
 }: GridViewProps) => {
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
   const initialOrderRef = useRef<string[] | null>(null);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50); // Default 50 records per page
+  const pageSizeOptions = [25, 50, 100];
+
+  // Reset to page 1 when records change significantly
+  useEffect(() => {
+    setCurrentPage(1);
+    // Reset order ref when records count changes significantly (more than 10% difference)
+    if (initialOrderRef.current && records.length > 0) {
+      const currentLength = initialOrderRef.current.length;
+      const newLength = records.length;
+      const diff = Math.abs(currentLength - newLength);
+      // If change is significant (>10% or absolute change >100), reset
+      if (diff > 100 || diff / Math.max(currentLength, newLength) > 0.1) {
+        initialOrderRef.current = null;
+      }
+    }
+  }, [records.length]);
 
   // Preserve stable row ordering based on initial load to prevent reordering on updates
   const displayRecords = useMemo(() => {
@@ -80,12 +100,50 @@ export const GridView = ({
       return [...orderedRecords, ...newRecords];
     }
     
+    // If the ordered records length doesn't match records length, there might be an inconsistency
+    // In that case, fall back to using records directly to ensure accuracy
+    if (orderedRecords.length !== records.length) {
+      initialOrderRef.current = records.map(r => r.id);
+      return records;
+    }
+    
     return orderedRecords;
   }, [records]);
 
+  // Pagination calculations - use records.length for accurate total count
+  // displayRecords preserves order but should match records.length
+  const totalRecords = records.length;
+  const totalPages = Math.ceil(totalRecords / pageSize);
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, totalRecords);
+  
+  // Get paginated records for display
+  const paginatedRecords = useMemo(() => {
+    return displayRecords.slice(startIndex, endIndex);
+  }, [displayRecords, startIndex, endIndex]);
+
+  // Pagination handlers
+  const goToPage = (page: number) => {
+    setCurrentPage(Math.max(1, Math.min(page, totalPages)));
+  };
+
+  const goToFirstPage = () => goToPage(1);
+  const goToPrevPage = () => goToPage(currentPage - 1);
+  const goToNextPage = () => goToPage(currentPage + 1);
+  const goToLastPage = () => goToPage(totalPages);
+
+  const handlePageSizeChange = (newSize: number) => {
+    setPageSize(newSize);
+    // Adjust current page to keep roughly the same records in view
+    const firstVisibleRecord = startIndex;
+    const newPage = Math.floor(firstVisibleRecord / newSize) + 1;
+    setCurrentPage(Math.max(1, newPage));
+  };
+
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedRows(new Set(displayRecords.map(r => r.id)));
+      // Only select records on the current page
+      setSelectedRows(new Set(paginatedRecords.map(r => r.id)));
     } else {
       setSelectedRows(new Set());
     }
@@ -111,8 +169,9 @@ export const GridView = ({
     }
   };
 
-  const allSelected = displayRecords.length > 0 && selectedRows.size === displayRecords.length;
-  const someSelected = selectedRows.size > 0 && selectedRows.size < displayRecords.length;
+  // Check if all records on current page are selected
+  const allSelected = paginatedRecords.length > 0 && paginatedRecords.every(r => selectedRows.has(r.id));
+  const someSelected = selectedRows.size > 0 && !allSelected;
 
   type GroupSection = {
     id: string;
@@ -215,7 +274,7 @@ export const GridView = ({
 
   const rowContent = groupedSections
     ? renderGroupSections(groupedSections)
-    : displayRecords.map((record, index) => (
+    : paginatedRecords.map((record, index) => (
         <TableRow
           key={record.id}
           record={record}
@@ -223,7 +282,7 @@ export const GridView = ({
           allFields={allFields} // Pass all fields for masterlist field matching
           tables={tables}
           selectedTableId={selectedTableId}
-          rowIndex={index}
+          rowIndex={startIndex + index} // Use actual row index for display
           savingCell={savingCell}
           isSelected={selectedRows.has(record.id)}
           onUpdateCell={onUpdateCell}
@@ -316,14 +375,93 @@ export const GridView = ({
                 </div>
                 <div className="w-32 flex-shrink-0"></div>
               </div>
-              
-              {/* Footer with record count */}
-              <div className="flex items-center justify-end px-6 py-3 bg-gray-50 border-t border-gray-200">
-                <span className="text-sm text-gray-500">{records.length} {records.length === 1 ? 'record' : 'records'}</span>
-              </div>
             </>
           )}
         </div>
+      </div>
+
+      {/* Pagination controls - Fixed outside scrollable area */}
+      <div className="flex-shrink-0 flex items-center justify-between px-6 py-3 bg-gray-50 border-t border-gray-200">
+        {/* Left side - Record count and page size selector */}
+        <div className="flex items-center gap-4">
+          <span className="text-sm text-gray-500">
+            {totalRecords} {totalRecords === 1 ? 'record' : 'records'}
+          </span>
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-gray-500">Show:</label>
+            <select
+              value={pageSize}
+              onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+              className="px-2 py-1 text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 bg-white"
+            >
+              {pageSizeOptions.map(size => (
+                <option key={size} value={size}>{size}</option>
+              ))}
+            </select>
+            <span className="text-sm text-gray-500">per page</span>
+          </div>
+        </div>
+
+        {/* Right side - Pagination controls */}
+        {totalPages > 1 && (
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-600">
+              {startIndex + 1}-{endIndex} of {totalRecords}
+            </span>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={goToFirstPage}
+                disabled={currentPage === 1}
+                className="p-1.5 rounded hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                title="First page"
+              >
+                <ChevronsLeft size={18} className="text-gray-600" />
+              </button>
+              <button
+                onClick={goToPrevPage}
+                disabled={currentPage === 1}
+                className="p-1.5 rounded hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Previous page"
+              >
+                <ChevronLeft size={18} className="text-gray-600" />
+              </button>
+              
+              {/* Page number input */}
+              <div className="flex items-center gap-1 mx-2">
+                <span className="text-sm text-gray-600">Page</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={totalPages}
+                  value={currentPage}
+                  onChange={(e) => {
+                    const page = parseInt(e.target.value, 10);
+                    if (!isNaN(page)) goToPage(page);
+                  }}
+                  className="w-14 px-2 py-1 text-sm text-center border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                />
+                <span className="text-sm text-gray-600">of {totalPages}</span>
+              </div>
+
+              <button
+                onClick={goToNextPage}
+                disabled={currentPage === totalPages}
+                className="p-1.5 rounded hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Next page"
+              >
+                <ChevronRight size={18} className="text-gray-600" />
+              </button>
+              <button
+                onClick={goToLastPage}
+                disabled={currentPage === totalPages}
+                className="p-1.5 rounded hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Last page"
+              >
+                <ChevronsRight size={18} className="text-gray-600" />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
