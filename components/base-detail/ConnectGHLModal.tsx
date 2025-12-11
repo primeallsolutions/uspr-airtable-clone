@@ -61,6 +61,39 @@ export const ConnectGHLModal = ({
   // All available GHL fields (discovered from mapping)
   const [availableGHLFields, setAvailableGHLFields] = useState<string[]>(STANDARD_GHL_FIELDS);
 
+  // Define functions before they're used in useEffect
+  const loadIntegration = useCallback(async () => {
+    try {
+      setLoading(true);
+      const integrationData = await GHLService.getIntegrationByBaseId(baseId);
+      if (integrationData) {
+        setIntegration(integrationData);
+      } else {
+        setIntegration(null);
+      }
+    } catch (error) {
+      console.error('Failed to load integration:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [baseId]);
+
+  const loadFields = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('fields')
+        .select('*')
+        .eq('table_id', tableId)
+        .order('order_index');
+
+      if (error) throw error;
+      setFields(data || []);
+    } catch (error) {
+      console.error('Failed to load fields:', error);
+      toast.error('Failed to load fields');
+    }
+  }, [tableId]);
+
   // Load integration status and fields
   useEffect(() => {
     if (isOpen && baseId) {
@@ -138,38 +171,6 @@ export const ConnectGHLModal = ({
       setFieldMappings([]);
     }
   }, [integration, fields]);
-
-  const loadIntegration = useCallback(async () => {
-    try {
-      setLoading(true);
-      const integrationData = await GHLService.getIntegrationByBaseId(baseId);
-      if (integrationData) {
-        setIntegration(integrationData);
-      } else {
-        setIntegration(null);
-      }
-    } catch (error) {
-      console.error('Failed to load integration:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, [baseId]);
-
-  const loadFields = useCallback(async () => {
-    try {
-      const { data, error } = await supabase
-        .from('fields')
-        .select('*')
-        .eq('table_id', tableId)
-        .order('order_index');
-
-      if (error) throw error;
-      setFields(data || []);
-    } catch (error) {
-      console.error('Failed to load fields:', error);
-      toast.error('Failed to load fields');
-    }
-  }, [tableId]);
 
   const handleConnect = async () => {
     if (!accessToken.trim() || !locationId.trim()) {
