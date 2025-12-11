@@ -283,6 +283,25 @@ export class BaseDetailService {
     return (data ?? []) as FieldRow[];
   }
 
+  // Update field order for multiple fields
+  static async updateFieldOrder(updates: Array<{ id: string; order_index: number }>): Promise<void> {
+    // Update each field's order_index
+    const promises = updates.map(({ id, order_index }) =>
+      supabase
+        .from("fields")
+        .update({ order_index })
+        .eq("id", id)
+    );
+
+    const results = await Promise.all(promises);
+    
+    // Check for errors
+    const errors = results.filter(result => result.error);
+    if (errors.length > 0) {
+      throw new Error(`Failed to update field order: ${errors.map(r => r.error?.message).join(', ')}`);
+    }
+  }
+
   // Map select/multi-select values between fields by display name/label
   private static mapSelectValueBetweenFields(
     value: unknown,
@@ -527,27 +546,46 @@ export class BaseDetailService {
     // If masterlist select options changed, propagate to same-name select fields in other tables in the base
     const isSelectField = fieldMeta.type === 'single_select' || fieldMeta.type === 'multi_select';
     if (tableMeta.is_master_list && isSelectField && updates.options) {
+      console.log(`🔄 Propagating options for masterlist field "${fieldMeta.name}" (${fieldMeta.type}) to other tables`);
       try {
-        const { data: peerTables } = await supabase
+        const { data: peerTables, error: peerTablesError } = await supabase
           .from("tables")
-          .select("id")
+          .select("id, name")
           .eq("base_id", tableMeta.base_id)
           .eq("is_master_list", false);
 
+        if (peerTablesError) {
+          console.error('❌ Failed to fetch peer tables:', peerTablesError);
+          throw peerTablesError;
+        }
+
         const peerTableIds = (peerTables ?? []).map(t => t.id);
+        console.log(`📋 Found ${peerTableIds.length} non-masterlist tables:`, peerTables?.map(t => t.name));
+        
         if (peerTableIds.length === 0) {
+          console.log('⚠️ No non-masterlist tables found to propagate to');
           return;
         }
 
-        const { data: siblingFields } = await supabase
+        const { data: siblingFields, error: siblingFieldsError } = await supabase
           .from("fields")
-          .select("id")
+          .select("id, name, table_id")
           .eq("name", fieldMeta.name)
           .eq("type", fieldMeta.type)
           .in("table_id", peerTableIds);
 
+        if (siblingFieldsError) {
+          console.error('❌ Failed to fetch sibling fields:', siblingFieldsError);
+          throw siblingFieldsError;
+        }
+
         const siblingIds = (siblingFields ?? []).map(f => f.id);
+        console.log(`🎯 Found ${siblingIds.length} sibling fields with name "${fieldMeta.name}":`, 
+          siblingFields?.map(f => ({ id: f.id, table: peerTables?.find(t => t.id === f.table_id)?.name }))
+        );
+        
         if (siblingIds.length === 0) {
+          console.log(`⚠️ No fields with name "${fieldMeta.name}" and type "${fieldMeta.type}" found in non-masterlist tables`);
           return;
         }
 
@@ -557,12 +595,14 @@ export class BaseDetailService {
           .in("id", siblingIds);
 
         if (propagateError) {
-          console.error('Failed to propagate select options to sibling fields', propagateError);
+          console.error('❌ Failed to propagate select options to sibling fields:', propagateError);
+          throw propagateError;
         } else {
-          console.log('Propagated select options to sibling fields', siblingIds);
+          console.log(`✅ Successfully propagated options to ${siblingIds.length} sibling field(s)`);
         }
       } catch (propErr) {
-        console.error('Failed to sync select options from masterlist to other tables', propErr);
+        console.error('❌ Failed to sync select options from masterlist to other tables:', propErr);
+        // Don't throw - the main update was successful
       }
     }
   }
@@ -577,41 +617,96 @@ export class BaseDetailService {
   }
 
   static async deleteAllFields(tableId: string): Promise<void> {
-    const { error } = await supabase
+    // First, delete all field definitions
+    const { error: fieldsError } = await supabase
       .from("fields")
       .delete()
       .eq("table_id", tableId);
 
-    if (error) throw error;
+    if (fieldsError) throw fieldsError;
+
+    // Then, clear all data from records in this table by setting values to empty object
+    const { error: recordsError } = await supabase
+      .from("records")
+      .update({ values: {} })
+      .eq("table_id", tableId);
+
+    if (recordsError) throw recordsError;
   }
 
   // Record operations
   static async getRecords(tableId: string): Promise<RecordRow[]> {
-    const { data, error } = await supabase
-      .from("records")
-      .select("id, table_id, values, created_at")
-      .eq("table_id", tableId)
-      .order("created_at", { ascending: false });
+    // Supabase has a default limit of 1000 rows
+    // We need to paginate to get all records
+    const PAGE_SIZE = 1000;
+    let allRecords: RecordRow[] = [];
+    let page = 0;
+    let hasMore = true;
 
-    if (error) throw error;
-    return (data ?? []) as RecordRow[];
+    while (hasMore) {
+      const from = page * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
+
+      const { data, error } = await supabase
+        .from("records")
+        .select("id, table_id, values, created_at")
+        .eq("table_id", tableId)
+        .order("created_at", { ascending: false })
+        .range(from, to);
+
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        allRecords = allRecords.concat(data as RecordRow[]);
+        // If we got less than PAGE_SIZE, we've reached the end
+        hasMore = data.length === PAGE_SIZE;
+        page++;
+      } else {
+        hasMore = false;
+      }
+    }
+
+    return allRecords;
   }
 
   static async getAllRecordsFromBase(baseId: string): Promise<RecordRow[]> {
-    const { data, error } = await supabase
-      .from("records")
-      .select(`
-        id, 
-        table_id, 
-        values, 
-        created_at,
-        tables!inner(base_id)
-      `)
-      .eq("tables.base_id", baseId)
-      .order("created_at", { ascending: false });
+    // Supabase has a default limit of 1000 rows
+    // We need to paginate to get all records
+    const PAGE_SIZE = 1000;
+    let allRecords: RecordRow[] = [];
+    let page = 0;
+    let hasMore = true;
 
-    if (error) throw error;
-    return (data ?? []) as RecordRow[];
+    while (hasMore) {
+      const from = page * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
+
+      const { data, error } = await supabase
+        .from("records")
+        .select(`
+          id, 
+          table_id, 
+          values, 
+          created_at,
+          tables!inner(base_id)
+        `)
+        .eq("tables.base_id", baseId)
+        .order("created_at", { ascending: false })
+        .range(from, to);
+
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        allRecords = allRecords.concat(data as RecordRow[]);
+        // If we got less than PAGE_SIZE, we've reached the end
+        hasMore = data.length === PAGE_SIZE;
+        page++;
+      } else {
+        hasMore = false;
+      }
+    }
+
+    return allRecords;
   }
 
   static async createRecord(tableId: string, values: Record<string, unknown> = {}): Promise<RecordRow> {

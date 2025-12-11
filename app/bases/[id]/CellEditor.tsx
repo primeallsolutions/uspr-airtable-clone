@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import type { FieldRow } from "@/lib/types/base-detail";
 
 const DEFAULT_CHOICE_COLORS = ['#1E40AF', '#C2410C', '#B91C1C']; // dark blue, dark orange, dark red
@@ -18,6 +18,11 @@ export default function CellEditor({
   const [local, setLocal] = useState<string>(() => (value == null ? "" : String(value)));
   const [emailError, setEmailError] = useState<string | null>(null);
   const [phoneError, setPhoneError] = useState<string | null>(null);
+  
+  // Sync local state when value prop changes (e.g., after sync from GHL)
+  useEffect(() => {
+    setLocal(value == null ? "" : String(value));
+  }, [value]);
 
   type SelectOptions = { choices?: string[] } | Record<string, { label: string; color: string }>;
 
@@ -347,6 +352,30 @@ export default function CellEditor({
   }
 
   // default: text
+  // Check if the value contains newlines (multi-line text or text box list from GHL)
+  const isMultiLine = typeof value === 'string' && value.includes('\n');
+  
+  if (isMultiLine || field.type === 'long_text') {
+    return (
+      <textarea
+        className={`${baseInputClass} resize-none min-h-[60px] max-h-[120px] overflow-y-auto`}
+        value={local}
+        onChange={(e) => setLocal(e.target.value)}
+        onBlur={handleCommit}
+        onKeyDown={(e) => { 
+          // Allow Enter for new lines in textarea, Ctrl+Enter or Cmd+Enter to commit
+          if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+            e.preventDefault();
+            handleCommit();
+          }
+        }}
+        disabled={isSaving}
+        placeholder="Enter text..."
+        rows={Math.min(5, (local.match(/\n/g) || []).length + 1)}
+      />
+    );
+  }
+  
   return (
     <input
       type="text"

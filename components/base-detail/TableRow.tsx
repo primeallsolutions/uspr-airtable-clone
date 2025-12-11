@@ -122,10 +122,12 @@ export const TableRow = ({
         
         const isSticky = idx === 0; // keep first data column visible
         const leftOffset = idx === 0 ? '5.5rem' : undefined; // checkbox + row number widths
+        // Check if this cell might have multi-line content (text with newlines)
+        const hasMultiLineContent = typeof value === 'string' && value.includes('\n');
         return (
           <div
             key={field.id}
-            className={`flex-1 min-w-[150px] max-w-[300px] border-r border-gray-200 relative p-3 flex items-center ${isSticky ? 'sticky z-20 bg-white shadow-[4px_0_6px_-4px_rgba(0,0,0,0.08)]' : ''}`}
+            className={`flex-1 min-w-[150px] max-w-[300px] border-r border-gray-200 relative p-2 ${hasMultiLineContent ? 'items-start' : 'flex items-center'} ${isSticky ? 'sticky z-20 bg-white shadow-[4px_0_6px_-4px_rgba(0,0,0,0.08)]' : ''}`}
             style={isSticky ? { left: leftOffset } : undefined}
           >
             {renderCellContent()}
