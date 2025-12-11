@@ -320,7 +320,8 @@ export const useBaseDetail = (baseId: string | null) => {
       // Check if this is a masterlist field being updated with options
       const updatingField = fields.find(f => f.id === fieldId);
       const isSelectField = updatingField && (updatingField.type === 'single_select' || updatingField.type === 'multi_select');
-      const isUpdatingOptions = updates.options !== undefined;
+      const isUpdatingOptions = updates.options !== undefined && updates.options !== null;
+      if (!isUpdatingOptions) delete updates.options;
       const isMasterlistField = updatingField && tables.find(t => t.id === updatingField.table_id)?.is_master_list;
       
       await BaseDetailService.updateField(fieldId, updates);
