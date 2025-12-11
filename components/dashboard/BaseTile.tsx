@@ -6,11 +6,12 @@ import type { BaseRecord } from "@/lib/types/dashboard";
 
 interface BaseTileProps {
   base: BaseRecord;
+  onStarToggle?: (base: BaseRecord) => void;
   onContextMenu?: (e: React.MouseEvent, base: BaseRecord) => void;
   onDeleteClick?: (base: BaseRecord) => void;
 }
 
-export const BaseTile = ({ base, onContextMenu, onDeleteClick }: BaseTileProps) => {
+export const BaseTile = ({ base, onStarToggle, onContextMenu, onDeleteClick }: BaseTileProps) => {
   const router = useRouter();
   const { timezone } = useTimezone();
 
@@ -23,11 +24,22 @@ export const BaseTile = ({ base, onContextMenu, onDeleteClick }: BaseTileProps) 
     }
   };
 
+  // Handlers for star toggle, context menu, and delete clicks
+  const handleToggleStarClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    onStarToggle?.(base);
+  }
   const handleContextMenuClick = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     onContextMenu?.(e, base);
   };
+  const handleDeleteClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    onDeleteClick?.(base);
+  }
 
   const lastOpened = base.last_opened_at ?? base.created_at;
 
@@ -41,10 +53,10 @@ export const BaseTile = ({ base, onContextMenu, onDeleteClick }: BaseTileProps) 
           <Rocket size={18} />
         </div>
         <div className="flex items-center gap-2">
-          {base.is_starred && <Star className="w-5 h-5 text-yellow-500 fill-current" />}
+          {base.is_starred && <Star className="w-5 h-5 text-yellow-500 hover:text-yellow-400 fill-current" onClick={handleToggleStarClick} />}
           {onContextMenu && (
             <button 
-              className="text-gray-400 hover:text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity"
+              className="text-gray-400 hover:text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
               onClick={handleContextMenuClick}
               title="More options"
             >
@@ -53,8 +65,8 @@ export const BaseTile = ({ base, onContextMenu, onDeleteClick }: BaseTileProps) 
           )}
           {onDeleteClick && (
             <button
-              className="text-gray-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
-              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDeleteClick(base); }}
+              className="text-gray-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+              onClick={handleDeleteClick}
               title="Delete base"
             >
               <Trash2 size={18} />

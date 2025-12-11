@@ -301,6 +301,7 @@ export default function Dashboard() {
                 onCollectionViewChange={setCollectionView}
                 onSortOptionChange={setSortOption}
                 onSortToggle={setIsSortOpen}
+                onBaseStarToggle={toggleStar}
                 onBaseContextMenu={handleBaseContextMenu}
               />
             )}
@@ -314,6 +315,7 @@ export default function Dashboard() {
                 sortOption={sortOption}
                 onCollectionViewChange={setCollectionView}
                 onCreateBase={openCreateModal}
+                onBaseStarToggle={toggleStar}
                 onBaseContextMenu={handleBaseContextMenu}
                 onManageMembers={() => setIsManageWorkspaceMembersOpen(true)}
                 canManageMembers={role === 'owner' || role === 'admin'}
@@ -326,6 +328,7 @@ export default function Dashboard() {
                 starredBases={starredBases}
                 collectionView={collectionView}
                 onCollectionViewChange={setCollectionView}
+                onBaseStarToggle={toggleStar}
                 onBaseContextMenu={handleBaseContextMenu}
               />
             )}
