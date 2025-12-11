@@ -250,8 +250,10 @@ export default function CellEditor({
       <input
         type="date"
         className={centeredInputClass}
-        value={value == null ? '' : String(value)}
-        onChange={(e) => onUpdate(e.target.value || null)}
+        value={local}
+        onChange={(e) => setLocal(e.target.value)}
+        onBlur={handleCommit}
+        onKeyDown={(e) => { if (e.key === 'Enter') handleCommit(); }}
         disabled={isSaving}
       />
     );
@@ -262,8 +264,10 @@ export default function CellEditor({
       <input
         type="datetime-local"
         className={centeredInputClass}
-        value={value == null ? '' : String(value)}
-        onChange={(e) => onUpdate(e.target.value || null)}
+        value={local}
+        onChange={(e) => setLocal(e.target.value)}
+        onBlur={handleCommit}
+        onKeyDown={(e) => { if (e.key === 'Enter') handleCommit(); }}
         disabled={isSaving}
       />
     );
@@ -341,7 +345,7 @@ export default function CellEditor({
       <input
         type="number"
         className={centeredInputClass}
-        value={value == null ? '' : String(value)}
+        value={local}
         onChange={(e) => setLocal(e.target.value)}
         onBlur={handleCommit}
         onKeyDown={(e) => { if (e.key === 'Enter') handleCommit(); }}
