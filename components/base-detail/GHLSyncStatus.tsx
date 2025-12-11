@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { CheckCircle, AlertCircle, Loader2 } from "lucide-react";
 import { GHLService } from "@/lib/services/ghl-service";
 import type { GHLIntegration } from "@/lib/types/ghl-integration";
@@ -18,11 +18,7 @@ export const GHLSyncStatus = ({ baseId, onOpenSettings, showConnectButton = fals
   const [integration, setIntegration] = useState<GHLIntegration | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadIntegration();
-  }, [baseId]);
-
-  const loadIntegration = async () => {
+  const loadIntegration = useCallback(async () => {
     try {
       setLoading(true);
       const data = await GHLService.getIntegrationByBaseId(baseId);
@@ -33,7 +29,11 @@ export const GHLSyncStatus = ({ baseId, onOpenSettings, showConnectButton = fals
     } finally {
       setLoading(false);
     }
-  };
+  }, [baseId]);
+
+  useEffect(() => {
+    loadIntegration();
+  }, [loadIntegration]);
 
   if (loading) {
     return (

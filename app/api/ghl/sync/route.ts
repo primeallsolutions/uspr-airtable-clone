@@ -103,7 +103,7 @@ export async function POST(request: NextRequest) {
     let pageCount = 0;
 
     while (nextPageUrl) {
-      const contactsResponse = await fetch(
+      const contactsResponse: Response = await fetch(
         nextPageUrl,
         {
           headers: {
@@ -234,7 +234,7 @@ export async function POST(request: NextRequest) {
         // The list endpoint doesn't include custom field values
         let fullContact = contact;
         try {
-          const fullContactResponse = await fetch(
+          const fullContactResponse: Response = await fetch(
             `${GHL_API_BASE_URL}/contacts/${contact.id}`,
             {
               headers: {
