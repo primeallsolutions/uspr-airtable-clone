@@ -931,7 +931,7 @@ export default function BaseDetailPage() {
             {activeViewPanel && (
               <div
                 ref={viewPanelRef}
-                className="fixed z-30"
+                className="fixed z-50"
                 style={{
                   left: panelPosition.x,
                   top: panelPosition.y
