@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { X, CheckCircle, AlertCircle, Loader2, Link as LinkIcon, Key, MapPin, RefreshCw, Plus, Trash2, Wand2 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { GHLService } from "@/lib/services/ghl-service";
@@ -67,7 +67,7 @@ export const ConnectGHLModal = ({
       loadIntegration();
       loadFields();
     }
-  }, [isOpen, baseId, tableId]);
+  }, [isOpen, baseId, tableId, loadIntegration, loadFields]);
 
   // Reset form when modal opens
   useEffect(() => {
@@ -139,7 +139,7 @@ export const ConnectGHLModal = ({
     }
   }, [integration, fields]);
 
-  const loadIntegration = async () => {
+  const loadIntegration = useCallback(async () => {
     try {
       setLoading(true);
       const integrationData = await GHLService.getIntegrationByBaseId(baseId);
@@ -153,9 +153,9 @@ export const ConnectGHLModal = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, [baseId]);
 
-  const loadFields = async () => {
+  const loadFields = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('fields')
@@ -169,7 +169,7 @@ export const ConnectGHLModal = ({
       console.error('Failed to load fields:', error);
       toast.error('Failed to load fields');
     }
-  };
+  }, [tableId]);
 
   const handleConnect = async () => {
     if (!accessToken.trim() || !locationId.trim()) {
@@ -503,7 +503,7 @@ export const ConnectGHLModal = ({
                       className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                     <p className="text-xs text-gray-500 mt-1">
-                      Starts with "pit-" for Private Integration Tokens
+                      Starts with &quot;pit-&quot; for Private Integration Tokens
                     </p>
                   </div>
 
@@ -706,8 +706,8 @@ export const ConnectGHLModal = ({
                       <div className="p-8 text-center text-gray-500">
                         <p>No field mappings configured.</p>
                         <p className="mt-2 text-sm">
-                          Click <strong>"Map All Fields"</strong> to auto-create and map all GHL fields,
-                          <br />or click <strong>"Add Field"</strong> to manually add mappings.
+                          Click <strong>&quot;Map All Fields&quot;</strong> to auto-create and map all GHL fields,
+                          <br />or click <strong>&quot;Add Field&quot;</strong> to manually add mappings.
                         </p>
                       </div>
                     ) : (
@@ -753,7 +753,7 @@ export const ConnectGHLModal = ({
                 {/* Field mapping info */}
                 <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
                   <p className="text-xs text-gray-600">
-                    <strong>Tip:</strong> Click "Map All Fields" to automatically discover all GHL fields and create matching fields in your base.
+                    <strong>Tip:</strong> Click &quot;Map All Fields&quot; to automatically discover all GHL fields and create matching fields in your base.
                     Contacts will sync to the masterlist table. The GHL Contact ID is automatically stored for deduplication.
                   </p>
                 </div>

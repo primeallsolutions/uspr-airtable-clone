@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Fetch first page to get total count from meta
-    const contactsResponse = await fetch(
+    const contactsResponse: Response = await fetch(
       `${GHL_API_BASE_URL}/contacts/?locationId=${integration.location_id}&limit=1`,
       {
         headers: {
@@ -79,7 +79,7 @@ export async function GET(request: NextRequest) {
       let nextPageUrl: string | null = `${GHL_API_BASE_URL}/contacts/?locationId=${integration.location_id}&limit=100`;
       
       while (nextPageUrl) {
-        const pageResponse = await fetch(nextPageUrl, {
+        const pageResponse: Response = await fetch(nextPageUrl, {
           headers: {
             'Authorization': `Bearer ${integration.access_token}`,
             'Version': '2021-07-28',

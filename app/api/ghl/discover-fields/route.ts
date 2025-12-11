@@ -120,7 +120,7 @@ export async function POST(request: NextRequest) {
 
     // Fetch ALL custom fields from GHL Custom Fields API
     try {
-      const customFieldsResponse = await fetch(
+      const customFieldsResponse: Response = await fetch(
         `${GHL_API_BASE_URL}/locations/${integration.location_id}/customFields`,
         {
           headers: {
@@ -162,7 +162,7 @@ export async function POST(request: NextRequest) {
 
     // Also try to get fields from Contact Custom Fields endpoint (different API)
     try {
-      const contactCustomFieldsResponse = await fetch(
+      const contactCustomFieldsResponse: Response = await fetch(
         `${GHL_API_BASE_URL}/locations/${integration.location_id}/customFields?model=contact`,
         {
           headers: {
@@ -197,7 +197,7 @@ export async function POST(request: NextRequest) {
 
     // Also fetch a sample contact to discover any fields we might have missed
     try {
-      const contactsResponse = await fetch(
+      const contactsResponse: Response = await fetch(
         `${GHL_API_BASE_URL}/contacts/?locationId=${integration.location_id}&limit=5`,
         {
           headers: {

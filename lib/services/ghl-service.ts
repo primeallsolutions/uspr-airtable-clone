@@ -321,7 +321,7 @@ export class GHLService {
    */
   static async getIntegrationByLocationId(
     locationId: string,
-    adminClient?: ReturnType<typeof import('@supabase/supabase-js').createClient>
+    adminClient?: any
   ): Promise<GHLIntegration | null> {
     const client = adminClient || supabase;
     

@@ -355,7 +355,7 @@ export default function CellEditor({
   // Check if the value contains newlines (multi-line text or text box list from GHL)
   const isMultiLine = typeof value === 'string' && value.includes('\n');
   
-  if (isMultiLine || field.type === 'long_text') {
+  if (isMultiLine) {
     return (
       <textarea
         className={`${baseInputClass} resize-none min-h-[60px] max-h-[120px] overflow-y-auto`}
