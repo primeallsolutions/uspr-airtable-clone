@@ -636,31 +636,77 @@ export class BaseDetailService {
 
   // Record operations
   static async getRecords(tableId: string): Promise<RecordRow[]> {
-    const { data, error } = await supabase
-      .from("records")
-      .select("id, table_id, values, created_at")
-      .eq("table_id", tableId)
-      .order("created_at", { ascending: false });
+    // Supabase has a default limit of 1000 rows
+    // We need to paginate to get all records
+    const PAGE_SIZE = 1000;
+    let allRecords: RecordRow[] = [];
+    let page = 0;
+    let hasMore = true;
 
-    if (error) throw error;
-    return (data ?? []) as RecordRow[];
+    while (hasMore) {
+      const from = page * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
+
+      const { data, error } = await supabase
+        .from("records")
+        .select("id, table_id, values, created_at")
+        .eq("table_id", tableId)
+        .order("created_at", { ascending: false })
+        .range(from, to);
+
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        allRecords = allRecords.concat(data as RecordRow[]);
+        // If we got less than PAGE_SIZE, we've reached the end
+        hasMore = data.length === PAGE_SIZE;
+        page++;
+      } else {
+        hasMore = false;
+      }
+    }
+
+    return allRecords;
   }
 
   static async getAllRecordsFromBase(baseId: string): Promise<RecordRow[]> {
-    const { data, error } = await supabase
-      .from("records")
-      .select(`
-        id, 
-        table_id, 
-        values, 
-        created_at,
-        tables!inner(base_id)
-      `)
-      .eq("tables.base_id", baseId)
-      .order("created_at", { ascending: false });
+    // Supabase has a default limit of 1000 rows
+    // We need to paginate to get all records
+    const PAGE_SIZE = 1000;
+    let allRecords: RecordRow[] = [];
+    let page = 0;
+    let hasMore = true;
 
-    if (error) throw error;
-    return (data ?? []) as RecordRow[];
+    while (hasMore) {
+      const from = page * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
+
+      const { data, error } = await supabase
+        .from("records")
+        .select(`
+          id, 
+          table_id, 
+          values, 
+          created_at,
+          tables!inner(base_id)
+        `)
+        .eq("tables.base_id", baseId)
+        .order("created_at", { ascending: false })
+        .range(from, to);
+
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        allRecords = allRecords.concat(data as RecordRow[]);
+        // If we got less than PAGE_SIZE, we've reached the end
+        hasMore = data.length === PAGE_SIZE;
+        page++;
+      } else {
+        hasMore = false;
+      }
+    }
+
+    return allRecords;
   }
 
   static async createRecord(tableId: string, values: Record<string, unknown> = {}): Promise<RecordRow> {

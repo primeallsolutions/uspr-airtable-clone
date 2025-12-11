@@ -1,8 +1,9 @@
 "use client";
 import { useMemo, useState, useEffect, useRef } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { ContextMenu, useContextMenu } from "@/components/ui/context-menu";
 import { RenameModal } from "@/components/ui/rename-modal";
+import { toast } from "sonner";
 
 // Hooks
 import { useAuth } from "@/lib/hooks/useAuth";
@@ -30,6 +31,8 @@ import { DeleteBaseModal } from "@/components/base-detail/DeleteBaseModal";
 import { DeleteFieldModal } from "@/components/base-detail/DeleteFieldModal";
 import { DeleteAllFieldsModal } from "@/components/base-detail/DeleteAllFieldsModal";
 import { ExportBaseModal } from "@/components/base-detail/ExportBaseModal";
+import { ConnectGHLModal } from "@/components/base-detail/ConnectGHLModal";
+import { GHLSyncStatus } from "@/components/base-detail/GHLSyncStatus";
 import {
   HideFieldsPanel,
   FilterPanel,
@@ -66,7 +69,17 @@ import { BaseDetailService } from "@/lib/services/base-detail-service";
 
 export default function BaseDetailPage() {
   const params = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
   const baseId = useMemo(() => (Array.isArray(params?.id) ? params.id[0] : params?.id), [params]);
+  
+  // Check for GHL connection success message
+  useEffect(() => {
+    if (searchParams?.get('ghl_connected') === 'true') {
+      toast.success('Go High Level connected successfully!');
+      // Remove query param from URL
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, [searchParams]);
   
   // Custom hooks
   const { loading: userLoading } = useAuth();
@@ -152,6 +165,11 @@ export default function BaseDetailPage() {
   const [isDeleteAllFieldsModalOpen, setIsDeleteAllFieldsModalOpen] = useState(false);
   const openDeleteAllFieldsModal = () => setIsDeleteAllFieldsModalOpen(true);
   const closeDeleteAllFieldsModal = () => setIsDeleteAllFieldsModalOpen(false);
+
+  // Add state for GHL integration modal
+  const [isGHLModalOpen, setIsGHLModalOpen] = useState(false);
+  const openGHLModal = () => setIsGHLModalOpen(true);
+  const closeGHLModal = () => setIsGHLModalOpen(false);
   
   const { contextMenu, setContextMenu, showContextMenu, hideContextMenu } = useContextMenu();
   const { role, can } = useRole({ baseId });
@@ -878,6 +896,8 @@ export default function BaseDetailPage() {
           onExportBase={openExportBaseModal}
           showInterfacesTab={false}
           showFormsTab={false}
+          baseId={baseId}
+          onConnectGHL={openGHLModal}
         />
 
         {/* Table Controls */}
@@ -1180,6 +1200,20 @@ export default function BaseDetailPage() {
         baseId={baseId}
         baseName={base?.name || 'Base'}
       />
+
+      {/* GHL Integration Modal */}
+      {selectedTableId && baseId && (
+        <ConnectGHLModal
+          isOpen={isGHLModalOpen}
+          onClose={closeGHLModal}
+          baseId={baseId}
+          tableId={selectedTableId}
+          onConnected={() => {
+            closeGHLModal();
+            // Optionally reload data here if needed
+          }}
+        />
+      )}
     </div>
   );
 }
