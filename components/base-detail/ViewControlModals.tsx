@@ -26,7 +26,7 @@ const generateId = () =>
     ? crypto.randomUUID()
     : Math.random().toString(36).slice(2);
 
-export type FilterOperator = "contains" | "equals" | "starts_with" | "is_not";
+export type FilterOperator = "contains" | "equals" | "starts_with" | "is_not" | 'greater_than' | 'greater_than_or_equal' | 'less_than' | 'less_than_or_equal';
 
 export interface FilterCondition {
   id: string;
@@ -68,7 +68,7 @@ interface PanelCardProps {
 }
 
 const PanelCard = ({ title, icon, onClose, children, footer }: PanelCardProps) => (
-  <div className="w-[260px] max-w-[60vw] bg-white rounded-2xl shadow-2xl border border-gray-100 flex flex-col max-h-[50vh]">
+  <div className="w-[450px] max-w-[60vw] bg-white rounded-2xl shadow-2xl border border-gray-100 flex flex-col max-h-[50vh]">
     <div className="flex items-center justify-between px-3 py-2.5 border-b border-gray-100">
       <div className="flex items-center gap-3">
         {icon && (
@@ -250,6 +250,31 @@ export const FilterPanel = ({
     }));
   };
 
+  // Helper function to select available operators for filters based on the selected field type
+  // This can be expanded later to use different filters for any other data types
+  const operatorOptions = (fieldId: string | null) => {
+    const field = fields.find((f) => f.id === fieldId);
+    const isNumeric = field?.type === "number";
+
+    if (isNumeric) {
+      return [
+        { value: "equals", label: "is exactly" },
+        { value: "is_not", label: "is not" },
+        { value: "greater_than", label: "greater than" },
+        { value: "greater_than_or_equal", label: "greater than or equal" },
+        { value: "less_than", label: "less than" },
+        { value: "less_than_or_equal", label: "less than or equal" }
+      ] as Array<{ value: FilterOperator; label: string }>;
+    }
+
+    return [
+      { value: "contains", label: "contains" },
+      { value: "equals", label: "is exactly" },
+      { value: "starts_with", label: "starts with" },
+      { value: "is_not", label: "is not" }
+    ] as Array<{ value: FilterOperator; label: string }>;
+  };
+
   const addCondition = () => {
     setLocalFilter((prev) => ({
       ...prev,
@@ -361,7 +386,12 @@ export const FilterPanel = ({
               <select
                 className="flex-1 min-w-[140px] border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
                 value={condition.fieldId ?? ""}
-                onChange={(e) => updateCondition(condition.id, { fieldId: e.target.value || null })}
+                onChange={(e) => {
+                  const nextFieldId = e.target.value || null;
+                  const allowed = operatorOptions(nextFieldId).map(op => op.value); // prevent a filter from being used on the wrong type (i.e. greater_than on text)
+                  const nextOperator = allowed.includes(condition.operator) ? condition.operator : allowed[0];
+                  updateCondition(condition.id, { fieldId: nextFieldId, operator: nextOperator });
+                }}
               >
                 <option value="">Choose field</option>
                 {fields.map((field) => (
@@ -375,10 +405,11 @@ export const FilterPanel = ({
                 value={condition.operator}
                 onChange={(e) => updateCondition(condition.id, { operator: e.target.value as FilterOperator })}
               >
-                <option value="contains">contains</option>
-                <option value="equals">is exactly</option>
-                <option value="starts_with">starts with</option>
-                <option value="is_not">is not</option>
+                {operatorOptions(condition.fieldId).map((option) => ( /* Generate options based on field type */
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
               </select>
               <input
                 type="text"
