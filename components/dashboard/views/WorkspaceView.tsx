@@ -16,6 +16,7 @@ interface WorkspaceViewProps {
   sortOption: SortOption;
   onCollectionViewChange: (view: CollectionView) => void;
   onCreateBase: () => void;
+  onBaseStarToggle?: (base: BaseRecord) => void;
   onBaseContextMenu: (e: React.MouseEvent, base: BaseRecord) => void;
   onManageMembers?: () => void;
   canManageMembers?: boolean;
@@ -30,6 +31,7 @@ export const WorkspaceView = ({
   sortOption,
   onCollectionViewChange,
   onCreateBase,
+  onBaseStarToggle,
   onBaseContextMenu,
   onManageMembers,
   canManageMembers = false,
@@ -90,6 +92,7 @@ export const WorkspaceView = ({
                 <BaseTile 
                   key={base.id} 
                   base={base}
+                  onStarToggle={onBaseStarToggle}
                   onContextMenu={onBaseContextMenu}
                   onDeleteClick={onDeleteBaseClick}
                 />
@@ -111,7 +114,13 @@ export const WorkspaceView = ({
               </div>
             ) : (
               sortBases(workspaceBases, sortOption).map(base => (
-                <BaseRow key={base.id} base={base} onDeleteClick={onDeleteBaseClick} />
+                <BaseRow
+                  key={base.id}
+                  base={base}
+                  onStarToggle={onBaseStarToggle}
+                  onContextMenu={onBaseContextMenu}
+                  onDeleteClick={onDeleteBaseClick}
+                />
               ))
             )}
           </div>

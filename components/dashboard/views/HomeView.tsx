@@ -15,6 +15,7 @@ interface HomeViewProps {
   onCollectionViewChange: (view: CollectionView) => void;
   onSortOptionChange: (option: SortOption) => void;
   onSortToggle: (open: boolean) => void;
+  onBaseStarToggle?: (base: BaseRecord) => void;
   onBaseContextMenu: (e: React.MouseEvent, base: BaseRecord) => void;
 }
 
@@ -26,6 +27,7 @@ export const HomeView = ({
   onCollectionViewChange,
   onSortOptionChange,
   onSortToggle,
+  onBaseStarToggle,
   onBaseContextMenu
 }: HomeViewProps) => {
   // Split bases by today/earlier
@@ -67,6 +69,7 @@ export const HomeView = ({
                   <BaseTile 
                     key={base.id} 
                     base={base}
+                    onStarToggle={onBaseStarToggle}
                     onContextMenu={onBaseContextMenu}
                   />
                 ))
@@ -85,6 +88,7 @@ export const HomeView = ({
                   <BaseTile 
                     key={base.id} 
                     base={base}
+                    onStarToggle={onBaseStarToggle}
                     onContextMenu={onBaseContextMenu}
                   />
                 ))
@@ -101,7 +105,12 @@ export const HomeView = ({
               <div className="text-right">Last opened</div>
             </div>
             {sortBases(recentBases, sortOption).map((base) => (
-              <BaseRow key={base.id} base={base} />
+              <BaseRow
+                key={base.id}
+                base={base}
+                onStarToggle={onBaseStarToggle}
+                onContextMenu={onBaseContextMenu}
+              />
             ))}
           </div>
         </>

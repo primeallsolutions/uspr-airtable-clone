@@ -46,7 +46,8 @@ export function ContextMenu({ options, position, onClose, isVisible }: ContextMe
 
   // Calculate optimal position to prevent overflow
   const getOptimalPosition = () => {
-    if (!menuRef.current) return { left: position.x, top: position.y };
+    // Note: There used to be a check for menuRef.current here, but there are no cases where an early return was necessary.
+    // Removing it allows for the position calculation to always run, preventing the menu from rendering off-screen.
     
     const menuWidth = 200; // min-w-[200px]
     const menuHeight = options.length * 40 + 16; // Approximate height
