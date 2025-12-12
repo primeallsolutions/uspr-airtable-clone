@@ -645,6 +645,15 @@ export default function BaseDetailPage() {
               return value.startsWith(query);
             case 'is_not':
               return value !== query;
+            // numeric field type specific filters
+            case 'greater_than':
+              return parseFloat(value) > parseFloat(query);
+            case 'greater_than_or_equal':
+              return parseFloat(value) >= parseFloat(query);
+            case 'less_than':
+              return parseFloat(value) < parseFloat(query);
+            case 'less_than_or_equal':
+              return parseFloat(value) <= parseFloat(query);
             default:
               return value.includes(query);
           }
@@ -931,7 +940,7 @@ export default function BaseDetailPage() {
             {activeViewPanel && (
               <div
                 ref={viewPanelRef}
-                className="fixed z-30"
+                className="fixed z-50"
                 style={{
                   left: panelPosition.x,
                   top: panelPosition.y

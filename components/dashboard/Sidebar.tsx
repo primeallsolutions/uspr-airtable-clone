@@ -52,7 +52,7 @@ export const Sidebar = ({
       <nav className="px-2 py-2">
         <button 
           onClick={() => onViewChange('home')} 
-          className={`flex w-full items-center gap-2 rounded-md px-2 py-2 text-left transition-colors cursor-pointer ${
+          className={`flex w-full items-center gap-2 rounded-md px-2 py-2 cursor-pointer ${
             activeView === 'home' 
               ? 'bg-blue-100 text-blue-700 font-medium' 
               : 'text-gray-900 hover:bg-gray-100'
@@ -60,23 +60,28 @@ export const Sidebar = ({
         >
           <HomeIcon size={18} />
           <span>Home</span>
-          {activeView === 'home' && (
-            <div className="ml-auto h-1.5 w-1.5 rounded-full bg-blue-600"></div>
-          )}
         </button>
         
         <button 
           onClick={() => onViewChange('starred')}
-          className={`flex w-full items-center gap-2 rounded-md px-2 py-2 text-gray-700 hover:bg-gray-100 cursor-pointer ${activeView === 'starred' ? 'bg-gray-100' : ''}`}
+          className={`flex w-full items-center gap-2 rounded-md px-2 py-2 cursor-pointer ${
+            activeView === 'starred'
+              ? 'bg-blue-100 text-blue-700 font-medium'
+              : 'text-gray-900 hover:bg-gray-100'
+          }`}
         >
           <Star size={18} />
           <span>Starred</span>
-          {activeView === 'starred' && (
-            <div className="ml-auto h-1.5 w-1.5 rounded-full bg-blue-600"></div>
-          )}
         </button>
         
-        <button className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-gray-700 hover:bg-gray-100 cursor-pointer">
+        <button
+          /* TODO: Add onClick attribute when "Shared" page is created */
+          className={`flex w-full items-center gap-2 rounded-md px-2 py-2 ${
+            activeView === 'shared'
+              ? 'bg-blue-100 text-blue-700 font-medium'
+              : 'text-gray-400' // Currently disabled; enabled state: 'text-gray-900 hover:bg-gray-100'
+          }`}
+        >
           <Share2 size={18} />
           <span>Shared</span>
         </button>
@@ -136,18 +141,15 @@ export const Sidebar = ({
                     </div>
                   ) : (
                     <button
-                      className={`flex w-full items-center gap-2 rounded-md px-2 py-2 text-left transition-colors cursor-pointer ${
+                      className={`flex w-full items-center gap-2 rounded-md px-2 py-2 cursor-pointer ${
                         activeView === 'workspace' && selectedWorkspaceId === workspace.id
                           ? 'bg-blue-100 text-blue-700 font-medium'
-                          : 'text-gray-700 hover:bg-gray-100'
+                          : 'text-gray-900 hover:bg-gray-100'
                       }`}
                       onClick={() => onWorkspaceSelect(workspace.id)}
                     >
                       <span className={`inline-block h-3.5 w-3.5 rounded-full ${color}`}></span>
                       <span className="truncate">{workspace.name}</span>
-                      {activeView === 'workspace' && selectedWorkspaceId === workspace.id && (
-                        <div className="ml-auto h-1.5 w-1.5 rounded-full bg-blue-600"></div>
-                      )}
                     </button>
                   )}
                   
@@ -198,10 +200,10 @@ export const Sidebar = ({
               return (
                 <button
                   key={workspace.id}
-                  className={`flex w-full items-center gap-2 rounded-md px-2 py-2 text-left transition-colors ${
+                  className={`flex w-full items-center gap-2 rounded-md px-2 py-2 cursor-pointer ${
                     activeView === 'workspace' && selectedWorkspaceId === workspace.id
                       ? 'bg-blue-100 text-blue-700 font-medium'
-                      : 'text-gray-700 hover:bg-gray-100'
+                      : 'text-gray-900 hover:bg-gray-100'
                   }`}
                   onClick={() => onWorkspaceSelect(workspace.id)}
                 >
@@ -214,7 +216,8 @@ export const Sidebar = ({
         </div>
       )}
 
-      {activeView !== 'account' && (
+      {/* Only show the Create button on the following views: */}
+      {(activeView === 'home' || activeView === 'workspace') && (
         <div className="mt-auto px-4 pb-4">
           <button
             onClick={onCreateBase}

@@ -19,7 +19,7 @@ export type WorkspaceRecord = {
   created_at?: string;
 };
 
-export type ActiveView = 'home' | 'workspace' | 'starred' | 'account';
+export type ActiveView = 'home' | 'workspace' | 'starred' | 'shared' | 'account';
 export type CollectionView = 'grid' | 'list';
 export type SortOption = 'lastOpened' | 'lastModified' | 'alphabetical' | 'oldestToNewest' | 'newestToOldest';
 
