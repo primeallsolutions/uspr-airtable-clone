@@ -381,44 +381,6 @@ export const GridView = ({
                   <span>Add Row</span>
                 </button>
               </div>
-              {/* Add Row button spanning entire row */}
-              <div className="flex border-b border-gray-200 hover:bg-gray-50">
-                {/* Checkbox column */}
-                  <div className="flex-shrink-0 border-r border-gray-200" style={{ width: selectWidth }}></div>
-                
-                {/* Actions placeholder */}
-                <div
-                  className="flex-shrink-0 border-r border-gray-200 bg-gray-50 flex items-center justify-center text-xs text-gray-400"
-                  style={{ width: actionsWidth }}
-                >
-                  —
-                </div>
-
-                <div
-                  className="flex-shrink-0 border-r border-gray-200 bg-gray-100 flex items-center justify-center"
-                  style={{ width: rowNumberWidth }}
-                >
-                  <span className="text-xs text-gray-500">+</span>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <button
-                    onClick={() => onAddRow()}
-                    className="w-full h-12 flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 transition-colors"
-                  >
-                    <Plus size={16} />
-                    <span>Add Row</span>
-                  </button>
-                </div>
-                <div
-                  className="flex-shrink-0 border-l border-gray-200 bg-gray-50"
-                  style={{ width: addFieldWidth }}
-                ></div>
-              </div>
-              
-              {/* Footer with record count */}
-              <div className="flex items-center justify-end px-6 py-3 bg-gray-50 border-t border-gray-200">
-                <span className="text-sm text-gray-500">{records.length} {records.length === 1 ? 'record' : 'records'}</span>
-              </div>
             </>
           )}
         </div>
