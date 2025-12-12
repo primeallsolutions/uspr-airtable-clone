@@ -43,6 +43,7 @@ import {
   type FilterState,
   type SortRule
 } from "@/components/base-detail/ViewControlModals";
+import { DocumentsView } from "@/components/base-detail/DocumentsView";
 
 const generateClientId = () =>
   typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
@@ -1031,14 +1032,12 @@ export default function BaseDetailPage() {
                   savingCell={savingCell}
                   onSort={handleColumnSort}
                   onUpdateCell={updateCell}
-                  onDeleteRow={deleteRecord}
                   onBulkDelete={bulkDeleteRecords}
                   onAddRow={handleAddRow}
                   onAddField={handleAddField}
                   onFieldContextMenu={handleFieldContextMenu}
                   onRowContextMenu={handleRowContextMenu}
                   onReorderFields={handleReorderFields}
-                  canDeleteRow={can.delete ?? true}
                   groupFieldIds={groupFieldIds}
                   colorFieldId={colorFieldId}
                   colorAssignments={colorAssignments}
@@ -1107,6 +1106,14 @@ export default function BaseDetailPage() {
                 <p className="text-gray-500">Form features coming soon...</p>
               </div>
             </div>
+          )}
+
+          {topTab === 'documents' && (
+            <DocumentsView
+              baseId={baseId || ''}
+              baseName={base?.name}
+              selectedTable={tables.find(t => t.id === selectedTableId) || null}
+            />
           )}
         </div>
       </div>

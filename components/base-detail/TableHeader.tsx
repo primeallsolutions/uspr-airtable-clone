@@ -1,6 +1,7 @@
 import { ChevronDown, Plus, MoreVertical, GripVertical } from "lucide-react";
 import { useState } from "react";
 import type { FieldRow, SortDirection } from "@/lib/types/base-detail";
+import { tableLayout } from "./tableLayout";
 
 interface TableHeaderProps {
   fields: FieldRow[];
@@ -79,10 +80,16 @@ export const TableHeader = ({
     setDragOverIndex(null);
   };
 
+  const { selectWidth, actionsWidth, rowNumberWidth, addFieldWidth } = tableLayout;
+  const firstDataLeftOffset = `calc(${selectWidth} + ${actionsWidth} + ${rowNumberWidth})`;
+
   return (
     <div className="flex border-b border-gray-200 bg-gray-50 min-w-max">
       {/* Checkbox column */}
-      <div className="w-10 flex-shrink-0 border-r border-gray-200 bg-white flex items-center justify-start pl-3 sticky left-0 z-30">
+      <div
+        className="flex-shrink-0 border-r border-gray-200 bg-white flex items-center justify-start pl-3 sticky left-0 z-30"
+        style={{ width: selectWidth }}
+      >
         <input
           type="checkbox"
           checked={allSelected}
@@ -96,16 +103,27 @@ export const TableHeader = ({
           title={allSelected ? "Deselect all" : "Select all"}
         />
       </div>
+
+      {/* Actions column */}
+      <div
+        className="flex-shrink-0 border-r border-gray-200 bg-white flex items-center justify-center sticky z-30"
+        style={{ left: selectWidth, width: actionsWidth }}
+      >
+        <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Actions</span>
+      </div>
       
       {/* Row number column */}
-      <div className="w-12 flex-shrink-0 border-r border-gray-200 bg-white flex items-center justify-center sticky left-10 z-30">
+      <div
+        className="flex-shrink-0 border-r border-gray-200 bg-white flex items-center justify-center sticky z-30"
+        style={{ left: `calc(${selectWidth} + ${actionsWidth})`, width: rowNumberWidth }}
+      >
         <span className="text-xs text-gray-500 font-medium">#</span>
       </div>
       
       {/* Field columns */}
       {fields.map((field, idx) => {
         const isSticky = idx === 0; // keep first data column visible
-        const leftOffset = idx === 0 ? '5.5rem' : undefined; // 10 + 12 widths
+        const leftOffset = idx === 0 ? firstDataLeftOffset : undefined;
         const isDragging = draggedIndex === idx;
         const isDragOver = dragOverIndex === idx;
         
@@ -163,9 +181,9 @@ export const TableHeader = ({
           </div>
         );
       })}
-      
+
       {/* Add field column */}
-      <div className="w-32 flex-shrink-0 bg-gray-50">
+      <div className="flex-shrink-0 bg-gray-50" style={{ width: addFieldWidth }}>
         <button
           onClick={onAddField}
           className="w-full h-full flex items-center justify-center text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition-colors"

@@ -2,6 +2,8 @@ import { useMemo, useState, useRef, useEffect } from "react";
 import { Plus, Trash2, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 import { TableHeader } from "./TableHeader";
 import { TableRow } from "./TableRow";
+import { RecordDetailsModal } from "./RecordDetailsModal";
+import { tableLayout } from "./tableLayout";
 import type { RecordRow, FieldRow, SavingCell, TableRow as TableRowType } from "@/lib/types/base-detail";
 
 interface GridViewProps {
@@ -15,14 +17,12 @@ interface GridViewProps {
   savingCell: SavingCell;
   onSort: (fieldId: string) => void;
   onUpdateCell: (recordId: string, fieldId: string, value: unknown) => void;
-  onDeleteRow: (recordId: string) => void;
   onBulkDelete: (recordIds: string[]) => void;
   onAddRow: (values?: Record<string, unknown>) => void | Promise<void>;
   onAddField: () => void;
   onFieldContextMenu: (e: React.MouseEvent, field: FieldRow) => void;
   onRowContextMenu: (e: React.MouseEvent, record: RecordRow) => void;
   onReorderFields?: (reorderedFields: FieldRow[]) => void;
-  canDeleteRow?: boolean;
   groupFieldIds?: string[];
   colorFieldId?: string | null;
   colorAssignments?: Record<string, string>;
@@ -39,14 +39,12 @@ export const GridView = ({
   savingCell,
   onSort,
   onUpdateCell,
-  onDeleteRow,
   onBulkDelete,
   onAddRow,
   onAddField,
   onFieldContextMenu,
   onRowContextMenu,
   onReorderFields,
-  canDeleteRow = true,
   groupFieldIds,
   colorFieldId,
   colorAssignments = {}
@@ -73,6 +71,8 @@ export const GridView = ({
       }
     }
   }, [records.length]);
+  const [detailRecordId, setDetailRecordId] = useState<string | null>(null);
+  const { selectWidth, actionsWidth, rowNumberWidth, addFieldWidth } = tableLayout;
 
   // Preserve stable row ordering based on initial load to prevent reordering on updates
   const displayRecords = useMemo(() => {
@@ -226,6 +226,19 @@ export const GridView = ({
     return buildSections(displayRecords, validIds);
   }, [displayRecords, groupFieldIds, allFields, fields]);
 
+  const detailRecord = useMemo(
+    () => (detailRecordId ? records.find(record => record.id === detailRecordId) || null : null),
+    [detailRecordId, records]
+  );
+
+  const handleOpenDetails = (record: RecordRow) => {
+    setDetailRecordId(record.id);
+  };
+
+  const handleCloseDetails = () => {
+    setDetailRecordId(null);
+  };
+
   let rowCounter = 0;
 
   const renderGroupSections = (sections: GroupSection[]) =>
@@ -260,10 +273,9 @@ export const GridView = ({
                   savingCell={savingCell}
                   isSelected={selectedRows.has(record.id)}
                   onUpdateCell={onUpdateCell}
-                  onDeleteRow={onDeleteRow}
                   onRowContextMenu={onRowContextMenu}
+                  onViewDetails={handleOpenDetails}
                   onSelectRow={handleSelectRow}
-                  canDeleteRow={canDeleteRow}
                   colorFieldId={colorFieldId}
                   colorAssignments={colorAssignments}
                 />
@@ -286,16 +298,16 @@ export const GridView = ({
           savingCell={savingCell}
           isSelected={selectedRows.has(record.id)}
           onUpdateCell={onUpdateCell}
-          onDeleteRow={onDeleteRow}
           onRowContextMenu={onRowContextMenu}
+          onViewDetails={handleOpenDetails}
           onSelectRow={handleSelectRow}
-          canDeleteRow={canDeleteRow}
           colorFieldId={colorFieldId}
           colorAssignments={colorAssignments}
         />
       ));
 
   return (
+    <>
     <div className="flex-1 flex flex-col min-h-0">
       {/* Bulk Actions Bar */}
       {selectedRows.size > 0 && (
@@ -368,6 +380,44 @@ export const GridView = ({
                   <Plus size={16} />
                   <span>Add Row</span>
                 </button>
+              </div>
+              {/* Add Row button spanning entire row */}
+              <div className="flex border-b border-gray-200 hover:bg-gray-50">
+                {/* Checkbox column */}
+                  <div className="flex-shrink-0 border-r border-gray-200" style={{ width: selectWidth }}></div>
+                
+                {/* Actions placeholder */}
+                <div
+                  className="flex-shrink-0 border-r border-gray-200 bg-gray-50 flex items-center justify-center text-xs text-gray-400"
+                  style={{ width: actionsWidth }}
+                >
+                  —
+                </div>
+
+                <div
+                  className="flex-shrink-0 border-r border-gray-200 bg-gray-100 flex items-center justify-center"
+                  style={{ width: rowNumberWidth }}
+                >
+                  <span className="text-xs text-gray-500">+</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <button
+                    onClick={() => onAddRow()}
+                    className="w-full h-12 flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 transition-colors"
+                  >
+                    <Plus size={16} />
+                    <span>Add Row</span>
+                  </button>
+                </div>
+                <div
+                  className="flex-shrink-0 border-l border-gray-200 bg-gray-50"
+                  style={{ width: addFieldWidth }}
+                ></div>
+              </div>
+              
+              {/* Footer with record count */}
+              <div className="flex items-center justify-end px-6 py-3 bg-gray-50 border-t border-gray-200">
+                <span className="text-sm text-gray-500">{records.length} {records.length === 1 ? 'record' : 'records'}</span>
               </div>
             </>
           )}
@@ -458,5 +508,16 @@ export const GridView = ({
         )}
       </div>
     </div>
+      <RecordDetailsModal
+        isOpen={Boolean(detailRecord)}
+        record={detailRecord}
+        fields={allFields || fields}
+        tables={tables}
+        selectedTableId={selectedTableId}
+        savingCell={savingCell}
+        onUpdateCell={onUpdateCell}
+        onClose={handleCloseDetails}
+      />
+    </>
   );
 };

@@ -1,6 +1,7 @@
-import { MoreVertical, Trash2 } from "lucide-react";
+import { Eye } from "lucide-react";
 import CellEditor from "../../app/bases/[id]/CellEditor";
 import type { RecordRow, FieldRow, SavingCell, TableRow as TableRowType } from "@/lib/types/base-detail";
+import { tableLayout } from "./tableLayout";
 
 interface TableRowProps {
   record: RecordRow;
@@ -12,10 +13,9 @@ interface TableRowProps {
   savingCell: SavingCell;
   isSelected: boolean;
   onUpdateCell: (recordId: string, fieldId: string, value: unknown) => void;
-  onDeleteRow: (recordId: string) => void;
   onRowContextMenu: (e: React.MouseEvent, record: RecordRow) => void;
+  onViewDetails: (record: RecordRow) => void;
   onSelectRow: (recordId: string, checked: boolean) => void;
-  canDeleteRow?: boolean;
   colorFieldId?: string | null;
   colorAssignments?: Record<string, string>;
 }
@@ -30,14 +30,15 @@ export const TableRow = ({
   savingCell,
   isSelected,
   onUpdateCell,
-  onDeleteRow,
   onRowContextMenu,
-  canDeleteRow = true,
+  onViewDetails,
   onSelectRow,
   colorFieldId,
   colorAssignments
 }: TableRowProps) => {
   const isSaving = savingCell?.recordId === record.id;
+  const { selectWidth, actionsWidth, rowNumberWidth, addFieldWidth } = tableLayout;
+  const firstDataLeftOffset = `calc(${selectWidth} + ${actionsWidth} + ${rowNumberWidth})`;
   
   // Determine if we're viewing the masterlist
   const selectedTable = selectedTableId ? tables.find(t => t.id === selectedTableId) : null;
@@ -53,9 +54,13 @@ export const TableRow = ({
     <div
       className={`flex border-b border-gray-200 hover:bg-gray-50 group ${isSelected ? 'bg-blue-50' : ''}`}
       style={{ borderLeftColor: rowColor || 'transparent' }}
+      onContextMenu={(e) => onRowContextMenu(e, record)}
     >
       {/* Checkbox column */}
-      <div className="w-10 flex-shrink-0 border-r border-gray-200 flex items-center justify-start pl-3 sticky left-0 z-30 bg-white">
+      <div
+        className="flex-shrink-0 border-r border-gray-200 flex items-center justify-start pl-3 sticky left-0 z-30 bg-white"
+        style={{ width: selectWidth }}
+      >
         <input
           type="checkbox"
           checked={isSelected}
@@ -65,10 +70,30 @@ export const TableRow = ({
         />
       </div>
       
+      {/* Actions */}
+      <div
+        className="flex-shrink-0 border-r border-gray-200 bg-white flex items-center justify-center sticky z-30"
+        style={{ left: selectWidth, width: actionsWidth }}
+      >
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onViewDetails(record);
+          }}
+          className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md shadow-sm transition-colors flex items-center gap-2"
+          title="View details"
+        >
+          <Eye size={14} />
+          <span>Details</span>
+        </button>
+      </div>
+
       {/* Row number and table indicator */}
-      <div className="w-12 flex-shrink-0 border-r border-gray-200 bg-white flex flex-col items-center justify-center py-1 sticky left-10 z-30">
+      <div
+        className="flex-shrink-0 border-r border-gray-200 bg-white flex flex-col items-center justify-center py-1 sticky z-30"
+        style={{ left: `calc(${selectWidth} + ${actionsWidth})`, width: rowNumberWidth }}
+      >
         <span className="text-xs text-gray-500">{rowIndex + 1}</span>
-        
       </div>
       
       {/* Field cells */}
@@ -121,7 +146,7 @@ export const TableRow = ({
         };
         
         const isSticky = idx === 0; // keep first data column visible
-        const leftOffset = idx === 0 ? '5.5rem' : undefined; // checkbox + row number widths
+        const leftOffset = idx === 0 ? firstDataLeftOffset : undefined;
         // Check if this cell might have multi-line content (text with newlines)
         const hasMultiLineContent = typeof value === 'string' && value.includes('\n');
         return (
@@ -135,28 +160,8 @@ export const TableRow = ({
         );
       })}
       
-      {/* Row actions */}
-      <div className="w-32 flex-shrink-0 flex items-center justify-center">
-        <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button
-            onClick={(e) => onRowContextMenu(e, record)}
-            className="p-1 hover:bg-gray-200 rounded"
-            title="Row options"
-          >
-            <MoreVertical size={14} />
-          </button>
-          {canDeleteRow && (
-            <button
-              onClick={() => onDeleteRow(record.id)}
-              className="p-1 hover:bg-red-100 text-red-600 hover:text-red-800 rounded"
-              title="Delete row"
-              disabled={isSaving}
-            >
-              <Trash2 size={14} />
-            </button>
-          )}
-        </div>
-      </div>
+      {/* Spacer to keep alignment with add-field header column */}
+      <div className="flex-shrink-0 bg-white" style={{ width: addFieldWidth }}></div>
     </div>
   );
 };
