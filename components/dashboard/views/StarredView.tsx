@@ -9,6 +9,7 @@ interface StarredViewProps {
   starredBases: BaseRecord[];
   collectionView: CollectionView;
   onCollectionViewChange: (view: CollectionView) => void;
+  onBaseStarToggle?: (base: BaseRecord) => void;
   onBaseContextMenu: (e: React.MouseEvent, base: BaseRecord) => void;
 }
 
@@ -16,6 +17,7 @@ export const StarredView = ({
   starredBases,
   collectionView,
   onCollectionViewChange,
+  onBaseStarToggle,
   onBaseContextMenu
 }: StarredViewProps) => {
   return (
@@ -37,6 +39,7 @@ export const StarredView = ({
               <BaseTile 
                 key={base.id} 
                 base={base}
+                onStarToggle={onBaseStarToggle}
                 onContextMenu={onBaseContextMenu}
               />
             ))
@@ -55,7 +58,12 @@ export const StarredView = ({
             </div>
           ) : (
             starredBases.map((base) => (
-              <BaseRow key={base.id} base={base} />
+              <BaseRow
+                key={base.id}
+                base={base}
+                onStarToggle={onBaseStarToggle}
+                onContextMenu={onBaseContextMenu}
+              />
             ))
           )}
         </div>

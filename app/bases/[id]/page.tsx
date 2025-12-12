@@ -43,6 +43,7 @@ import {
   type FilterState,
   type SortRule
 } from "@/components/base-detail/ViewControlModals";
+import { DocumentsView } from "@/components/base-detail/DocumentsView";
 
 const generateClientId = () =>
   typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
@@ -645,6 +646,15 @@ export default function BaseDetailPage() {
               return value.startsWith(query);
             case 'is_not':
               return value !== query;
+            // numeric field type specific filters
+            case 'greater_than':
+              return parseFloat(value) > parseFloat(query);
+            case 'greater_than_or_equal':
+              return parseFloat(value) >= parseFloat(query);
+            case 'less_than':
+              return parseFloat(value) < parseFloat(query);
+            case 'less_than_or_equal':
+              return parseFloat(value) <= parseFloat(query);
             default:
               return value.includes(query);
           }
@@ -931,7 +941,7 @@ export default function BaseDetailPage() {
             {activeViewPanel && (
               <div
                 ref={viewPanelRef}
-                className="fixed z-30"
+                className="fixed z-50"
                 style={{
                   left: panelPosition.x,
                   top: panelPosition.y
@@ -1022,14 +1032,12 @@ export default function BaseDetailPage() {
                   savingCell={savingCell}
                   onSort={handleColumnSort}
                   onUpdateCell={updateCell}
-                  onDeleteRow={deleteRecord}
                   onBulkDelete={bulkDeleteRecords}
                   onAddRow={handleAddRow}
                   onAddField={handleAddField}
                   onFieldContextMenu={handleFieldContextMenu}
                   onRowContextMenu={handleRowContextMenu}
                   onReorderFields={handleReorderFields}
-                  canDeleteRow={can.delete ?? true}
                   groupFieldIds={groupFieldIds}
                   colorFieldId={colorFieldId}
                   colorAssignments={colorAssignments}
@@ -1098,6 +1106,14 @@ export default function BaseDetailPage() {
                 <p className="text-gray-500">Form features coming soon...</p>
               </div>
             </div>
+          )}
+
+          {topTab === 'documents' && (
+            <DocumentsView
+              baseId={baseId || ''}
+              baseName={base?.name}
+              selectedTable={tables.find(t => t.id === selectedTableId) || null}
+            />
           )}
         </div>
       </div>

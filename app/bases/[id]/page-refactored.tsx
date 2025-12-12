@@ -274,7 +274,6 @@ export default function BaseDetailPage() {
                   savingCell={savingCell}
                   onSort={toggleSort}
                   onUpdateCell={updateCell}
-                  onDeleteRow={deleteRecord}
                   onBulkDelete={bulkDeleteRecords}
                   onAddRow={handleAddRow}
                   onAddField={() => {}} // TODO: Implement field creation
