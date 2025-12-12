@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { mapGHLFieldTypeToAppType } from '@/lib/utils/ghl-transform';
 
 const GHL_API_BASE_URL = 'https://services.leadconnectorhq.com';
 
@@ -17,72 +18,67 @@ const supabaseAdmin = createClient(
 
 // Standard GHL contact fields - these are always available
 const GHL_STANDARD_FIELDS: { key: string; name: string; type: string }[] = [
-  { key: 'firstName', name: 'firstName', type: 'text' },
-  { key: 'lastName', name: 'lastName', type: 'text' },
-  { key: 'name', name: 'name', type: 'text' },
-  { key: 'email', name: 'email', type: 'email' },
-  { key: 'phone', name: 'phone', type: 'phone' },
-  { key: 'address1', name: 'address1', type: 'text' },
-  { key: 'city', name: 'city', type: 'text' },
-  { key: 'state', name: 'state', type: 'text' },
-  { key: 'postalCode', name: 'postalCode', type: 'text' },
-  { key: 'country', name: 'country', type: 'text' },
-  { key: 'companyName', name: 'companyName', type: 'text' },
-  { key: 'website', name: 'website', type: 'link' },
-  { key: 'tags', name: 'tags', type: 'text' },
-  { key: 'source', name: 'source', type: 'text' },
-  { key: 'dateOfBirth', name: 'dateOfBirth', type: 'date' },
-  { key: 'assignedTo', name: 'assignedTo', type: 'text' },
-  { key: 'timezone', name: 'timezone', type: 'text' },
+  { key: 'firstName', name: 'First Name', type: 'text' },
+  { key: 'lastName', name: 'Last Name', type: 'text' },
+  { key: 'name', name: 'Full Name', type: 'text' },
+  { key: 'email', name: 'Email', type: 'email' },
+  { key: 'phone', name: 'Phone', type: 'phone' },
+  { key: 'address1', name: 'Address', type: 'long_text' },
+  { key: 'city', name: 'City', type: 'text' },
+  { key: 'state', name: 'State', type: 'text' },
+  { key: 'postalCode', name: 'Postal Code', type: 'text' },
+  { key: 'country', name: 'Country', type: 'text' },
+  { key: 'companyName', name: 'Company Name', type: 'text' },
+  { key: 'website', name: 'Website', type: 'link' },
+  { key: 'tags', name: 'Tags', type: 'multi_select' },
+  { key: 'source', name: 'Source', type: 'text' },
+  { key: 'dateOfBirth', name: 'Date of Birth', type: 'date' },
+  { key: 'assignedTo', name: 'Assigned To', type: 'text' },
+  { key: 'timezone', name: 'Timezone', type: 'text' },
 ];
 
 /**
  * Map GHL field dataType to app field type
+ * Uses the shared mapping function from ghl-transform.ts
+ * Also handles lowercase and common variations
  */
 function mapGHLTypeToAppType(ghlType: string): string {
-  switch (ghlType?.toLowerCase()) {
-    case 'text':
-    case 'large_text':
-    case 'textarea':
-    case 'single_line':
-    case 'multi_line':
-      return 'text';
-    case 'number':
-    case 'numerical':
-    case 'float':
-    case 'integer':
-    case 'monetory':
-    case 'monetary':
-      return 'number';
-    case 'date':
-      return 'date';
-    case 'datetime':
-    case 'date_time':
-      return 'datetime';
-    case 'phone':
-    case 'phone_number':
-      return 'phone';
-    case 'email':
-      return 'email';
-    case 'checkbox':
-    case 'boolean':
-      return 'checkbox';
-    case 'url':
-    case 'link':
-    case 'website':
-      return 'link';
-    case 'dropdown':
-    case 'single_select':
-    case 'select':
-    case 'radio':
-      return 'single_select';
-    case 'multiple':
-    case 'multi_select':
-    case 'checkbox_list':
-      return 'multi_select';
-    default:
-      return 'text';
+  // First try the shared mapping function (handles uppercase standard types)
+  const mapped = mapGHLFieldTypeToAppType(ghlType);
+  if (mapped !== 'text' || !ghlType) {
+    return mapped;
   }
+  
+  // Fallback: handle lowercase and variations
+  const normalizedType = ghlType.toLowerCase();
+  
+  // Additional mappings for common variations
+  const variations: Record<string, string> = {
+    'single_line': 'text',
+    'textarea': 'long_text',
+    'multi_line': 'long_text',
+    'textbox_list': 'long_text',
+    'float': 'number',
+    'integer': 'number',
+    'monetory': 'monetary', // Common typo
+    'date_picker': 'date',
+    'date_time': 'datetime',
+    'phone_number': 'phone',
+    'boolean': 'checkbox',
+    'url': 'link',
+    'website': 'link',
+    'file_upload': 'link',
+    'signature': 'link',
+    'dropdown': 'single_select',
+    'select': 'single_select',
+    'single_options': 'single_select',
+    'radio': 'radio_select',
+    'multiple': 'multi_select',
+    'checkbox_list': 'multi_select',
+    'multiple_options': 'multi_select',
+  };
+  
+  return variations[normalizedType] || 'text';
 }
 
 /**
@@ -115,8 +111,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Collect all fields to create
-    const allFields: { key: string; name: string; type: string }[] = [...GHL_STANDARD_FIELDS];
+    // Collect all fields to create (with options for select fields)
+    const allFields: { key: string; name: string; type: string; options?: Record<string, unknown> }[] = [...GHL_STANDARD_FIELDS];
 
     // Fetch ALL custom fields from GHL Custom Fields API
     try {
@@ -145,10 +141,34 @@ export async function POST(request: NextRequest) {
           const fieldType = mapGHLTypeToAppType(cf.dataType || cf.type || 'text');
 
           if (fieldKey && fieldName) {
+            // Build options for select fields
+            let fieldOptions: Record<string, unknown> = {};
+            
+            if (['single_select', 'multi_select', 'radio_select'].includes(fieldType)) {
+              // Extract options from GHL field
+              const ghlOptions = cf.options || cf.picklistValues || cf.choices || [];
+              if (Array.isArray(ghlOptions) && ghlOptions.length > 0) {
+                const colorPalette = ['#1E40AF', '#065F46', '#C2410C', '#B91C1C', '#5B21B6', '#BE185D', '#3730A3', '#374151'];
+                ghlOptions.forEach((opt: any, idx: number) => {
+                  const optKey = typeof opt === 'string' ? opt : (opt.value || opt.id || opt.key || `option_${idx}`);
+                  const optLabel = typeof opt === 'string' ? opt : (opt.label || opt.name || opt.value || optKey);
+                  fieldOptions[optKey] = {
+                    label: optLabel,
+                    name: optLabel,
+                    color: colorPalette[idx % colorPalette.length]
+                  };
+                });
+              }
+            } else if (fieldType === 'monetary') {
+              // Default currency options for monetary fields
+              fieldOptions = { currency: 'USD', symbol: '$' };
+            }
+            
             allFields.push({
               key: fieldKey,
               name: fieldName, // Use exact name from GHL
               type: fieldType,
+              options: Object.keys(fieldOptions).length > 0 ? fieldOptions : undefined,
             });
           }
         });
@@ -314,7 +334,7 @@ export async function POST(request: NextRequest) {
             name: field.name, // Use exact GHL field name
             type: field.type,
             order_index: maxOrderIndex,
-            options: {},
+            options: field.options || {}, // Include options for select/monetary fields
           })
           .select('id')
           .single();

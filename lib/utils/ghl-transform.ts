@@ -1,4 +1,5 @@
 import type { GHLContact, GHLFieldMapping } from '../types/ghl-integration';
+import type { FieldType } from '../types/base-detail';
 
 // Standard GHL fields that exist directly on the contact object
 const STANDARD_GHL_FIELDS = [
@@ -7,6 +8,39 @@ const STANDARD_GHL_FIELDS = [
   'companyName', 'website', 'tags', 'source', 'dateOfBirth', 
   'assignedTo', 'timezone', 'dnd'
 ];
+
+/**
+ * Map GHL custom field dataType to app FieldType
+ * GHL dataTypes: TEXT, LARGE_TEXT, NUMERICAL, MONETARY, SINGLE_OPTIONS, 
+ *                MULTIPLE_OPTIONS, DATE, FILE_UPLOAD, SIGNATURE, TEXTBOX_LIST
+ */
+export function mapGHLFieldTypeToAppType(ghlDataType: string): FieldType {
+  const typeMap: Record<string, FieldType> = {
+    // Text types
+    'TEXT': 'text',              // Single Line
+    'LARGE_TEXT': 'long_text',   // Multi Line
+    'TEXTBOX_LIST': 'long_text', // Text Box List (array of text)
+    
+    // Numeric types
+    'NUMERICAL': 'number',
+    'MONETARY': 'monetary',
+    
+    // Selection types
+    'SINGLE_OPTIONS': 'single_select',  // Dropdown (Single) or Radio Select
+    'MULTIPLE_OPTIONS': 'multi_select', // Dropdown (Multiple) or Checkbox
+    'CHECKBOX': 'checkbox',
+    'RADIO': 'radio_select',
+    
+    // Date types
+    'DATE': 'date',
+    
+    // File types (store as link for now)
+    'FILE_UPLOAD': 'link',
+    'SIGNATURE': 'link',
+  };
+  
+  return typeMap[ghlDataType?.toUpperCase()] || 'text';
+}
 
 /**
  * Extract text value from GHL custom field value
@@ -67,6 +101,105 @@ function extractTextValue(value: unknown): string | null {
 }
 
 /**
+ * Extract monetary value from GHL custom field
+ * Returns the numeric value (GHL stores monetary as number or string)
+ */
+function extractMonetaryValue(value: unknown): number | null {
+  if (value === null || value === undefined) return null;
+  
+  // Direct number
+  if (typeof value === 'number') return value;
+  
+  // String representation of number
+  if (typeof value === 'string') {
+    const cleaned = value.replace(/[^\d.-]/g, '');
+    const num = parseFloat(cleaned);
+    return isNaN(num) ? null : num;
+  }
+  
+  // Object with value property
+  if (typeof value === 'object' && value !== null) {
+    if ('value' in value) {
+      return extractMonetaryValue((value as any).value);
+    }
+    if ('amount' in value) {
+      return extractMonetaryValue((value as any).amount);
+    }
+  }
+  
+  return null;
+}
+
+/**
+ * Extract selection value from GHL custom field
+ * Handles SINGLE_OPTIONS and MULTIPLE_OPTIONS
+ */
+function extractSelectionValue(value: unknown, isMultiple: boolean): string | string[] | null {
+  if (value === null || value === undefined) return null;
+  
+  // Direct string (single option selected)
+  if (typeof value === 'string') {
+    return isMultiple ? [value] : value;
+  }
+  
+  // Array of selections (multiple options)
+  if (Array.isArray(value)) {
+    const selections = value
+      .map(item => {
+        if (typeof item === 'string') return item;
+        if (item && typeof item === 'object') {
+          // Handle {id, value} or {key, label} formats
+          return (item as any).value || (item as any).label || (item as any).id || String(item);
+        }
+        return String(item);
+      })
+      .filter(Boolean);
+    
+    return isMultiple ? selections : (selections[0] || null);
+  }
+  
+  // Object with value property
+  if (typeof value === 'object' && value !== null) {
+    if ('value' in value) {
+      return extractSelectionValue((value as any).value, isMultiple);
+    }
+  }
+  
+  return null;
+}
+
+/**
+ * Extract date value from GHL custom field
+ * GHL can return dates in various formats
+ */
+function extractDateValue(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  
+  if (typeof value === 'string') {
+    // Try to parse and return in ISO format
+    const date = new Date(value);
+    if (!isNaN(date.getTime())) {
+      return date.toISOString().split('T')[0]; // Return YYYY-MM-DD format
+    }
+    return value; // Return as-is if parsing fails
+  }
+  
+  if (typeof value === 'number') {
+    // Assume timestamp
+    const date = new Date(value);
+    if (!isNaN(date.getTime())) {
+      return date.toISOString().split('T')[0];
+    }
+  }
+  
+  if (typeof value === 'object' && value !== null && 'value' in value) {
+    return extractDateValue((value as any).value);
+  }
+  
+  return null;
+}
+
+/**
  * Get custom field value from GHL contact
  * GHL can store custom fields in multiple ways:
  * 1. contact.customFields object with field ID as key
@@ -106,10 +239,12 @@ function getCustomFieldValue(contact: any, fieldKey: string): unknown {
 
 /**
  * Transform GHL contact to app record values
+ * @param fieldTypes Map of app field ID to field type (optional, for better value extraction)
  */
 export function transformGHLContactToRecord(
   contact: GHLContact,
-  fieldMapping: GHLFieldMapping
+  fieldMapping: GHLFieldMapping,
+  fieldTypes?: Record<string, FieldType>
 ): Record<string, unknown> {
   const recordValues: Record<string, unknown> = {};
 
@@ -124,6 +259,9 @@ export function transformGHLContactToRecord(
 
     // Check if this is a standard field
     const isStandardField = STANDARD_GHL_FIELDS.includes(ghlFieldKey);
+
+    // Get the app field type if available (before processing)
+    const appFieldType = fieldTypes?.[appFieldId];
 
     if (isStandardField) {
       // Handle standard fields
@@ -216,32 +354,89 @@ export function transformGHLContactToRecord(
       value = getCustomFieldValue(contact, ghlFieldKey);
     }
 
-    // For custom fields, extract text values properly (handles Single Line, Multi Line, Text Box List)
+    // Extract and transform value based on field type
     if (!isStandardField && value !== null && value !== undefined) {
-      // Use extractTextValue to handle all GHL text field types
-      const extractedText = extractTextValue(value);
-      if (extractedText !== null) {
-        value = extractedText;
+      // Extract value based on the app field type
+      if (appFieldType === 'long_text' || appFieldType === 'text') {
+        // For text fields, use extractTextValue to handle Single Line, Multi Line, Text Box List
+        const extractedText = extractTextValue(value);
+        if (extractedText !== null) {
+          value = extractedText;
+        }
+      } else if (appFieldType === 'monetary') {
+        // For monetary fields, extract numeric value
+        const extractedMonetary = extractMonetaryValue(value);
+        if (extractedMonetary !== null) {
+          value = extractedMonetary;
+        }
+      } else if (appFieldType === 'single_select' || appFieldType === 'radio_select') {
+        // For single select fields
+        const extractedSelection = extractSelectionValue(value, false);
+        if (extractedSelection !== null) {
+          value = extractedSelection;
+        }
+      } else if (appFieldType === 'multi_select') {
+        // For multi-select fields
+        const extractedSelection = extractSelectionValue(value, true);
+        if (extractedSelection !== null) {
+          value = extractedSelection;
+        }
+      } else if (appFieldType === 'checkbox') {
+        // For checkbox fields - extract boolean
+        if (typeof value === 'boolean') {
+          value = value;
+        } else if (typeof value === 'string') {
+          value = value === 'true' || value === '1' || value.toLowerCase() === 'yes';
+        } else if (typeof value === 'number') {
+          value = value !== 0;
+        } else if (value && typeof value === 'object' && 'value' in value) {
+          const val = (value as any).value;
+          value = typeof val === 'boolean' ? val : (val === 'true' || val === '1');
+        } else {
+          value = Boolean(value);
+        }
+      } else if (appFieldType === 'date' || appFieldType === 'datetime') {
+        // For date fields
+        const extractedDate = extractDateValue(value);
+        if (extractedDate !== null) {
+          value = extractedDate;
+        }
+      } else if (appFieldType === 'number') {
+        // For number fields
+        if (typeof value === 'number') {
+          value = value;
+        } else if (typeof value === 'string') {
+          const num = parseFloat(value);
+          value = isNaN(num) ? null : num;
+        } else if (value && typeof value === 'object' && 'value' in value) {
+          const val = (value as any).value;
+          const num = typeof val === 'number' ? val : parseFloat(String(val));
+          value = isNaN(num) ? null : num;
+        }
       } else {
-        // If extraction returns null, fall back to original handling for non-text types
-        // Handle GHL custom field objects with {id, value} structure
-        if (typeof value === 'object' && !Array.isArray(value)) {
-          // Check if this is a GHL custom field object with id and value
-          if ('value' in value) {
-            value = (value as any).value;
-          } else if ('field_value' in value) {
-            value = (value as any).field_value;
+        // Fallback: try extractTextValue for unknown types
+        const extractedText = extractTextValue(value);
+        if (extractedText !== null) {
+          value = extractedText;
+        } else {
+          // Handle GHL custom field objects with {id, value} structure
+          if (typeof value === 'object' && !Array.isArray(value)) {
+            if ('value' in value) {
+              value = (value as any).value;
+            } else if ('field_value' in value) {
+              value = (value as any).field_value;
+            }
           }
-        }
 
-        // Handle array values (convert to comma-separated string for non-text arrays)
-        if (Array.isArray(value)) {
-          value = value.join(', ');
-        }
+          // Handle array values
+          if (Array.isArray(value)) {
+            value = value.join(', ');
+          }
 
-        // Handle remaining object values (stringify as last resort)
-        if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
-          value = JSON.stringify(value);
+          // Handle remaining object values (stringify as last resort)
+          if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+            value = JSON.stringify(value);
+          }
         }
       }
     } else {
@@ -267,9 +462,17 @@ export function transformGHLContactToRecord(
       }
     }
 
-    // Only set if we have a value
-    if (value !== null && value !== undefined && value !== '') {
-      recordValues[appFieldId] = value;
+    // Set the value if it's not null or undefined
+    // Allow false for checkboxes, 0 for numbers, empty arrays for multi-select, etc.
+    // Only skip empty strings for text fields to avoid cluttering the data
+    if (value !== null && value !== undefined) {
+      // For text/long_text fields, skip empty strings
+      if ((appFieldType === 'text' || appFieldType === 'long_text') && value === '') {
+        // Skip empty text - don't add to recordValues
+      } else {
+        // For all other types, include the value (false, 0, empty arrays are valid)
+        recordValues[appFieldId] = value;
+      }
     }
   });
 
