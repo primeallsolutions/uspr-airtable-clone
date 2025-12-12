@@ -34,14 +34,14 @@ const COLUMN_COLORS = [
 
 const getColorForIndex = (index: number) => COLUMN_COLORS[index % COLUMN_COLORS.length];
 
-// Extract dropdown options from a select field (supports both single and multi select formats)
+// Extract dropdown options from a select field (supports single, multi, and radio select formats)
 const getDropdownOptions = (field: FieldRow): DropdownOption[] => {
   if (!field.options) {
     console.log(`    ⚠️ Field "${field.name}" has no options`);
     return [];
   }
   
-  if (field.type !== "single_select" && field.type !== "multi_select") {
+  if (field.type !== "single_select" && field.type !== "multi_select" && field.type !== "radio_select") {
     console.log(`    ⚠️ Field "${field.name}" is not select type: ${field.type}`);
     return [];
   }
@@ -130,7 +130,7 @@ export const KanbanView = ({
   
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Step 1: Get all columns with dropdown/options (single_select & multi_select fields)
+  // Step 1: Get all columns with dropdown/options (single_select, multi_select & radio_select fields)
   const dropdownFields = useMemo(
     () => {
       console.log("🔍 Detecting dropdown fields:", {
@@ -139,7 +139,7 @@ export const KanbanView = ({
       });
       
       const result = fields.filter(field => {
-        const isSelectType = field.type === "single_select" || field.type === "multi_select";
+        const isSelectType = field.type === "single_select" || field.type === "multi_select" || field.type === "radio_select";
         const options = getDropdownOptions(field);
         const hasOptions = options.length > 0;
         

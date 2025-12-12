@@ -355,6 +355,112 @@ export default function CellEditor({
     );
   }
 
+  // Monetary field - formatted currency input
+  if (field.type === 'monetary') {
+    const currencyOptions = field.options as { currency?: string; symbol?: string } | null;
+    const symbol = currencyOptions?.symbol || '$';
+
+    const formatMonetary = (val: string) => {
+      const num = parseFloat(val.replace(/[^\d.-]/g, ''));
+      if (isNaN(num)) return '';
+      return num.toFixed(2);
+    };
+
+    const handleMonetaryCommit = () => {
+      const cleanValue = local.replace(/[^\d.-]/g, '');
+      const num = parseFloat(cleanValue);
+      onUpdate(isNaN(num) ? null : num);
+    };
+
+    return (
+      <div className="flex items-center w-full">
+        <span className="text-gray-500 mr-1">{symbol}</span>
+        <input
+          type="text"
+          className={baseInputClass}
+          value={local}
+          onChange={(e) => setLocal(e.target.value)}
+          onBlur={() => {
+            setLocal(formatMonetary(local));
+            handleMonetaryCommit();
+          }}
+          onKeyDown={(e) => { 
+            if (e.key === 'Enter') {
+              setLocal(formatMonetary(local));
+              handleMonetaryCommit();
+            }
+          }}
+          disabled={isSaving}
+          placeholder="0.00"
+        />
+      </div>
+    );
+  }
+
+  // Radio Select - like single_select but with radio buttons UI
+  if (field.type === 'radio_select') {
+    return (
+      <div className="w-full min-h-[32px] px-2 py-1">
+        <div className="flex flex-wrap gap-2">
+          {selectChoices.map((choice) => {
+            const isSelected = String(value) === choice.key;
+            return (
+              <label
+                key={choice.key}
+                className={`flex items-center gap-1.5 px-2 py-1 rounded cursor-pointer text-xs font-medium transition-all ${
+                  isSelected 
+                    ? 'text-white' 
+                    : 'text-gray-600 hover:bg-gray-100'
+                }`}
+                style={isSelected ? { backgroundColor: choice.color } : undefined}
+              >
+                <input
+                  type="radio"
+                  name={`radio_${field.id}`}
+                  value={choice.key}
+                  checked={isSelected}
+                  onChange={(e) => onUpdate(e.target.value || null)}
+                  disabled={isSaving}
+                  className="sr-only"
+                />
+                <span 
+                  className={`w-3 h-3 rounded-full border-2 flex items-center justify-center ${
+                    isSelected ? 'border-white' : 'border-gray-400'
+                  }`}
+                >
+                  {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                </span>
+                {choice.label}
+              </label>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  // Long text - always renders as textarea
+  if (field.type === 'long_text') {
+    return (
+      <textarea
+        className={`${baseInputClass} resize-none min-h-[60px] max-h-[120px] overflow-y-auto`}
+        value={local}
+        onChange={(e) => setLocal(e.target.value)}
+        onBlur={handleCommit}
+        onKeyDown={(e) => { 
+          // Allow Enter for new lines in textarea, Ctrl+Enter or Cmd+Enter to commit
+          if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+            e.preventDefault();
+            handleCommit();
+          }
+        }}
+        disabled={isSaving}
+        placeholder="Enter text..."
+        rows={Math.min(5, Math.max(2, (local.match(/\n/g) || []).length + 1))}
+      />
+    );
+  }
+
   // default: text
   // Check if the value contains newlines (multi-line text or text box list from GHL)
   const isMultiLine = typeof value === 'string' && value.includes('\n');
