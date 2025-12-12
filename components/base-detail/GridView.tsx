@@ -380,6 +380,7 @@ export const GridView = ({
                   <Plus size={16} />
                   <span>Add Row</span>
                 </button>
+              </div>
               {/* Add Row button spanning entire row */}
               <div className="flex border-b border-gray-200 hover:bg-gray-50">
                 {/* Checkbox column */}
