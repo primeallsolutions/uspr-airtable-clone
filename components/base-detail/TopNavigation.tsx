@@ -76,6 +76,7 @@ export const TopNavigation = ({
   if (showFormsTab) {
     tabs.push({ id: 'forms', label: 'Forms' });
   }
+  tabs.push({ id: 'documents', label: 'Documents' });
 
   return (
     <div className="border-b border-gray-200 bg-white">
