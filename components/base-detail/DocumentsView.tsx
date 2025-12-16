@@ -39,6 +39,7 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable }: Docu
   const [isInitialLoad, setIsInitialLoad] = useState<boolean>(true);
   const [editorDoc, setEditorDoc] = useState<StoredDocument | null>(null);
   const [editorSignedUrl, setEditorSignedUrl] = useState<string | null>(null);
+  const [checkedDocuments, setCheckedDocuments] = useState<string[]>([]);
 
   const currentPrefix = useMemo(
     () => (folderPath && !folderPath.endsWith("/") ? `${folderPath}/` : folderPath),
@@ -419,6 +420,23 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable }: Docu
       alert("Unable to delete document");
     }
   };
+  const handleDeleteChecked = async () => {
+    if (checkedDocuments.length === 0) return;
+    const confirmDelete = window.confirm(
+      `Delete ${checkedDocuments.length} selected documents? This cannot be undone.`
+    );
+    if (!confirmDelete) return;
+    try {
+      for (const docPath of checkedDocuments)
+        await DocumentsService.deleteDocument(baseId, selectedTable?.id ?? null, docPath);
+      if (selectedDoc && checkedDocuments.includes(selectedDoc.path)) setSelectedDocPath(null);
+      setCheckedDocuments([]);
+      await refresh();
+    } catch (err) {
+      console.error("Failed to delete document", err);
+      alert("Unable to delete document");
+    }
+  }
 
   const handleRenameSelected = async () => {
     if (!selectedDoc || isFolder(selectedDoc)) return;
@@ -539,6 +557,9 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable }: Docu
             folderPath={folderPath}
             onDocumentSelect={setSelectedDocPath}
             onDocumentEdit={handleDocumentEdit}
+            checkedDocuments={checkedDocuments}
+            setCheckedDocuments={setCheckedDocuments}
+            onCheckedDelete={handleDeleteChecked}
           />
 
           <DocumentPreview

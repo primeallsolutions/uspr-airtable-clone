@@ -24,7 +24,6 @@ interface TableControlsProps {
   tables: TableRow[];
   selectedTableId: string | null;
   onTableSelect: (tableId: string) => void;
-  onAddRecord: () => void | Promise<void>;
   showTableTabs?: boolean;
   viewMode?: 'grid' | 'kanban'; // View mode to show appropriate controls
   onImportCsv: () => void;
@@ -56,7 +55,6 @@ export const TableControls = ({
   tables,
   selectedTableId,
   onTableSelect,
-  onAddRecord,
   showTableTabs = true,
   viewMode = 'grid',
   onImportCsv,
@@ -267,14 +265,6 @@ export const TableControls = ({
             </button>
             <button type="button" className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
               <ChevronRight size={16} className="text-gray-400" />
-            </button>
-            <button
-              type="button"
-              onClick={onAddRecord}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              title="Add record"
-            >
-              <Plus size={16} className="text-gray-400" />
             </button>
             <button
               type="button"
