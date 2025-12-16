@@ -194,6 +194,19 @@ export class MembershipService {
       throw new Error('Invite email does not match current user');
     }
 
+    // Ensure a profile row exists so FK constraints on memberships do not fail
+    const { error: profileErr } = await supabase
+      .from('profiles')
+      .upsert({ id: currentUserId, full_name: currentUserEmail ?? null });
+    if (profileErr) throw profileErr;
+    try {
+      await supabase
+        .from('notification_preferences')
+        .upsert({ user_id: currentUserId });
+    } catch {
+      // Non-fatal: preferences can be set later.
+    }
+
     // Create membership based on scope (idempotent if already a member)
     if (invite.workspace_id) {
       const { data: existing, error: fetchMemberErr } = await supabase
