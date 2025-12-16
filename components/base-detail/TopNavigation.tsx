@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, Plus, MoreVertical, Zap, Share2, Rocket, Crown, Edit, Trash2, ArrowLeft } from "lucide-react";
+import { MoreVertical, Zap, Crown, Edit, Trash2, ArrowLeft } from "lucide-react";
 import type { BaseRow, TableRow, TopTab } from "@/lib/types/base-detail";
+import { GHLSyncStatus } from "./GHLSyncStatus";
 
 interface TopNavigationProps {
   base: BaseRow | null;
@@ -17,6 +18,10 @@ interface TopNavigationProps {
   onDeleteTable: (tableId: string) => void;
   canDeleteTable?: boolean;
   onExportBase?: () => void;
+  showInterfacesTab?: boolean;
+  showFormsTab?: boolean;
+  baseId?: string;
+  onConnectGHL?: () => void;
 }
 
 export const TopNavigation = ({
@@ -32,7 +37,11 @@ export const TopNavigation = ({
   onRenameTable,
   onDeleteTable,
   canDeleteTable = true,
-  onExportBase
+  onExportBase,
+  showInterfacesTab = true,
+  showFormsTab = true,
+  baseId,
+  onConnectGHL
 }: TopNavigationProps) => {
   const router = useRouter();
   const [isTableDropdownOpen, setIsTableDropdownOpen] = useState(false);
@@ -59,9 +68,15 @@ export const TopNavigation = ({
   const tabs: { id: TopTab; label: string }[] = [
     { id: 'data', label: 'Data' },
     { id: 'automations', label: 'Automations' },
-    { id: 'interfaces', label: 'Interfaces' },
-    { id: 'forms', label: 'Forms' },
   ];
+
+  if (showInterfacesTab) {
+    tabs.push({ id: 'interfaces', label: 'Interfaces' });
+  }
+  if (showFormsTab) {
+    tabs.push({ id: 'forms', label: 'Forms' });
+  }
+  tabs.push({ id: 'documents', label: 'Documents' });
 
   return (
     <div className="border-b border-gray-200 bg-white">
@@ -176,6 +191,15 @@ export const TopNavigation = ({
 
         {/* Actions */}
         <div className="flex items-center gap-2">
+          {/* GHL Integration */}
+          {baseId && (
+            <GHLSyncStatus 
+              baseId={baseId} 
+              onOpenSettings={onConnectGHL}
+              showConnectButton={onConnectGHL !== undefined}
+            />
+          )}
+
           {onExportBase && (
             <button
               type="button"

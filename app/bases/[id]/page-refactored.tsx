@@ -15,14 +15,14 @@ import { GridView } from "@/components/base-detail/GridView";
 import { KanbanView } from "@/components/base-detail/KanbanView";
 
 // Types
-import type { BaseRow, FieldRow, RecordRow } from "@/lib/types/base-detail";
+import type { FieldRow, RecordRow } from "@/lib/types/base-detail";
 
 export default function BaseDetailPage() {
   const params = useParams<{ id: string }>();
   const baseId = useMemo(() => (Array.isArray(params?.id) ? params.id[0] : params?.id), [params]);
   
   // Custom hooks
-  const { user, loading: userLoading } = useAuth();
+  const { loading: userLoading } = useAuth();
   const {
     base,
     tables,
@@ -81,12 +81,14 @@ export default function BaseDetailPage() {
   };
 
   const handleFieldContextMenu = (e: React.MouseEvent, field: FieldRow) => {
+    void field;
     e.preventDefault();
     e.stopPropagation();
     showContextMenu(e);
   };
 
   const handleRowContextMenu = (e: React.MouseEvent, record: RecordRow) => {
+    void record;
     e.preventDefault();
     e.stopPropagation();
     showContextMenu(e);
@@ -149,9 +151,9 @@ export default function BaseDetailPage() {
     }
   };
 
-  const handleAddRow = async () => {
+  const handleAddRow = async (initialValues: Record<string, unknown> = {}) => {
     try {
-      await createRecord();
+      await createRecord(initialValues);
     } catch (err) {
       console.error('Error creating record:', err);
     }
@@ -224,6 +226,8 @@ export default function BaseDetailPage() {
         onToggleMasterList={handleToggleMasterList}
         onRenameTable={handleRenameTable}
         onDeleteTable={handleDeleteTable}
+        showInterfacesTab={false}
+        showFormsTab={false}
       />
 
       {/* Main Content */}
@@ -270,7 +274,6 @@ export default function BaseDetailPage() {
                   savingCell={savingCell}
                   onSort={toggleSort}
                   onUpdateCell={updateCell}
-                  onDeleteRow={deleteRecord}
                   onBulkDelete={bulkDeleteRecords}
                   onAddRow={handleAddRow}
                   onAddField={() => {}} // TODO: Implement field creation
@@ -281,6 +284,8 @@ export default function BaseDetailPage() {
                 <KanbanView
                   records={records}
                   fields={fields}
+                  tables={tables}
+                  selectedTableId={selectedTableId}
                   onUpdateCell={updateCell}
                   onDeleteRow={deleteRecord}
                   onAddRow={handleAddRow}

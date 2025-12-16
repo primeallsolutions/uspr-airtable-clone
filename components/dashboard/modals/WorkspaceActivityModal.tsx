@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { X } from "lucide-react";
 import { AuditLogService, type AuditLogRow } from "@/lib/services/audit-log-service";
 import { formatInTimezone } from "@/lib/utils/date-helpers";

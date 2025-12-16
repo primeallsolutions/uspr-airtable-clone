@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { X, Type, Hash, Calendar, Clock, Mail, Phone, CheckSquare, Link, List, CheckCircle, Plus, Edit2, Trash2, GripVertical } from "lucide-react";
+import { X, Type, Hash, Calendar, Clock, Mail, Phone, CheckSquare, Link, List, CheckCircle, Plus, Edit2, Trash2, GripVertical, AlignLeft, DollarSign, CircleDot } from "lucide-react";
 import type { FieldType } from "@/lib/types/base-detail";
 
 interface OptionItem {
@@ -20,18 +20,33 @@ const fieldTypes: Array<{
   description: string;
   icon: React.ReactNode;
 }> = [
+  // Text Input Types
   {
     type: 'text',
-    label: 'Text',
+    label: 'Text (Single Line)',
     description: 'Single line of text',
     icon: <Type size={20} className="text-gray-600" />
   },
+  {
+    type: 'long_text',
+    label: 'Long Text (Multi Line)',
+    description: 'Multi-line text or text box list',
+    icon: <AlignLeft size={20} className="text-gray-600" />
+  },
+  // Numeric Types
   {
     type: 'number',
     label: 'Number',
     description: 'Numeric values',
     icon: <Hash size={20} className="text-gray-600" />
   },
+  {
+    type: 'monetary',
+    label: 'Monetary',
+    description: 'Currency/money values',
+    icon: <DollarSign size={20} className="text-gray-600" />
+  },
+  // Date/Time Types
   {
     type: 'date',
     label: 'Date',
@@ -44,6 +59,7 @@ const fieldTypes: Array<{
     description: 'Date and time values',
     icon: <Clock size={20} className="text-gray-600" />
   },
+  // Contact Types
   {
     type: 'email',
     label: 'Email',
@@ -56,17 +72,24 @@ const fieldTypes: Array<{
     description: 'Phone numbers',
     icon: <Phone size={20} className="text-gray-600" />
   },
+  // Selection Types
   {
     type: 'single_select',
-    label: 'Single Select',
-    description: 'Choose one option from a list',
+    label: 'Dropdown (Single)',
+    description: 'Choose one option from a dropdown',
     icon: <List size={20} className="text-gray-600" />
   },
   {
     type: 'multi_select',
-    label: 'Multi Select',
-    description: 'Choose multiple options from a list',
+    label: 'Dropdown (Multiple)',
+    description: 'Choose multiple options from a dropdown',
     icon: <CheckCircle size={20} className="text-gray-600" />
+  },
+  {
+    type: 'radio_select',
+    label: 'Radio Select',
+    description: 'Choose one option with radio buttons',
+    icon: <CircleDot size={20} className="text-gray-600" />
   },
   {
     type: 'checkbox',
@@ -74,6 +97,7 @@ const fieldTypes: Array<{
     description: 'True or false values',
     icon: <CheckSquare size={20} className="text-gray-600" />
   },
+  // Other Types
   {
     type: 'link',
     label: 'Link',
@@ -98,6 +122,8 @@ export const CreateFieldModal = ({ isOpen, onClose, onCreateField }: CreateField
   const [selectedType, setSelectedType] = useState<FieldType>('text');
   const [options, setOptions] = useState<OptionItem[]>([]);
   const [editingOption, setEditingOption] = useState<string | null>(null);
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [newOptionLabel, setNewOptionLabel] = useState("");
   const [newOptionColor, setNewOptionColor] = useState(predefinedColors[0].value);
 
@@ -107,7 +133,11 @@ export const CreateFieldModal = ({ isOpen, onClose, onCreateField }: CreateField
     if (!fieldName.trim()) return;
     
     // Validate that selectedType is a valid FieldType
-    const validTypes: FieldType[] = ['text', 'number', 'date', 'datetime', 'email', 'phone', 'single_select', 'multi_select', 'checkbox', 'link'];
+    const validTypes: FieldType[] = [
+      'text', 'long_text', 'number', 'monetary', 'date', 'datetime', 
+      'email', 'phone', 'single_select', 'multi_select', 'radio_select', 
+      'checkbox', 'link'
+    ];
     if (!validTypes.includes(selectedType)) {
       console.error('Invalid field type selected:', selectedType);
       return;
@@ -118,8 +148,8 @@ export const CreateFieldModal = ({ isOpen, onClose, onCreateField }: CreateField
       type: selectedType
     };
     
-    // Add options for select fields
-    if (selectedType === 'single_select' || selectedType === 'multi_select') {
+    // Add options for select fields (single_select, multi_select, radio_select)
+    if (selectedType === 'single_select' || selectedType === 'multi_select' || selectedType === 'radio_select') {
       const optionsMap: Record<string, unknown> = {};
       options.forEach(option => {
         optionsMap[option.id] = {
@@ -128,6 +158,11 @@ export const CreateFieldModal = ({ isOpen, onClose, onCreateField }: CreateField
         };
       });
       fieldData.options = optionsMap;
+    }
+    
+    // Add currency options for monetary fields
+    if (selectedType === 'monetary') {
+      fieldData.options = { currency: 'USD', symbol: '$' };
     }
     
     onCreateField(fieldData);
@@ -158,13 +193,6 @@ export const CreateFieldModal = ({ isOpen, onClose, onCreateField }: CreateField
     setNewOptionColor(predefinedColors[0].value);
   };
 
-  const handleEditOption = (optionId: string, newLabel: string) => {
-    setOptions(prev => prev.map(option => 
-      option.id === optionId ? { ...option, label: newLabel } : option
-    ));
-    setEditingOption(null);
-  };
-
   const handleUpdateOptionColor = (optionId: string, color: string) => {
     setOptions(prev => prev.map(option => 
       option.id === optionId ? { ...option, color } : option
@@ -180,6 +208,54 @@ export const CreateFieldModal = ({ isOpen, onClose, onCreateField }: CreateField
       e.preventDefault();
       handleAddOption();
     }
+  };
+
+  // Drag and drop handlers for reordering options
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    setDraggedIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+    // Set a transparent drag image for better UX
+    const dragImage = document.createElement('div');
+    dragImage.style.opacity = '0';
+    document.body.appendChild(dragImage);
+    e.dataTransfer.setDragImage(dragImage, 0, 0);
+    setTimeout(() => document.body.removeChild(dragImage), 0);
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (draggedIndex !== null && draggedIndex !== index) {
+      setDragOverIndex(index);
+    }
+  };
+
+  const handleDragLeave = () => {
+    setDragOverIndex(null);
+  };
+
+  const handleDrop = (e: React.DragEvent, dropIndex: number) => {
+    e.preventDefault();
+    
+    if (draggedIndex === null || draggedIndex === dropIndex) {
+      setDraggedIndex(null);
+      setDragOverIndex(null);
+      return;
+    }
+
+    // Reorder the options array
+    const reorderedOptions = [...options];
+    const [movedOption] = reorderedOptions.splice(draggedIndex, 1);
+    reorderedOptions.splice(dropIndex, 0, movedOption);
+
+    setOptions(reorderedOptions);
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null);
+    setDragOverIndex(null);
   };
 
   if (!isOpen) return null;
@@ -251,8 +327,8 @@ export const CreateFieldModal = ({ isOpen, onClose, onCreateField }: CreateField
             </div>
           </div>
           
-          {/* Options for Select Fields */}
-          {(selectedType === 'single_select' || selectedType === 'multi_select') && (
+          {/* Options for Select Fields (single_select, multi_select, radio_select) */}
+          {(selectedType === 'single_select' || selectedType === 'multi_select' || selectedType === 'radio_select') && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-3">
                 Options
@@ -260,9 +336,24 @@ export const CreateFieldModal = ({ isOpen, onClose, onCreateField }: CreateField
               
               {/* Existing Options */}
               <div className="space-y-2 mb-4">
-                {options.map((option) => (
-                  <div key={option.id} className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg group">
-                    <GripVertical size={16} className="text-gray-400 cursor-move" />
+                {options.map((option, index) => {
+                  const isDragging = draggedIndex === index;
+                  const isDragOver = dragOverIndex === index;
+                  
+                  return (
+                  <div 
+                    key={option.id} 
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, index)}
+                    onDragOver={(e) => handleDragOver(e, index)}
+                    onDragLeave={handleDragLeave}
+                    onDrop={(e) => handleDrop(e, index)}
+                    onDragEnd={handleDragEnd}
+                    className={`flex items-center gap-2 p-3 bg-gray-50 rounded-lg group transition-all ${
+                      isDragging ? 'opacity-50' : ''
+                    } ${isDragOver ? 'border-l-4 border-l-blue-500' : ''}`}
+                  >
+                    <GripVertical size={16} className="text-gray-400 cursor-grab active:cursor-grabbing" />
                     
                     {/* Color Preview */}
                     <div 
@@ -332,7 +423,8 @@ export const CreateFieldModal = ({ isOpen, onClose, onCreateField }: CreateField
                       </button>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
               
               {/* Add New Option */}

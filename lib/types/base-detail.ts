@@ -19,7 +19,26 @@ export type TableRow = {
   is_master_list: boolean;
 };
 
-export type FieldType = 'text' | 'number' | 'date' | 'datetime' | 'email' | 'phone' | 'single_select' | 'multi_select' | 'checkbox' | 'link';
+export type FieldType = 
+  // Text Input Types
+  | 'text'           // Single Line text
+  | 'long_text'      // Multi Line text or Text Box List
+  // Numeric Types
+  | 'number'         // General numbers
+  | 'monetary'       // Currency/money values
+  // Date/Time Types
+  | 'date'           // Date only
+  | 'datetime'       // Date and time
+  // Contact Types
+  | 'email'          // Email addresses
+  | 'phone'          // Phone numbers
+  // Selection Types
+  | 'single_select'  // Dropdown (Single) - choose one option
+  | 'multi_select'   // Dropdown (Multiple) - choose multiple options
+  | 'radio_select'   // Radio button selection (single choice)
+  | 'checkbox'       // Boolean true/false or multi-checkbox
+  // Other Types
+  | 'link';          // URL links
 
 export type FieldRow = {
   id: string;
@@ -75,7 +94,7 @@ export type Automation = {
 };
 
 export type ViewMode = 'grid' | 'kanban';
-export type TopTab = 'data' | 'automations' | 'interfaces' | 'forms';
+export type TopTab = 'data' | 'automations' | 'interfaces' | 'forms' | 'documents';
 export type SortDirection = 'asc' | 'desc';
 
 export type Condition = {

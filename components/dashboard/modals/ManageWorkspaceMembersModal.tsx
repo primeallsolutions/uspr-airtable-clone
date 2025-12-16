@@ -161,6 +161,7 @@ export const ManageWorkspaceMembersModal = ({ isOpen, onClose, workspaceId }: Ma
                           className="px-2 py-1 border border-gray-300 rounded disabled:opacity-50"
                           disabled={Boolean(isOwner)}
                         >
+                          <option value="owner" disabled>Owner</option>
                           <option value="member">Member</option>
                           <option value="admin">{isOwner ? 'Admin (Owner)' : 'Admin'}</option>
                         </select>
@@ -198,6 +199,7 @@ export const ManageWorkspaceMembersModal = ({ isOpen, onClose, workspaceId }: Ma
                 onChange={(e) => setInviteRole(e.target.value as RoleType)}
                 className="px-3 py-2 border border-gray-300 rounded-md"
               >
+                <option value="owner">Owner</option>
                 <option value="member">Member</option>
                 <option value="admin">Admin</option>
               </select>
@@ -222,7 +224,6 @@ export const ManageWorkspaceMembersModal = ({ isOpen, onClose, workspaceId }: Ma
     </div>
   );
 };
-
 
 
 

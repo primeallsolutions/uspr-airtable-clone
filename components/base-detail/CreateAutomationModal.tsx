@@ -73,50 +73,91 @@ export const CreateAutomationModal = ({
   });
   const [isMappingAllFields, setIsMappingAllFields] = useState(false);
 
-  // Update preserve_original when action type changes
+  // Stable ordering helpers (prefer masterlist order, then table/order index)
+  const sortByOrderIndex = (a: FieldRow, b: FieldRow) => (a.order_index ?? 0) - (b.order_index ?? 0);
+  const masterTable = tables.find(t => t.is_master_list);
+  const masterFields = masterTable
+    ? fields.filter(f => f.table_id === masterTable.id).sort(sortByOrderIndex)
+    : [];
+  const masterOrderMap = new Map<string, number>();
+  masterFields.forEach((field, index) => {
+    masterOrderMap.set(field.name.toLowerCase(), index);
+  });
+  const tableOrderMap = new Map<string, number>(tables.map(t => [t.id, t.order_index ?? 0]));
+  const sortByMasterOrder = (a: FieldRow, b: FieldRow) => {
+    const aKey = a.name.toLowerCase();
+    const bKey = b.name.toLowerCase();
+    const aMasterIndex = masterOrderMap.get(aKey);
+    const bMasterIndex = masterOrderMap.get(bKey);
+
+    if (aMasterIndex !== undefined && bMasterIndex !== undefined) {
+      return aMasterIndex - bMasterIndex;
+    }
+    if (aMasterIndex !== undefined) return -1;
+    if (bMasterIndex !== undefined) return 1;
+
+    const tableCompare = (tableOrderMap.get(a.table_id) ?? 0) - (tableOrderMap.get(b.table_id) ?? 0);
+    if (tableCompare !== 0) return tableCompare;
+
+    const orderCompare = sortByOrderIndex(a, b);
+    if (orderCompare !== 0) return orderCompare;
+
+    return a.name.localeCompare(b.name);
+  };
+
+  // Ensure preserve_original defaults sensibly when switching action types
   useEffect(() => {
-    if (formData.action.type === 'move_to_table' && formData.action.preserve_original === true) {
+    if (formData.action.type === 'move_to_table' && formData.action.preserve_original !== false) {
       setFormData(prev => ({
         ...prev,
         action: { ...prev.action, preserve_original: false }
       }));
-    } else if (formData.action.type === 'copy_to_table' && formData.action.preserve_original === false) {
+      return;
+    }
+
+    if (formData.action.type === 'copy_to_table' && formData.action.preserve_original === false) {
       setFormData(prev => ({
         ...prev,
         action: { ...prev.action, preserve_original: true }
       }));
     }
-  }, [formData.action.type]);
+  }, [formData.action.preserve_original, formData.action.type]);
 
   // Get unique field names across all tables for field selection
-  // When "All tables in base" is selected, show unique field names (not per-table fields)
-  // Include fields from ALL tables, including masterlist
+  // Prefer the masterlist version of each field (keeps stable IDs/order when new target fields are created)
   const uniqueFieldNames = new Set<string>();
-  const fieldsByName = new Map<string, FieldRow>(); // Store first occurrence of each field name
+  const fieldsByName = new Map<string, FieldRow>(); // Store first occurrence of each field name (case-insensitive)
+  const allFieldsOrdered = [...fields].sort(sortByMasterOrder);
   
-  for (const field of fields) {
-    // Include all fields from all tables, including masterlist
-    if (!uniqueFieldNames.has(field.name)) {
-      uniqueFieldNames.add(field.name);
-      fieldsByName.set(field.name, field);
+  for (const field of allFieldsOrdered) {
+    const key = field.name.toLowerCase();
+    if (!uniqueFieldNames.has(key)) {
+      uniqueFieldNames.add(key);
+      fieldsByName.set(key, field);
     }
   }
   
-  // Get source fields - if table_name is specified, filter by that table; otherwise show unique field names
+  // Get source fields - prefer selected table; fall back to unique field names only if no table is set
   const sourceTable = formData.trigger.table_name 
     ? tables.find(t => t.name === formData.trigger.table_name)
     : null;
   
-  // For field selection, show unique field names when "All tables" is selected
-  // This allows selecting a field once and having it work across all tables
+  // When a source table is selected, use its actual fields so IDs stay consistent in the dropdowns/mappings.
+  // When no table is selected, use the unique-by-name list so base-wide automations still work.
   const sourceFields = sourceTable 
-    ? (sourceTable.is_master_list 
-        ? Array.from(fieldsByName.values()) // Show unique field names
-        : fields.filter(f => f.table_id === sourceTable.id))
-    : Array.from(fieldsByName.values()); // Show unique field names when "All tables" is selected
-  
-  // Field mappings should always use the unique field list so they're table-agnostic
-  const globalSourceFields = Array.from(fieldsByName.values());
+    ? fields.filter(f => f.table_id === sourceTable.id).sort(sortByMasterOrder)
+    : Array.from(fieldsByName.values());
+
+  // Always include fields that are already referenced in mappings, even if they were filtered out
+  // (e.g., when new tables/fields reorder the deduped source list).
+  const sourceFieldsById = new Map(sourceFields.map(f => [f.id, f]));
+  for (const mapping of formData.action.field_mappings) {
+    const mappedSource = fields.find(f => f.id === mapping.source_field_id);
+    if (mappedSource && !sourceFieldsById.has(mappedSource.id)) {
+      sourceFieldsById.set(mappedSource.id, mappedSource);
+    }
+  }
+  const globalSourceFields = Array.from(sourceFieldsById.values()).sort(sortByMasterOrder);
 
   // Reset trigger field when source table changes
   useEffect(() => {
@@ -153,8 +194,18 @@ export const CreateAutomationModal = ({
     ? tables.find(t => t.name === formData.action.target_table_name)
     : null;
   const targetFields = targetTable
-    ? fields.filter(f => f.table_id === targetTable.id)
+    ? fields.filter(f => f.table_id === targetTable.id).sort(sortByMasterOrder)
     : [];
+
+  // Keep target fields that are already mapped even if they no longer appear in the filtered list
+  const targetFieldsById = new Map(targetFields.map(f => [f.id, f]));
+  for (const mapping of formData.action.field_mappings) {
+    const mappedTarget = fields.find(f => f.id === mapping.target_field_id);
+    if (mappedTarget && !targetFieldsById.has(mappedTarget.id)) {
+      targetFieldsById.set(mappedTarget.id, mappedTarget);
+    }
+  }
+  const targetFieldsWithMappings = Array.from(targetFieldsById.values()).sort(sortByMasterOrder);
   
   // Get the selected field to determine appropriate operators
   // Support both field_id (backward compatibility) and field_name (new way)
@@ -170,9 +221,6 @@ export const CreateAutomationModal = ({
     if (!formData.name.trim()) {
       newErrors.name = 'Automation name is required';
     }
-
-    // table_name is optional - if empty, applies to all tables
-    // No validation needed for source table
 
     if (!formData.action.target_table_name) {
       newErrors.target_table_name = 'Target table is required';
@@ -203,7 +251,7 @@ export const CreateAutomationModal = ({
       enabled: formData.enabled,
       trigger: {
         type: formData.trigger.type,
-        table_name: formData.trigger.table_name || undefined, // Optional - if empty, applies to all tables
+        table_name: formData.trigger.table_name || undefined,
         field_id: formData.trigger.field_id || undefined, // Keep for backward compatibility
         field_name: formData.trigger.field_name || undefined, // Field name for cross-table support
         condition: formData.trigger.condition.operator && formData.trigger.condition.value 
@@ -308,8 +356,11 @@ export const CreateAutomationModal = ({
       const newMappings: { source_field_id: string; target_field_id: string }[] = [];
       const fieldsToCreate: { name: string; type: FieldType; order_index: number; options?: Record<string, unknown> }[] = [];
 
-      // Always use global source fields so mappings remain table-agnostic
-      const allSourceFields = globalSourceFields;
+      // Use source fields sorted by masterlist-first ordering so mappings are stable
+      const allSourceFields = [...sourceFields].sort(sortByMasterOrder);
+      let targetFieldsSnapshot = [...targetFields].sort(sortByMasterOrder);
+      const targetByName = new Map<string, FieldRow>();
+      targetFieldsSnapshot.forEach(f => targetByName.set(f.name.toLowerCase(), f));
       
       // Track unique field names to prevent duplicates when mapping from multiple tables
       const processedFieldNames = new Set<string>();
@@ -318,12 +369,13 @@ export const CreateAutomationModal = ({
         // No need to skip masterlist fields here - sourceFields is already filtered correctly
         
         // Skip if we've already processed a field with this name (to avoid duplicates from multiple tables)
-        if (processedFieldNames.has(sourceField.name)) {
+        const normalizedSourceName = sourceField.name.toLowerCase();
+        if (processedFieldNames.has(normalizedSourceName)) {
           continue;
         }
         
         // Check if a target field with the same name already exists in the target table
-        const targetField = targetFields.find(f => f.name === sourceField.name);
+        const targetField = targetByName.get(normalizedSourceName);
         
         // Only create field if it doesn't exist in target table
         if (!targetField) {
@@ -332,7 +384,7 @@ export const CreateAutomationModal = ({
           const fieldToCreate: { name: string; type: FieldType; order_index: number; options?: Record<string, unknown> } = {
             name: sourceField.name,
             type: sourceField.type,
-            order_index: targetFields.length + fieldsToCreate.length
+            order_index: targetFieldsSnapshot.length + fieldsToCreate.length
           };
           
           // Preserve options for select fields (single_select, multi_select)
@@ -344,7 +396,7 @@ export const CreateAutomationModal = ({
         }
         
         // Mark this field name as processed
-        processedFieldNames.add(sourceField.name);
+        processedFieldNames.add(normalizedSourceName);
       }
 
       // Create all new fields (masterlist is allowed, but we log for visibility)
@@ -387,7 +439,15 @@ export const CreateAutomationModal = ({
         }
       }
 
-      // Refresh target fields to include newly created ones
+      // Refresh target fields to include newly created ones (sorted)
+      try {
+        targetFieldsSnapshot = await BaseDetailService.getFields(targetTable.id);
+        targetFieldsSnapshot = [...targetFieldsSnapshot].sort(sortByMasterOrder);
+      } catch (err) {
+        console.warn('Failed to refresh target fields; using snapshot', err);
+      }
+      targetByName.clear();
+      targetFieldsSnapshot.forEach(f => targetByName.set(f.name.toLowerCase(), f));
       if (onFieldCreated) {
         onFieldCreated();
       }
@@ -400,13 +460,15 @@ export const CreateAutomationModal = ({
         // No need to skip masterlist fields here - sourceFields is already filtered correctly
         
         // Skip if we've already mapped a field with this name (to avoid duplicate mappings)
-        if (mappedFieldNames.has(sourceField.name)) {
+        const normalizedSourceName = sourceField.name.toLowerCase();
+        if (mappedFieldNames.has(normalizedSourceName)) {
           continue;
         }
         
         // Find the corresponding target field (existing or newly created)
-        const targetField = targetFields.find(f => f.name === sourceField.name) || 
-                         createdFields.find(f => f.name === sourceField.name);
+        const targetField =
+          targetByName.get(normalizedSourceName) ||
+          createdFields.find(f => f.name.toLowerCase() === normalizedSourceName);
         
         if (targetField) {
           newMappings.push({
@@ -414,7 +476,7 @@ export const CreateAutomationModal = ({
             target_field_id: targetField.id
           });
           // Mark this field name as mapped
-          mappedFieldNames.add(sourceField.name);
+          mappedFieldNames.add(normalizedSourceName);
         }
       }
 
@@ -475,25 +537,33 @@ export const CreateAutomationModal = ({
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Source Table (Optional)
+                Source Table (optional)
               </label>
               <select
                 value={formData.trigger.table_name || ''}
-                onChange={(e) => setFormData(prev => ({ 
-                  ...prev, 
-                  trigger: { ...prev.trigger, table_name: e.target.value }
-                }))}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setFormData(prev => ({ 
+                    ...prev, 
+                    trigger: { 
+                      ...prev.trigger, 
+                      table_name: value,
+                      // Clear legacy field id when going base-wide to avoid mismatched IDs
+                      field_id: value ? prev.trigger.field_id : undefined 
+                    }
+                  }));
+                }}
                 className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                   errors.table_name ? 'border-red-500' : 'border-gray-300'
                 }`}
               >
-                <option value="">All tables in base (default)</option>
+                <option value="">Any table (base-wide)</option>
                 {tables.map(table => (
                   <option key={table.id} value={table.name}>{table.name}</option>
                 ))}
               </select>
               <p className="text-sm text-gray-500 mt-1">
-                Leave empty to apply automation to all tables, or select a specific table
+                Leave blank to trigger from any table in this base, or pick a table to scope the automation.
               </p>
               {errors.table_name && <p className="text-red-500 text-sm mt-1">{errors.table_name}</p>}
             </div>
@@ -530,19 +600,26 @@ export const CreateAutomationModal = ({
                 <>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Field *
+                      Field * (required for field change)
                     </label>
                     <select
-                      value={formData.trigger.field_name || formData.trigger.field_id || ''}
+                      value={
+                        formData.trigger.table_name
+                          ? formData.trigger.field_id || ''
+                          : formData.trigger.field_name || formData.trigger.field_id || ''
+                      }
                       onChange={(e) => {
-                        const selectedFieldName = e.target.value;
-                        const selectedField = sourceFields.find(f => f.name === selectedFieldName);
-                        setFormData(prev => ({ 
-                          ...prev, 
-                          trigger: { 
-                            ...prev.trigger, 
-                            field_name: selectedFieldName || undefined,
-                            field_id: selectedField?.id || undefined // Keep for backward compatibility
+                        const selected = e.target.value;
+                        const selectedField = sourceFields.find(f => f.id === selected || f.name === selected);
+                        const nextFieldId = formData.trigger.table_name ? selectedField?.id || selected : selectedField?.id;
+                        const nextFieldName = selectedField?.name || (!formData.trigger.table_name ? selected : undefined);
+
+                        setFormData(prev => ({
+                          ...prev,
+                          trigger: {
+                            ...prev.trigger,
+                            field_name: nextFieldName,
+                            field_id: nextFieldId
                           }
                         }));
                       }}
@@ -550,14 +627,13 @@ export const CreateAutomationModal = ({
                         errors.trigger_field ? 'border-red-500' : 'border-gray-300'
                       }`}
                     >
-                      <option value="">Select field</option>
+                      <option value="">Select field (required)</option>
                       {sourceFields.length === 0 ? (
                         <option value="" disabled>No fields available{formData.trigger.table_name ? ' for selected table' : ''}</option>
                       ) : (
                         sourceFields.map(field => {
-                          // Always show just the field name (globalized across all tables)
                           return (
-                            <option key={field.id} value={field.name}>
+                            <option key={field.id} value={formData.trigger.table_name ? field.id : field.name}>
                               {field.name}
                             </option>
                           );
@@ -571,7 +647,7 @@ export const CreateAutomationModal = ({
                   </div>
 
                   {/* Condition Configuration */}
-                  {formData.trigger.field_id && (
+                  {(formData.trigger.field_id || formData.trigger.field_name) && (
                     <div className="col-span-2 space-y-3">
                       <h5 className="text-sm font-medium text-gray-700">Trigger Condition</h5>
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -662,7 +738,6 @@ export const CreateAutomationModal = ({
                   <option value="copy_to_table">Copy to Table (creates new record)</option>
                   <option value="move_to_table">Move to Table (moves record)</option>
                   <option value="sync_to_table">Sync to Table (updates existing or creates new)</option>
-                  <option value="copy_fields">Copy Fields (copies field values only)</option>
                 </select>
               </div>
 
@@ -708,6 +783,7 @@ export const CreateAutomationModal = ({
                       <input
                         type="checkbox"
                         checked={formData.action.preserve_original}
+                        disabled
                         onChange={(e) => setFormData(prev => ({
                           ...prev,
                           action: { ...prev.action, preserve_original: e.target.checked }
@@ -715,7 +791,7 @@ export const CreateAutomationModal = ({
                         className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                       />
                       <span className="text-sm text-blue-700">
-                        Keep original record in source table (not recommended for move operations)
+                        Keep original record in source table (disabled for move operations)
                       </span>
                     </label>
                   </div>
@@ -784,7 +860,7 @@ export const CreateAutomationModal = ({
 
               {formData.action.field_mappings.map((mapping, index) => {
                 const selectedSourceField = globalSourceFields.find(f => f.id === mapping.source_field_id);
-                const selectedTargetField = targetFields.find(f => f.id === mapping.target_field_id);
+                const selectedTargetField = targetFieldsWithMappings.find(f => f.id === mapping.target_field_id);
                 
                 return (
                 <div key={index} className="flex items-center gap-3 mb-3 p-3 bg-gray-50 rounded-lg border">
@@ -827,7 +903,7 @@ export const CreateAutomationModal = ({
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
                       <option value="">Select target field</option>
-                      {targetFields.map(field => (
+                      {targetFieldsWithMappings.map(field => (
                         <option key={field.id} value={field.id}>{field.name}</option>
                       ))}
                       <option value="__create_field__">+ Create new field</option>

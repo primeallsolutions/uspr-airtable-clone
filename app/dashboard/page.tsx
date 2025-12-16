@@ -43,7 +43,6 @@ export default function Dashboard() {
     recentBases,
     workspaceBases,
     starredBases,
-    error: basesError,
     loadRecentBases,
     loadWorkspaceBases,
     loadStarredBases,
@@ -51,19 +50,16 @@ export default function Dashboard() {
     renameBase,
     updateBaseDetails,
     toggleStar,
-    deleteBase,
-    clearError: clearBasesError
+    deleteBase
   } = useBases();
   
   const {
     workspaces,
     sharedWorkspaces,
-    error: workspacesError,
     loadWorkspaces,
     createWorkspace,
     updateWorkspace,
     deleteWorkspace,
-    clearError: clearWorkspacesError
   } = useWorkspaces();
   
   const {
@@ -83,7 +79,6 @@ export default function Dashboard() {
     editingWorkspaceId,
     editingWorkspaceName,
     workspaceToDelete,
-    setActiveView,
     setCollectionView,
     setSortOption,
     setSelectedWorkspaceId,
@@ -142,14 +137,6 @@ export default function Dashboard() {
     if (!selectedBase) return;
     await updateBaseDetails(selectedBase.id, payload);
   }, [selectedBase, updateBaseDetails]);
-
-  const handleDeleteBase = useCallback(async (base: BaseRecord) => {
-    openDeleteBaseModal(base);
-  }, [openDeleteBaseModal]);
-
-  const handleDeleteBaseShortcut = useCallback((base: BaseRecord) => {
-    openDeleteBaseModal(base);
-  }, [openDeleteBaseModal]);
 
   const handleCreateBase = useCallback(async (formData: { name: string; description: string; workspaceId: string }) => {
     await createBase(formData);
@@ -240,6 +227,10 @@ export default function Dashboard() {
     }
   }, [activeView, selectedWorkspaceId, loadRecentBases, loadWorkspaceBases, loadStarredBases, router, hideContextMenu]);
 
+  const handleDeleteBaseShortcut = useCallback((base: BaseRecord) => {
+    openDeleteBaseModal(base);
+  }, [openDeleteBaseModal]);
+
   // Context menu options
   const contextMenuOptions = selectedBase
     ? getBaseContextMenuOptions(selectedBase, {
@@ -310,6 +301,7 @@ export default function Dashboard() {
                 onCollectionViewChange={setCollectionView}
                 onSortOptionChange={setSortOption}
                 onSortToggle={setIsSortOpen}
+                onBaseStarToggle={toggleStar}
                 onBaseContextMenu={handleBaseContextMenu}
               />
             )}
@@ -323,6 +315,7 @@ export default function Dashboard() {
                 sortOption={sortOption}
                 onCollectionViewChange={setCollectionView}
                 onCreateBase={openCreateModal}
+                onBaseStarToggle={toggleStar}
                 onBaseContextMenu={handleBaseContextMenu}
                 onManageMembers={() => setIsManageWorkspaceMembersOpen(true)}
                 canManageMembers={role === 'owner' || role === 'admin'}
@@ -335,6 +328,7 @@ export default function Dashboard() {
                 starredBases={starredBases}
                 collectionView={collectionView}
                 onCollectionViewChange={setCollectionView}
+                onBaseStarToggle={toggleStar}
                 onBaseContextMenu={handleBaseContextMenu}
               />
             )}

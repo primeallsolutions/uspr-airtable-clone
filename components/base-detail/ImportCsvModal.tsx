@@ -458,7 +458,7 @@ export const ImportCsvModal = ({
       console.log('📊 Clearing all mappings');
       setFieldMappings({});
     }
-  }, [csvColumns]);
+  }, [csvColumns, fields]);
 
   const handleImport = useCallback(async () => {
     if (!file) return;
@@ -489,7 +489,7 @@ export const ImportCsvModal = ({
     } finally {
       setIsProcessing(false);
     }
-  }, [file, fieldMappings, onImport]);
+  }, [createAllFields, csvColumns, fieldMappings, file, onImport]);
 
   const handleClose = useCallback(() => {
     setFile(null);
@@ -714,9 +714,12 @@ export const ImportCsvModal = ({
                               <option value="email">Email</option>
                               <option value="phone">Phone</option>
                               <option value="checkbox">Checkbox</option>
-                              <option value="single_select">Single Select</option>
-                              <option value="multi_select">Multi Select</option>
+                              <option value="single_select">Dropdown (Single)</option>
+                              <option value="multi_select">Dropdown (Multiple)</option>
+                              <option value="radio_select">Radio Select</option>
                               <option value="link">Link</option>
+                              <option value="long_text">Long Text</option>
+                              <option value="monetary">Monetary</option>
                             </select>
                           </div>
                         </div>

@@ -278,12 +278,6 @@ export class BaseImportService {
         // We'll need to match by field name since we don't have a direct mapping
         // For this, we need to get the original field names from the export
         // But since records are exported with field IDs, we need a different approach
-        
-        // Build a mapping from old field IDs to field names using the export data
-        // We'll match fields by name and order_index to create a mapping
-        const oldFieldIdToName = new Map<string, string>();
-        const exportedFieldsForTable = exported.fields.filter(f => f.table_name === tableName);
-        
         // Since we don't have old field IDs in the export, we'll match by name and order
         // This is a best-effort approach - records exported with field IDs won't map perfectly
         // unless we also export field metadata with IDs

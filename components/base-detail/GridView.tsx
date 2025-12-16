@@ -1,7 +1,9 @@
-import { useMemo, useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { useMemo, useState, useRef, useEffect } from "react";
+import { Plus, Trash2, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 import { TableHeader } from "./TableHeader";
 import { TableRow } from "./TableRow";
+import { RecordDetailsModal } from "./RecordDetailsModal";
+import { tableLayout } from "./tableLayout";
 import type { RecordRow, FieldRow, SavingCell, TableRow as TableRowType } from "@/lib/types/base-detail";
 
 interface GridViewProps {
@@ -15,13 +17,12 @@ interface GridViewProps {
   savingCell: SavingCell;
   onSort: (fieldId: string) => void;
   onUpdateCell: (recordId: string, fieldId: string, value: unknown) => void;
-  onDeleteRow: (recordId: string) => void;
   onBulkDelete: (recordIds: string[]) => void;
-  onAddRow: () => void;
+  onAddRow: (values?: Record<string, unknown>) => void | Promise<void>;
   onAddField: () => void;
   onFieldContextMenu: (e: React.MouseEvent, field: FieldRow) => void;
   onRowContextMenu: (e: React.MouseEvent, record: RecordRow) => void;
-  canDeleteRow?: boolean;
+  onReorderFields?: (reorderedFields: FieldRow[]) => void;
   groupFieldIds?: string[];
   colorFieldId?: string | null;
   colorAssignments?: Record<string, string>;
@@ -38,22 +39,111 @@ export const GridView = ({
   savingCell,
   onSort,
   onUpdateCell,
-  onDeleteRow,
   onBulkDelete,
   onAddRow,
   onAddField,
   onFieldContextMenu,
   onRowContextMenu,
-  canDeleteRow = true,
+  onReorderFields,
   groupFieldIds,
   colorFieldId,
   colorAssignments = {}
 }: GridViewProps) => {
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
+  const initialOrderRef = useRef<string[] | null>(null);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50); // Default 50 records per page
+  const pageSizeOptions = [25, 50, 100];
+
+  // Reset to page 1 when records change significantly
+  useEffect(() => {
+    setCurrentPage(1);
+    // Reset order ref when records count changes significantly (more than 10% difference)
+    if (initialOrderRef.current && records.length > 0) {
+      const currentLength = initialOrderRef.current.length;
+      const newLength = records.length;
+      const diff = Math.abs(currentLength - newLength);
+      // If change is significant (>10% or absolute change >100), reset
+      if (diff > 100 || diff / Math.max(currentLength, newLength) > 0.1) {
+        initialOrderRef.current = null;
+      }
+    }
+  }, [records.length]);
+  const [detailRecordId, setDetailRecordId] = useState<string | null>(null);
+  const { selectWidth, actionsWidth, rowNumberWidth, addFieldWidth } = tableLayout;
+
+  // Preserve stable row ordering based on initial load to prevent reordering on updates
+  const displayRecords = useMemo(() => {
+    // On first render or when records change significantly, capture the initial order
+    if (initialOrderRef.current === null || initialOrderRef.current.length === 0) {
+      initialOrderRef.current = records.map(r => r.id);
+      return records;
+    }
+
+    // Build a map of current record IDs for quick lookup
+    const recordsById = new Map(records.map(r => [r.id, r]));
+    
+    // Maintain the initial order, filtering out deleted records
+    const orderedRecords = initialOrderRef.current
+      .map(id => recordsById.get(id))
+      .filter((r): r is RecordRow => r !== undefined);
+    
+    // Add any new records that weren't in the initial order (append to end)
+    const existingIds = new Set(initialOrderRef.current);
+    const newRecords = records.filter(r => !existingIds.has(r.id));
+    
+    if (newRecords.length > 0) {
+      // Update the initial order ref to include new records
+      initialOrderRef.current = [...initialOrderRef.current.filter(id => recordsById.has(id)), ...newRecords.map(r => r.id)];
+      return [...orderedRecords, ...newRecords];
+    }
+    
+    // If the ordered records length doesn't match records length, there might be an inconsistency
+    // In that case, fall back to using records directly to ensure accuracy
+    if (orderedRecords.length !== records.length) {
+      initialOrderRef.current = records.map(r => r.id);
+      return records;
+    }
+    
+    return orderedRecords;
+  }, [records]);
+
+  // Pagination calculations - use records.length for accurate total count
+  // displayRecords preserves order but should match records.length
+  const totalRecords = records.length;
+  const totalPages = Math.ceil(totalRecords / pageSize);
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, totalRecords);
+  
+  // Get paginated records for display
+  const paginatedRecords = useMemo(() => {
+    return displayRecords.slice(startIndex, endIndex);
+  }, [displayRecords, startIndex, endIndex]);
+
+  // Pagination handlers
+  const goToPage = (page: number) => {
+    setCurrentPage(Math.max(1, Math.min(page, totalPages)));
+  };
+
+  const goToFirstPage = () => goToPage(1);
+  const goToPrevPage = () => goToPage(currentPage - 1);
+  const goToNextPage = () => goToPage(currentPage + 1);
+  const goToLastPage = () => goToPage(totalPages);
+
+  const handlePageSizeChange = (newSize: number) => {
+    setPageSize(newSize);
+    // Adjust current page to keep roughly the same records in view
+    const firstVisibleRecord = startIndex;
+    const newPage = Math.floor(firstVisibleRecord / newSize) + 1;
+    setCurrentPage(Math.max(1, newPage));
+  };
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedRows(new Set(records.map(r => r.id)));
+      // Only select records on the current page
+      setSelectedRows(new Set(paginatedRecords.map(r => r.id)));
     } else {
       setSelectedRows(new Set());
     }
@@ -79,8 +169,9 @@ export const GridView = ({
     }
   };
 
-  const allSelected = records.length > 0 && selectedRows.size === records.length;
-  const someSelected = selectedRows.size > 0 && selectedRows.size < records.length;
+  // Check if all records on current page are selected
+  const allSelected = paginatedRecords.length > 0 && paginatedRecords.every(r => selectedRows.has(r.id));
+  const someSelected = selectedRows.size > 0 && !allSelected;
 
   type GroupSection = {
     id: string;
@@ -99,11 +190,11 @@ export const GridView = ({
     const validIds = groupFieldIds.filter(id => fieldsToUse.some(field => field.id === id));
     if (validIds.length === 0) return null;
 
-    const buildSections = (data: RecordRow[], ids: string[], depth = 0): GroupSection[] => {
-      if (ids.length === 0) {
-        return [];
-      }
-      const [currentId, ...rest] = ids;
+        const buildSections = (data: RecordRow[], ids: string[], depth = 0): GroupSection[] => {
+          if (ids.length === 0) {
+            return [];
+          }
+          const [currentId, ...rest] = ids;
       const groupField = fieldsToUse.find(field => field.id === currentId);
       if (!groupField) {
         return rest.length ? buildSections(data, rest, depth) : [];
@@ -112,7 +203,7 @@ export const GridView = ({
       const buckets = new Map<string, RecordRow[]>();
       data.forEach(record => {
         const rawValue = record.values?.[currentId];
-        const label = rawValue === null || rawValue === undefined || rawValue === '' ? 'No value' : String(rawValue);
+        const label = rawValue === null || rawValue === undefined || rawValue === '' ? 'No data' : String(rawValue);
         if (!buckets.has(label)) {
           buckets.set(label, []);
         }
@@ -132,8 +223,21 @@ export const GridView = ({
         }));
     };
 
-    return buildSections(records, validIds);
-  }, [records, groupFieldIds, allFields, fields]);
+    return buildSections(displayRecords, validIds);
+  }, [displayRecords, groupFieldIds, allFields, fields]);
+
+  const detailRecord = useMemo(
+    () => (detailRecordId ? records.find(record => record.id === detailRecordId) || null : null),
+    [detailRecordId, records]
+  );
+
+  const handleOpenDetails = (record: RecordRow) => {
+    setDetailRecordId(record.id);
+  };
+
+  const handleCloseDetails = () => {
+    setDetailRecordId(null);
+  };
 
   let rowCounter = 0;
 
@@ -169,10 +273,9 @@ export const GridView = ({
                   savingCell={savingCell}
                   isSelected={selectedRows.has(record.id)}
                   onUpdateCell={onUpdateCell}
-                  onDeleteRow={onDeleteRow}
                   onRowContextMenu={onRowContextMenu}
+                  onViewDetails={handleOpenDetails}
                   onSelectRow={handleSelectRow}
-                  canDeleteRow={canDeleteRow}
                   colorFieldId={colorFieldId}
                   colorAssignments={colorAssignments}
                 />
@@ -183,27 +286,28 @@ export const GridView = ({
 
   const rowContent = groupedSections
     ? renderGroupSections(groupedSections)
-    : records.map((record, index) => (
+    : paginatedRecords.map((record, index) => (
         <TableRow
           key={record.id}
           record={record}
           fields={fields}
+          allFields={allFields} // Pass all fields for masterlist field matching
           tables={tables}
           selectedTableId={selectedTableId}
-          rowIndex={index}
+          rowIndex={startIndex + index} // Use actual row index for display
           savingCell={savingCell}
           isSelected={selectedRows.has(record.id)}
           onUpdateCell={onUpdateCell}
-          onDeleteRow={onDeleteRow}
           onRowContextMenu={onRowContextMenu}
+          onViewDetails={handleOpenDetails}
           onSelectRow={handleSelectRow}
-          canDeleteRow={canDeleteRow}
           colorFieldId={colorFieldId}
           colorAssignments={colorAssignments}
         />
       ));
 
   return (
+    <>
     <div className="flex-1 flex flex-col min-h-0">
       {/* Bulk Actions Bar */}
       {selectedRows.size > 0 && (
@@ -236,77 +340,146 @@ export const GridView = ({
               onAddField={onAddField}
               onFieldContextMenu={onFieldContextMenu}
               onSelectAll={handleSelectAll}
+              onReorderFields={onReorderFields}
             />
           </div>
           
           {/* Table Body */}
           {records.length === 0 ? (
-            <div className="flex items-center justify-center h-64">
-              <div className="text-center">
-                <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
-                  <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                  </svg>
+            <div className="relative h-64">
+              {/* When there are no records, lock the viewport to keep button centered even when the container scrolls. */}
+              <div className="fixed inset-0 flex items-center justify-center pointer-events-none">
+                <div className="flex flex-col items-center gap-3 text-center pointer-events-auto">
+                  <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
+                    <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No records yet</h3>
+                  <p className="text-gray-500 mb-4">Get started by adding your first record</p>
+                  <button
+                    onClick={() => onAddRow()}
+                    className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    <Plus size={16} />
+                    Add Row
+                  </button>
                 </div>
-                <h3 className="text-lg font-medium text-gray-900 mb-2">No records yet</h3>
-                <p className="text-gray-500 mb-4">Get started by adding your first record</p>
-                <button
-                  onClick={onAddRow}
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  <Plus size={16} />
-                  Add Row
-                </button>
               </div>
             </div>
           ) : (
             <>
-              {records.map((record, index) => (
-                <TableRow
-                  key={record.id}
-                  record={record}
-                  fields={fields}
-                  allFields={allFields} // Pass all fields for masterlist field matching
-                  tables={tables}
-                  selectedTableId={selectedTableId}
-                  rowIndex={index}
-                  savingCell={savingCell}
-                  isSelected={selectedRows.has(record.id)}
-                  onUpdateCell={onUpdateCell}
-                  onDeleteRow={onDeleteRow}
-                  onRowContextMenu={onRowContextMenu}
-                  onSelectRow={handleSelectRow}
-                />
-              ))}
+              {rowContent}
               
-              {/* Add Row button spanning entire row */}
-              <div className="flex border-b border-gray-200 hover:bg-gray-50">
-                {/* Checkbox column */}
-                <div className="w-10 flex-shrink-0 border-r border-gray-200"></div>
-                
-                <div className="w-12 flex-shrink-0 border-r border-gray-200 bg-gray-100 flex items-center justify-center">
-                  <span className="text-xs text-gray-500">+</span>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <button
-                    onClick={onAddRow}
-                    className="w-full h-12 flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 transition-colors"
-                  >
-                    <Plus size={16} />
-                    <span>Add Row</span>
-                  </button>
-                </div>
-                <div className="w-32 flex-shrink-0"></div>
-              </div>
-              
-              {/* Footer with record count */}
-              <div className="flex items-center justify-end px-6 py-3 bg-gray-50 border-t border-gray-200">
-                <span className="text-sm text-gray-500">{records.length} {records.length === 1 ? 'record' : 'records'}</span>
+              {/* Floating Add Row button pinned to viewport, as opposed to a button on a row that scrolls out of view */}
+              <div className="pointer-events-none fixed bottom-2 right-6 z-20">
+                <button
+                  onClick={() => onAddRow()}
+                  className="pointer-events-auto inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg shadow-lg hover:bg-blue-700 transition-colors"
+                >
+                  <Plus size={16} />
+                  <span>Add Row</span>
+                </button>
               </div>
             </>
           )}
         </div>
       </div>
+
+      {/* Pagination controls - Fixed outside scrollable area */}
+      <div className="flex-shrink-0 flex items-center justify-between px-6 py-3 bg-gray-50 border-t border-gray-200">
+        {/* Left side - Record count and page size selector */}
+        <div className="flex items-center gap-4">
+          <span className="text-sm text-gray-500">
+            {totalRecords} {totalRecords === 1 ? 'record' : 'records'}
+          </span>
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-gray-500">Show:</label>
+            <select
+              value={pageSize}
+              onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+              className="px-2 py-1 text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 bg-white"
+            >
+              {pageSizeOptions.map(size => (
+                <option key={size} value={size}>{size}</option>
+              ))}
+            </select>
+            <span className="text-sm text-gray-500">per page</span>
+          </div>
+        </div>
+
+        {/* Right side - Pagination controls */}
+        {totalPages > 1 && (
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-600">
+              {startIndex + 1}-{endIndex} of {totalRecords}
+            </span>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={goToFirstPage}
+                disabled={currentPage === 1}
+                className="p-1.5 rounded hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                title="First page"
+              >
+                <ChevronsLeft size={18} className="text-gray-600" />
+              </button>
+              <button
+                onClick={goToPrevPage}
+                disabled={currentPage === 1}
+                className="p-1.5 rounded hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Previous page"
+              >
+                <ChevronLeft size={18} className="text-gray-600" />
+              </button>
+              
+              {/* Page number input */}
+              <div className="flex items-center gap-1 mx-2">
+                <span className="text-sm text-gray-600">Page</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={totalPages}
+                  value={currentPage}
+                  onChange={(e) => {
+                    const page = parseInt(e.target.value, 10);
+                    if (!isNaN(page)) goToPage(page);
+                  }}
+                  className="w-14 px-2 py-1 text-sm text-center border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                />
+                <span className="text-sm text-gray-600">of {totalPages}</span>
+              </div>
+
+              <button
+                onClick={goToNextPage}
+                disabled={currentPage === totalPages}
+                className="p-1.5 rounded hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Next page"
+              >
+                <ChevronRight size={18} className="text-gray-600" />
+              </button>
+              <button
+                onClick={goToLastPage}
+                disabled={currentPage === totalPages}
+                className="p-1.5 rounded hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Last page"
+              >
+                <ChevronsRight size={18} className="text-gray-600" />
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
+      <RecordDetailsModal
+        isOpen={Boolean(detailRecord)}
+        record={detailRecord}
+        fields={allFields || fields}
+        tables={tables}
+        selectedTableId={selectedTableId}
+        savingCell={savingCell}
+        onUpdateCell={onUpdateCell}
+        onClose={handleCloseDetails}
+      />
+    </>
   );
 };

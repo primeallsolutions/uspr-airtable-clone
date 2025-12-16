@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Menu, Grid, Kanban, Plus, Search, Bell, HelpCircle } from "lucide-react";
+import { Menu, Grid, Kanban, Plus, Search } from "lucide-react";
 import type { ViewMode } from "@/lib/types/base-detail";
 
 interface SidebarProps {

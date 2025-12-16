@@ -37,7 +37,7 @@ export const useAuth = () => {
   useEffect(() => {
     checkUser();
     // Keep session in sync with auth changes
-    const { data: subscription } = supabase.auth.onAuthStateChange((_event) => {
+    const { data: subscription } = supabase.auth.onAuthStateChange(() => {
       void checkUser();
     });
     return () => {

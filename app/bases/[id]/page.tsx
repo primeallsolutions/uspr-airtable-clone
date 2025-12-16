@@ -1,9 +1,9 @@
 "use client";
 import { useMemo, useState, useEffect, useRef } from "react";
-import { useParams } from "next/navigation";
-import { Crown } from "lucide-react";
+import { useParams, useSearchParams } from "next/navigation";
 import { ContextMenu, useContextMenu } from "@/components/ui/context-menu";
 import { RenameModal } from "@/components/ui/rename-modal";
+import { toast } from "sonner";
 
 // Hooks
 import { useAuth } from "@/lib/hooks/useAuth";
@@ -31,6 +31,8 @@ import { DeleteBaseModal } from "@/components/base-detail/DeleteBaseModal";
 import { DeleteFieldModal } from "@/components/base-detail/DeleteFieldModal";
 import { DeleteAllFieldsModal } from "@/components/base-detail/DeleteAllFieldsModal";
 import { ExportBaseModal } from "@/components/base-detail/ExportBaseModal";
+import { ConnectGHLModal } from "@/components/base-detail/ConnectGHLModal";
+import { GHLSyncStatus } from "@/components/base-detail/GHLSyncStatus";
 import {
   HideFieldsPanel,
   FilterPanel,
@@ -41,6 +43,7 @@ import {
   type FilterState,
   type SortRule
 } from "@/components/base-detail/ViewControlModals";
+import { DocumentsView } from "@/components/base-detail/DocumentsView";
 
 const generateClientId = () =>
   typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
@@ -67,7 +70,17 @@ import { BaseDetailService } from "@/lib/services/base-detail-service";
 
 export default function BaseDetailPage() {
   const params = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
   const baseId = useMemo(() => (Array.isArray(params?.id) ? params.id[0] : params?.id), [params]);
+  
+  // Check for GHL connection success message
+  useEffect(() => {
+    if (searchParams?.get('ghl_connected') === 'true') {
+      toast.success('Go High Level connected successfully!');
+      // Remove query param from URL
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, [searchParams]);
   
   // Custom hooks
   const { loading: userLoading } = useAuth();
@@ -153,6 +166,11 @@ export default function BaseDetailPage() {
   const [isDeleteAllFieldsModalOpen, setIsDeleteAllFieldsModalOpen] = useState(false);
   const openDeleteAllFieldsModal = () => setIsDeleteAllFieldsModalOpen(true);
   const closeDeleteAllFieldsModal = () => setIsDeleteAllFieldsModalOpen(false);
+
+  // Add state for GHL integration modal
+  const [isGHLModalOpen, setIsGHLModalOpen] = useState(false);
+  const openGHLModal = () => setIsGHLModalOpen(true);
+  const closeGHLModal = () => setIsGHLModalOpen(false);
   
   const { contextMenu, setContextMenu, showContextMenu, hideContextMenu } = useContextMenu();
   const { role, can } = useRole({ baseId });
@@ -283,14 +301,6 @@ export default function BaseDetailPage() {
     }
   };
 
-  const handleRemoveMasterList = async (tableId: string) => {
-    try {
-      await updateTable(tableId, { is_master_list: false });
-    } catch (err) {
-      console.error('Error removing master list:', err);
-    }
-  };
-
   const handleRenameTable = async (tableId: string) => {
     // Store the tableId for the modal to use
     setContextMenu(prev => ({ ...prev, tableId }));
@@ -346,11 +356,90 @@ export default function BaseDetailPage() {
     }
   };
 
-  const handleAddRow = async () => {
+  const handleAddRow = async (initialValues: Record<string, unknown> = {}) => {
     try {
-      await createRecord();
+      await createRecord(initialValues);
     } catch (err) {
       console.error('Error creating record:', err);
+    }
+  };
+
+  const handleReorderFields = async (reorderedFields: FieldRow[]) => {
+    try {
+      // Create updates with new order indices
+      const updates = reorderedFields.map((field, index) => ({
+        id: field.id,
+        order_index: index
+      }));
+      
+      // Update order in database
+      await BaseDetailService.updateFieldOrder(updates);
+      
+      // Reload fields to reflect new order
+      if (selectedTableId) {
+        await loadFields(selectedTableId);
+      }
+    } catch (err) {
+      console.error('Error reordering fields:', err);
+    }
+  };
+
+  const getRandomKanbanColor = () => {
+    const palette = [
+      '#2563eb',
+      '#0ea5e9',
+      '#22c55e',
+      '#eab308',
+      '#f59e0b',
+      '#f97316',
+      '#ef4444',
+      '#ec4899',
+      '#a855f7',
+      '#6366f1',
+      '#10b981',
+      '#14b8a6',
+      '#f43f5e',
+      '#8b5cf6',
+      '#64748b'
+    ];
+    return palette[Math.floor(Math.random() * palette.length)];
+  };
+
+  const handleAddStackValue = async (fieldId: string, label: string) => {
+    const targetField = fields.find(f => f.id === fieldId && f.type === 'single_select');
+    if (!targetField) return;
+
+    const existingOptions = targetField.options || {};
+    let nextOptions: Record<string, unknown>;
+
+    if (typeof existingOptions === 'object' && !Array.isArray(existingOptions)) {
+      const entries = Object.entries(existingOptions);
+      const hasLabelObjects = entries.some(([, val]) => val && typeof val === 'object' && 'label' in (val as Record<string, unknown>));
+
+      if (hasLabelObjects || entries.length === 0) {
+        const key = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+          ? crypto.randomUUID()
+          : Math.random().toString(36).slice(2);
+        nextOptions = {
+          ...existingOptions,
+          [key]: { label, color: getRandomKanbanColor() }
+        };
+      } else {
+        const choices = (existingOptions as { choices?: string[] }).choices;
+        if (Array.isArray(choices)) {
+          nextOptions = { choices: [...choices, label] };
+        } else {
+          nextOptions = { ...existingOptions, [label]: label };
+        }
+      }
+    } else {
+      nextOptions = { choices: [label] };
+    }
+
+    try {
+      await updateField(fieldId, { options: nextOptions });
+    } catch (err) {
+      console.error('Error adding kanban column:', err);
     }
   };
 
@@ -478,8 +567,7 @@ export default function BaseDetailPage() {
 
     try {
       await deleteAllFields(selectedTableId);
-      // The deleteAllFields function already reloads fields, so we just need to reload records
-      await loadRecords(selectedTableId);
+      // The deleteAllFields function now handles reloading both fields and records
       closeDeleteAllFieldsModal();
     } catch (err) {
       console.error('Error deleting all fields:', err);
@@ -515,87 +603,125 @@ export default function BaseDetailPage() {
     return result;
   };
 
+  // === Masterlist Detection for Kanban ===
+  const masterlistTable = useMemo(
+    () => tables.find(t => t.is_master_list) || tables[0],
+    [tables]
+  );
+
+  // When in Kanban view, always use masterlist table
+  const activeTableIdForData = useMemo(() => {
+    if (viewMode === 'kanban') {
+      return masterlistTable?.id || selectedTableId;
+    }
+    return selectedTableId;
+  }, [viewMode, masterlistTable, selectedTableId]);
+
+  // Load masterlist data when switching to Kanban
+  useEffect(() => {
+    if (viewMode === 'kanban' && masterlistTable && masterlistTable.id !== selectedTableId) {
+      setSelectedTableId(masterlistTable.id);
+    }
+  }, [viewMode, masterlistTable, selectedTableId, setSelectedTableId]);
+
+  // === Shared Data Processing (applies to both Grid and Kanban) ===
+  const processedRecords = useMemo(() => {
+    console.log("🔄 processedRecords recomputing, raw records count:", records.length);
+    let result = records;
+
+    // 1. Apply filters
+    const activeConditions = filterState.conditions.filter(condition => condition.fieldId && condition.value.trim());
+    if (activeConditions.length > 0) {
+      result = result.filter(record => {
+        const evaluations = activeConditions.map(condition => {
+          const field = fields.find(f => f.id === condition.fieldId);
+          if (!field) return false;
+          const rawValue = record.values?.[field.id];
+          const value = rawValue === null || rawValue === undefined ? '' : String(rawValue).toLowerCase();
+          const query = condition.value.toLowerCase();
+          switch (condition.operator) {
+            case 'equals':
+              return value === query;
+            case 'starts_with':
+              return value.startsWith(query);
+            case 'is_not':
+              return value !== query;
+            // numeric field type specific filters
+            case 'greater_than':
+              return parseFloat(value) > parseFloat(query);
+            case 'greater_than_or_equal':
+              return parseFloat(value) >= parseFloat(query);
+            case 'less_than':
+              return parseFloat(value) < parseFloat(query);
+            case 'less_than_or_equal':
+              return parseFloat(value) <= parseFloat(query);
+            default:
+              return value.includes(query);
+          }
+        });
+        return filterState.match === 'all' ? evaluations.every(Boolean) : evaluations.some(Boolean);
+      });
+    }
+
+    // 2. Apply search
+    const query = searchQuery.trim().toLowerCase();
+    if (query) {
+      result = result.filter(record => {
+        const values = Object.values(record.values || {});
+        return values.some(value =>
+          value !== null &&
+          value !== undefined &&
+          String(value).toLowerCase().includes(query)
+        );
+      });
+    }
+
+    // 3. Apply sorts
+    const validRules = sortRules.filter(rule => rule.fieldId);
+    if (validRules.length > 0) {
+      result = [...result].sort((a, b) => {
+        for (const rule of validRules) {
+          const fieldId = rule.fieldId!;
+          const field = fields.find(f => f.id === fieldId);
+          if (!field) continue;
+          const aValue = a.values?.[fieldId];
+          const bValue = b.values?.[fieldId];
+          if (aValue == null && bValue == null) continue;
+          if (aValue == null) return rule.direction === 'asc' ? 1 : -1;
+          if (bValue == null) return rule.direction === 'asc' ? -1 : 1;
+
+          let comparison = 0;
+          if (typeof aValue === 'number' && typeof bValue === 'number') {
+            comparison = aValue - bValue;
+          } else if (field.type === 'date' || field.type === 'datetime') {
+            comparison = new Date(aValue as string).getTime() - new Date(bValue as string).getTime();
+          } else {
+            comparison = String(aValue).localeCompare(String(bValue), undefined, { numeric: true, sensitivity: 'base' });
+          }
+
+          if (comparison !== 0) {
+            return rule.direction === 'asc' ? comparison : -comparison;
+          }
+        }
+        return 0;
+      });
+    }
+
+    return result;
+  }, [records, fields, filterState, searchQuery, sortRules]);
+
+  // === Grid-Specific Configurations ===
   const visibleFields = useMemo(() => {
     if (hiddenFieldIds.length === 0) return fields;
     return fields.filter(field => !hiddenFieldIds.includes(field.id));
   }, [fields, hiddenFieldIds]);
-
-  const filteredRecords = useMemo(() => {
-    const activeConditions = filterState.conditions.filter(condition => condition.fieldId && condition.value.trim());
-    if (activeConditions.length === 0) return records;
-    return records.filter(record => {
-      const evaluations = activeConditions.map(condition => {
-        const field = fields.find(f => f.id === condition.fieldId);
-        if (!field) return false;
-        const rawValue = record.values?.[field.id];
-        const value = rawValue === null || rawValue === undefined ? '' : String(rawValue).toLowerCase();
-        const query = condition.value.toLowerCase();
-        switch (condition.operator) {
-          case 'equals':
-            return value === query;
-          case 'starts_with':
-            return value.startsWith(query);
-          case 'is_not':
-            return value !== query;
-          default:
-            return value.includes(query);
-        }
-      });
-      return filterState.match === 'all' ? evaluations.every(Boolean) : evaluations.some(Boolean);
-    });
-  }, [records, fields, filterState]);
-
-  const searchFilteredRecords = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-    if (!query) return filteredRecords;
-    return filteredRecords.filter(record => {
-      const values = Object.values(record.values || {});
-      return values.some(value =>
-        value !== null &&
-        value !== undefined &&
-        String(value).toLowerCase().includes(query)
-      );
-    });
-  }, [filteredRecords, searchQuery]);
-
-  const sortedRecords = useMemo(() => {
-    if (sortRules.length === 0) return searchFilteredRecords;
-    const validRules = sortRules.filter(rule => rule.fieldId);
-    if (validRules.length === 0) return searchFilteredRecords;
-    return [...searchFilteredRecords].sort((a, b) => {
-      for (const rule of validRules) {
-        const fieldId = rule.fieldId!;
-        const field = fields.find(f => f.id === fieldId);
-        if (!field) continue;
-        const aValue = a.values?.[fieldId];
-        const bValue = b.values?.[fieldId];
-        if (aValue == null && bValue == null) continue;
-        if (aValue == null) return rule.direction === 'asc' ? 1 : -1;
-        if (bValue == null) return rule.direction === 'asc' ? -1 : 1;
-
-        let comparison = 0;
-        if (typeof aValue === 'number' && typeof bValue === 'number') {
-          comparison = aValue - bValue;
-        } else if (field.type === 'date' || field.type === 'datetime') {
-          comparison = new Date(aValue as string).getTime() - new Date(bValue as string).getTime();
-        } else {
-          comparison = String(aValue).localeCompare(String(bValue), undefined, { numeric: true, sensitivity: 'base' });
-        }
-
-        if (comparison !== 0) {
-          return rule.direction === 'asc' ? comparison : -comparison;
-        }
-      }
-      return 0;
-    });
-  }, [searchFilteredRecords, sortRules, fields]);
 
   const colorAssignments = useMemo(() => {
     if (!colorFieldId) return {};
     const palette = ['#2563eb', '#16a34a', '#db2777', '#f97316', '#0ea5e9', '#a855f7', '#059669', '#be185d', '#d97706', '#2563eb33'];
     const assignments: Record<string, string> = {};
     let paletteIndex = 0;
-    sortedRecords.forEach(record => {
+    processedRecords.forEach(record => {
       const rawValue = record.values?.[colorFieldId];
       const key = rawValue === null || rawValue === undefined || rawValue === '' ? '__empty' : String(rawValue);
       if (!assignments[key]) {
@@ -604,9 +730,7 @@ export default function BaseDetailPage() {
       }
     });
     return assignments;
-  }, [colorFieldId, sortedRecords]);
-
-  const processedRecords = sortedRecords;
+  }, [colorFieldId, processedRecords]);
 
   const hiddenFieldsCount = hiddenFieldIds.length;
   const activeFilterCount = filterState.conditions.filter(condition => condition.fieldId && condition.value.trim()).length;
@@ -780,6 +904,10 @@ export default function BaseDetailPage() {
           onDeleteTable={handleDeleteTable}
           canDeleteTable={can.delete}
           onExportBase={openExportBaseModal}
+          showInterfacesTab={false}
+          showFormsTab={false}
+          baseId={baseId}
+          onConnectGHL={openGHLModal}
         />
 
         {/* Table Controls */}
@@ -789,7 +917,8 @@ export default function BaseDetailPage() {
               tables={tables}
               selectedTableId={selectedTableId}
               onTableSelect={setSelectedTableId}
-              onAddRecord={handleAddRow}
+              showTableTabs={viewMode === 'grid'}
+              viewMode={viewMode}
               onImportCsv={openImportModal}
               onCreateTable={openCreateTableModal}
               onRenameTable={handleRenameTable}
@@ -802,7 +931,7 @@ export default function BaseDetailPage() {
               onColor={(el) => toggleViewPanel('color', el)}
               onShare={(el) => toggleViewPanel('share', el)}
               onDeleteAllFields={openDeleteAllFieldsModal}
-            canDeleteTable={can.delete}
+              canDeleteTable={can.delete}
               viewState={viewControlState}
               activePanel={activeViewPanel}
               searchQuery={searchQuery}
@@ -811,7 +940,7 @@ export default function BaseDetailPage() {
             {activeViewPanel && (
               <div
                 ref={viewPanelRef}
-                className="fixed z-30"
+                className="fixed z-50"
                 style={{
                   left: panelPosition.x,
                   top: panelPosition.y
@@ -902,13 +1031,12 @@ export default function BaseDetailPage() {
                   savingCell={savingCell}
                   onSort={handleColumnSort}
                   onUpdateCell={updateCell}
-                  onDeleteRow={deleteRecord}
                   onBulkDelete={bulkDeleteRecords}
                   onAddRow={handleAddRow}
                   onAddField={handleAddField}
                   onFieldContextMenu={handleFieldContextMenu}
                   onRowContextMenu={handleRowContextMenu}
-                  canDeleteRow={can.delete ?? true}
+                  onReorderFields={handleReorderFields}
                   groupFieldIds={groupFieldIds}
                   colorFieldId={colorFieldId}
                   colorAssignments={colorAssignments}
@@ -917,6 +1045,8 @@ export default function BaseDetailPage() {
                 <KanbanView
                   records={processedRecords}
                   fields={fields}
+                  tables={tables}
+                  selectedTableId={selectedTableId}
                   onUpdateCell={updateCell}
                   onDeleteRow={deleteRecord}
                   onAddRow={handleAddRow}
@@ -976,6 +1106,14 @@ export default function BaseDetailPage() {
                 <p className="text-gray-500">Form features coming soon...</p>
               </div>
             </div>
+          )}
+
+          {topTab === 'documents' && (
+            <DocumentsView
+              baseId={baseId || ''}
+              baseName={base?.name}
+              selectedTable={tables.find(t => t.id === selectedTableId) || null}
+            />
           )}
         </div>
       </div>
@@ -1078,6 +1216,20 @@ export default function BaseDetailPage() {
         baseId={baseId}
         baseName={base?.name || 'Base'}
       />
+
+      {/* GHL Integration Modal */}
+      {selectedTableId && baseId && (
+        <ConnectGHLModal
+          isOpen={isGHLModalOpen}
+          onClose={closeGHLModal}
+          baseId={baseId}
+          tableId={selectedTableId}
+          onConnected={() => {
+            closeGHLModal();
+            // Optionally reload data here if needed
+          }}
+        />
+      )}
     </div>
   );
 }
