@@ -190,11 +190,11 @@ export const GridView = ({
     const validIds = groupFieldIds.filter(id => fieldsToUse.some(field => field.id === id));
     if (validIds.length === 0) return null;
 
-    const buildSections = (data: RecordRow[], ids: string[], depth = 0): GroupSection[] => {
-      if (ids.length === 0) {
-        return [];
-      }
-      const [currentId, ...rest] = ids;
+        const buildSections = (data: RecordRow[], ids: string[], depth = 0): GroupSection[] => {
+          if (ids.length === 0) {
+            return [];
+          }
+          const [currentId, ...rest] = ids;
       const groupField = fieldsToUse.find(field => field.id === currentId);
       if (!groupField) {
         return rest.length ? buildSections(data, rest, depth) : [];
@@ -203,7 +203,7 @@ export const GridView = ({
       const buckets = new Map<string, RecordRow[]>();
       data.forEach(record => {
         const rawValue = record.values?.[currentId];
-        const label = rawValue === null || rawValue === undefined || rawValue === '' ? 'No value' : String(rawValue);
+        const label = rawValue === null || rawValue === undefined || rawValue === '' ? 'No data' : String(rawValue);
         if (!buckets.has(label)) {
           buckets.set(label, []);
         }

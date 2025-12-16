@@ -371,11 +371,11 @@ export const RecordDetailsModal = ({
                           <Loader2 className="w-4 h-4 animate-spin" />
                           <span className="italic">Saving...</span>
                         </div>
-                      ) : value !== null && value !== undefined && String(value).trim() !== "" ? (
-                        <div className="w-full">
-                          {field.type === "link" && typeof value === "string" ? (
-                            <a
-                              href={value}
+                    ) : value !== null && value !== undefined && String(value).trim() !== "" ? (
+                      <div className="w-full">
+                        {field.type === "link" && typeof value === "string" ? (
+                          <a
+                            href={value}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1.5 text-base font-medium break-words"
@@ -418,10 +418,10 @@ export const RecordDetailsModal = ({
                           )}
                         </div>
                       ) : (
-                        <span className="text-gray-400 italic text-sm">Click to edit</span>
+                        <span className="text-gray-400 italic text-sm">No data</span>
                       )}
-                    </div>
-                  )}
+                  </div>
+                )}
                   <div className="mt-3 flex items-center justify-between">
                     {field.type && (
                       <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-gray-600 bg-gray-100 rounded-md">

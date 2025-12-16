@@ -1,6 +1,6 @@
 import { supabase } from '../supabaseClient';
 
-export type RoleType = 'member' | 'admin';
+export type RoleType = 'member' | 'admin' | 'owner';
 
 export type WorkspaceMember = {
   membership_id: string;
@@ -149,20 +149,22 @@ export class MembershipService {
       .single();
     if (error) throw error;
 
-    // Send email via magic link (works for both registered and unregistered users)
-    // Redirect user back to accept page with this invite token after auth
+    // Fire-and-forget custom email via API route (uses Resend server-side)
     try {
-      const redirectUrl = params.redirectTo ?? `${window.location.origin}/invites/accept/${params.token}`;
-      await supabase.auth.signInWithOtp({
-        email: params.email,
-        options: {
-          emailRedirectTo: redirectUrl,
-          shouldCreateUser: true,
-        },
+      await fetch('/api/invites/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: params.email,
+          token: params.token,
+          role: params.role,
+          workspaceId: params.workspaceId ?? null,
+          baseId: params.baseId ?? null,
+        }),
       });
     } catch (e) {
-      // Non-fatal: invite row exists; email may still be delivered by Supabase config
-      console.warn('Failed to send magic link for invite:', e);
+      // Non-fatal: invite row exists; caller can still copy the link manually
+      console.warn('Failed to trigger invite email via Resend:', e);
     }
     return data as Invite;
   }
@@ -177,7 +179,7 @@ export class MembershipService {
     return (data ?? []) as Invite[];
   }
 
-  static async acceptInvite(token: string, currentUserId: string, currentUserEmail?: string | null): Promise<void> {
+  static async acceptInvite(token: string, currentUserId: string, currentUserEmail?: string | null): Promise<{ redirectPath: string }> {
     // Read the invite by token
     const { data: invite, error: fetchError } = await supabase
       .from('invites')
@@ -192,17 +194,35 @@ export class MembershipService {
       throw new Error('Invite email does not match current user');
     }
 
-    // Create membership based on scope
+    // Create membership based on scope (idempotent if already a member)
     if (invite.workspace_id) {
-      const { error } = await supabase
+      const { data: existing, error: fetchMemberErr } = await supabase
         .from('workspace_memberships')
-        .insert({ workspace_id: invite.workspace_id, user_id: currentUserId, role: invite.role });
-      if (error) throw error;
+        .select('id')
+        .eq('workspace_id', invite.workspace_id)
+        .eq('user_id', currentUserId)
+        .limit(1);
+      if (fetchMemberErr) throw fetchMemberErr;
+      if (!existing || existing.length === 0) {
+        const { error } = await supabase
+          .from('workspace_memberships')
+          .insert({ workspace_id: invite.workspace_id, user_id: currentUserId, role: invite.role });
+        if (error && error.code !== '23505' /* unique_violation */) throw error;
+      }
     } else if (invite.base_id) {
-      const { error } = await supabase
+      const { data: existing, error: fetchMemberErr } = await supabase
         .from('base_memberships')
-        .insert({ base_id: invite.base_id, user_id: currentUserId, role: invite.role });
-      if (error) throw error;
+        .select('id')
+        .eq('base_id', invite.base_id)
+        .eq('user_id', currentUserId)
+        .limit(1);
+      if (fetchMemberErr) throw fetchMemberErr;
+      if (!existing || existing.length === 0) {
+        const { error } = await supabase
+          .from('base_memberships')
+          .insert({ base_id: invite.base_id, user_id: currentUserId, role: invite.role });
+        if (error && error.code !== '23505') throw error;
+      }
     } else {
       throw new Error('Invite scope is invalid');
     }
@@ -213,6 +233,14 @@ export class MembershipService {
       .update({ status: 'accepted' })
       .eq('id', invite.id);
     if (updateError) throw updateError;
+
+    const redirectPath = invite.workspace_id
+      ? `/workspaces/${invite.workspace_id}`
+      : invite.base_id
+        ? `/bases/${invite.base_id}`
+        : '/dashboard';
+
+    return { redirectPath };
   }
 
   static async revokeInvite(inviteId: string): Promise<void> {
@@ -223,5 +251,3 @@ export class MembershipService {
     if (error) throw error;
   }
 }
-
-

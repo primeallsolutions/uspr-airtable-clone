@@ -1,15 +1,17 @@
 import { useState, useMemo, useEffect, useRef } from "react";
-import { Plus, ChevronDown, X, GripVertical } from "lucide-react";
-import type { RecordRow, FieldRow, TableRow } from "@/lib/types/base-detail";
+import { Plus, ChevronDown, GripVertical } from "lucide-react";
+import type { RecordRow, FieldRow, TableRow, SavingCell } from "@/lib/types/base-detail";
+import { RecordDetailsModal } from "./RecordDetailsModal";
 
 interface KanbanViewProps {
   records: RecordRow[];
   fields: FieldRow[];
   tables: TableRow[];
+  selectedTableId: string | null;
   onUpdateCell: (recordId: string, fieldId: string, value: unknown) => Promise<void> | void;
   onDeleteRow: (recordId: string) => Promise<void> | void;
   onAddRow: (values?: Record<string, unknown>) => void | Promise<void>;
-  savingCell: { recordId: string; fieldId: string } | null;
+  savingCell: SavingCell;
   canDeleteRow?: boolean;
 }
 
@@ -109,6 +111,8 @@ const getDropdownOptions = (field: FieldRow): DropdownOption[] => {
 export const KanbanView = ({
   records,
   fields,
+  tables,
+  selectedTableId,
   onUpdateCell,
   onDeleteRow,
   onAddRow,
@@ -127,6 +131,10 @@ export const KanbanView = ({
   const [expandedRecordId, setExpandedRecordId] = useState<string | null>(null);
   const [draggedRecordId, setDraggedRecordId] = useState<string | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
+  const expandedRecord = useMemo(
+    () => (expandedRecordId ? records.find(r => r.id === expandedRecordId) || null : null),
+    [expandedRecordId, records]
+  );
   
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -194,7 +202,7 @@ export const KanbanView = ({
     const dropdownOptions = stackedByOptions;
     const noValueColumn: KanbanColumn = {
       value: null,
-      label: "No Value",
+      label: "No data",
       color: "#9ca3af",
       records: []
     };
@@ -362,7 +370,7 @@ export const KanbanView = ({
 
   // Format value for display
   const formatValue = (value: unknown): string => {
-    if (value === null || value === undefined || value === "") return "Empty";
+    if (value === null || value === undefined || value === "") return "No data";
     if (Array.isArray(value)) return value.join(", ");
     if (typeof value === "object") return JSON.stringify(value);
     return String(value);
@@ -564,55 +572,16 @@ export const KanbanView = ({
         </div>
       </div>
 
-      {/* Contact Detail Modal */}
-      {expandedRecordId && (
-        <div
-          className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
-          onClick={() => setExpandedRecordId(null)}
-        >
-          <div
-            className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden"
-            onClick={e => e.stopPropagation()}
-          >
-            {/* Modal Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gray-50">
-              <h3 className="text-lg font-semibold text-gray-900">Contact Details</h3>
-              <button
-                onClick={() => setExpandedRecordId(null)}
-                className="p-1.5 hover:bg-gray-200 rounded-lg transition-colors"
-              >
-                <X className="w-5 h-5 text-gray-600" />
-              </button>
-            </div>
-
-            {/* Modal Content */}
-            <div className="overflow-y-auto max-h-[calc(85vh-80px)] p-6">
-              {(() => {
-                const record = records.find(r => r.id === expandedRecordId);
-                if (!record) return <div className="text-gray-500">Record not found</div>;
-
-                return (
-                  <div className="space-y-4">
-                    {fields.map(field => {
-                      const value = record.values?.[field.id];
-                      return (
-                        <div key={field.id} className="pb-3 border-b border-gray-100 last:border-0">
-                          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-                            {field.name}
-                          </div>
-                          <div className="text-sm text-gray-900 break-words">
-                            {formatValue(value)}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                );
-              })()}
-            </div>
-          </div>
-        </div>
-      )}
+      <RecordDetailsModal
+        isOpen={Boolean(expandedRecord)}
+        record={expandedRecord}
+        fields={fields}
+        tables={tables}
+        selectedTableId={selectedTableId}
+        savingCell={savingCell}
+        onUpdateCell={onUpdateCell}
+        onClose={() => setExpandedRecordId(null)}
+      />
     </div>
   );
 };

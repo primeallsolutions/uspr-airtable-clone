@@ -1,5 +1,8 @@
 import { supabase } from '../supabaseClient';
 
+const PROFILE_BUCKET = process.env.NEXT_PUBLIC_SUPABASE_PROFILE_BUCKET || 'Profile';
+const PROFILE_FOLDER = process.env.NEXT_PUBLIC_SUPABASE_PROFILE_FOLDER || 'Profile';
+
 export type Profile = {
   id: string;
   full_name: string | null;
@@ -46,11 +49,12 @@ export class ProfileService {
     const { data: user } = await supabase.auth.getUser();
     const uid = user.user?.id;
     if (!uid) throw new Error('Not authenticated');
-    const path = `${uid}/${Date.now()}-${file.name}`;
-    const { error: upErr } = await supabase.storage.from('avatars').upload(path, file, { upsert: true });
+    const path = `${PROFILE_FOLDER}/${uid}/${Date.now()}-${file.name}`;
+    const { error: upErr } = await supabase.storage.from(PROFILE_BUCKET).upload(path, file, { upsert: true });
     if (upErr) throw upErr;
-    const { data: pub } = supabase.storage.from('avatars').getPublicUrl(path);
-    const url = (pub as { publicUrl: string }).publicUrl;
+    const { data: pub } = supabase.storage.from(PROFILE_BUCKET).getPublicUrl(path);
+    const url = (pub as { publicUrl: string | undefined })?.publicUrl;
+    if (!url) throw new Error('Could not resolve avatar URL');
     await this.updateMyProfile({ avatar_url: url });
     return url;
   }
@@ -78,7 +82,5 @@ export class ProfileService {
     if (error) throw error;
   }
 }
-
-
 
 

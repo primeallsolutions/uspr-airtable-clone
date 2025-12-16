@@ -207,20 +207,68 @@ function extractDateValue(value: unknown): string | null {
  * 3. Directly on the contact with field ID as key
  */
 function getCustomFieldValue(contact: any, fieldKey: string): unknown {
+  const readFieldEntry = (entry: any): unknown => {
+    if (!entry || typeof entry !== 'object') return undefined;
+
+    const targetKey = String(fieldKey);
+    const possibleKeys = [
+      entry.id,
+      entry.key,
+      entry.fieldKey,
+      entry.customFieldId,
+      entry.customField,
+      entry.name
+    ]
+      .filter((key) => key !== undefined && key !== null)
+      .map((key) => String(key));
+
+    if (possibleKeys.includes(targetKey)) {
+      if ('value' in entry) return (entry as any).value;
+      if ('field_value' in entry) return (entry as any).field_value;
+      if ('fieldValue' in entry) return (entry as any).fieldValue;
+      if ('values' in entry) return (entry as any).values;
+    }
+
+    return undefined;
+  };
+
+  // Method 0: customFields as an array of {id,value} objects (common GHL shape)
+  if (Array.isArray(contact.customFields)) {
+    for (const cf of contact.customFields) {
+      const match = readFieldEntry(cf);
+      if (match !== undefined) {
+        return match;
+      }
+    }
+  }
+
   // Method 1: Check customFields object (most common)
   if (contact.customFields && typeof contact.customFields === 'object') {
     if (contact.customFields[fieldKey] !== undefined) {
-      return contact.customFields[fieldKey];
+      const raw = contact.customFields[fieldKey];
+      if (raw && typeof raw === 'object') {
+        if ('value' in raw) return raw.value;
+        if ('field_value' in raw) return raw.field_value;
+        if ('fieldValue' in raw) return raw.fieldValue;
+      }
+      return raw;
     }
   }
 
   // Method 2: Check customField array (alternative format)
   if (Array.isArray(contact.customField)) {
-    const field = contact.customField.find(
-      (cf: any) => cf.id === fieldKey || cf.key === fieldKey || cf.fieldKey === fieldKey
-    );
-    if (field) {
-      return field.value || field.field_value || field.fieldValue;
+    for (const cf of contact.customField) {
+      const match = readFieldEntry(cf);
+      if (match !== undefined) {
+        return match;
+      }
+    }
+  }
+  // Method 2b: customField provided as single object
+  if (contact.customField && typeof contact.customField === 'object' && !Array.isArray(contact.customField)) {
+    const match = readFieldEntry(contact.customField);
+    if (match !== undefined) {
+      return match;
     }
   }
 
