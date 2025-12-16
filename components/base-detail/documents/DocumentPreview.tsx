@@ -1,7 +1,8 @@
 import { Eye, Hash, CalendarClock, Pencil, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
 import type { StoredDocument } from "@/lib/services/documents-service";
 import { PdfViewer } from "../PdfViewer";
-import { isPdf, isImage, isFolder } from "./utils";
+import { isText, isPdf, isImage, isFolder } from "./utils";
 import { PreviewSkeleton } from "./DocumentsSkeleton";
 
 type DocumentPreviewProps = {
@@ -21,6 +22,40 @@ export const DocumentPreview = ({
   onDelete,
   loading = false,
 }: DocumentPreviewProps) => {
+  const [textContent, setTextContent] = useState<string | null>(null);
+  const [currentDoc, setCurrentDoc] = useState<string | null>(null);
+
+  // copied from DocumentEditor.tsx:309
+  useEffect(() => {
+    if (currentDoc != selectedDoc?.path) {
+      setCurrentDoc(selectedDoc?.path || null);
+      setTextContent(null);
+      return;
+    }
+
+    if (!signedUrl || !selectedDoc || !isText(selectedDoc.mimeType)) {
+      setTextContent(null);
+      return;
+    }
+    if (selectedDoc.size > 100 * 1024) {
+      setTextContent("File too large to preview.");
+      return;
+    }
+
+    const fetchContent = async () => {
+      try {
+        const response = await fetch(signedUrl);
+        const text = await response.text();
+        setTextContent(text);
+      } catch (err) {
+        console.error("Failed to load text", err);
+        setTextContent("");
+      }
+    };
+
+    fetchContent();
+  }, [signedUrl, selectedDoc, currentDoc]);
+
   return (
     <div className="min-h-0 overflow-hidden flex flex-col">
       <div className="px-4 py-3 flex items-center justify-between border-b border-gray-200">
@@ -32,7 +67,8 @@ export const DocumentPreview = ({
           <div className="flex items-center gap-2">
             <div className="text-xs text-gray-500 flex items-center gap-2">
               <Hash className="w-4 h-4" />
-              <span>{selectedDoc.path.slice(-8)}</span>
+              { /* only cut out the middle portion of the file name, which is likely just the unique storage ID, only show 40 characters total */ }
+              <span>{selectedDoc.path.length > 40 ? selectedDoc.path.slice(0, 15) + "..." + selectedDoc.path.slice(-25) : selectedDoc.path}</span>
             </div>
             <button
               onClick={onRename}
@@ -72,6 +108,16 @@ export const DocumentPreview = ({
                 <div className="h-full flex items-center justify-center text-sm text-red-600">
                   {viewerError}
                 </div>
+              ) : isText(selectedDoc.mimeType) ? (
+                textContent ? (
+                  <div className="w-full h-full flex p-3 bg-gray-100 overflow-auto">
+                    <pre className="text-xs text-gray-700 whitespace-pre-wrap break-words"><code>{textContent}</code></pre>
+                  </div>
+                ) : (
+                  <div className="h-full flex items-center justify-center text-sm text-gray-500">
+                    Loading preview...
+                  </div>
+                )
               ) : isPdf(selectedDoc.mimeType) ? (
                 signedUrl ? (
                   <PdfViewer fileUrl={signedUrl} />
