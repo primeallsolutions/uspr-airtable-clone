@@ -917,7 +917,6 @@ export default function BaseDetailPage() {
               tables={tables}
               selectedTableId={selectedTableId}
               onTableSelect={setSelectedTableId}
-              onAddRecord={handleAddRow}
               showTableTabs={viewMode === 'grid'}
               viewMode={viewMode}
               onImportCsv={openImportModal}
