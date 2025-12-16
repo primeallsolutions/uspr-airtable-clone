@@ -1047,6 +1047,7 @@ export default function BaseDetailPage() {
                   records={processedRecords}
                   fields={fields}
                   tables={tables}
+                  selectedTableId={selectedTableId}
                   onUpdateCell={updateCell}
                   onDeleteRow={deleteRecord}
                   onAddRow={handleAddRow}

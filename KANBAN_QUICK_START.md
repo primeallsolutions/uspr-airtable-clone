@@ -276,3 +276,9 @@ Your Kanban view is fully functional and ready to use. Just:
 
 
 
+
+
+
+
+
+

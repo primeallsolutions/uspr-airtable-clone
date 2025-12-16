@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { GHLService } from '@/lib/services/ghl-service';
 import { transformGHLContactToRecord } from '@/lib/utils/ghl-transform';
 import { createClient } from '@supabase/supabase-js';
+import type { FieldType } from '@/lib/types/base-detail';
 import crypto from 'crypto';
 
 // Create admin client for server-side operations
@@ -186,10 +187,17 @@ export async function POST(request: NextRequest) {
       ...fieldIds,
     };
 
+    // Build field types map for better value extraction
+    const fieldTypesMap: Record<string, FieldType> = {};
+    fields?.forEach(field => {
+      fieldTypesMap[field.id] = field.type as FieldType;
+    });
+
     // Transform GHL contact to record values
     const recordValues = transformGHLContactToRecord(
       contactData,
-      fieldMapping
+      fieldMapping,
+      fieldTypesMap
     );
 
     // Check if record already exists (by ghl_contact_id)
