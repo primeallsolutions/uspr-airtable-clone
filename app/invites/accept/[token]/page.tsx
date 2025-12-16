@@ -32,8 +32,15 @@ export default function AcceptInvitePage() {
         setMessage("Invite accepted. Redirecting...");
         setTimeout(() => router.replace(next), 800);
       } catch (e: unknown) {
+        console.error('Accept invite failed', e);
         setStatus("error");
-        setMessage(e instanceof Error ? e.message : "Failed to accept invite.");
+        if (e instanceof Error) {
+          setMessage(e.message);
+        } else if (typeof e === 'object' && e !== null && 'message' in e) {
+          setMessage(String((e as { message: unknown }).message));
+        } else {
+          setMessage("Failed to accept invite.");
+        }
       }
     }
     if (token) void accept();
@@ -48,6 +55,5 @@ export default function AcceptInvitePage() {
     </div>
   );
 }
-
 
 
