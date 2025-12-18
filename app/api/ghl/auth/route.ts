@@ -19,10 +19,10 @@ export async function GET(request: NextRequest) {
     }
 
     // Generate state if not provided (includes base_id for callback)
-    const authState = state || `${baseId}-${Date.now()}`;
+    const authState = state || `${baseId}_${Date.now()}`;
 
     // Generate authorization URL
-    const authUrl = GHLService.getAuthorizationUrl(authState);
+    const authUrl = GHLService.getAuthorizationUrl(baseId, authState);
 
     // Redirect to GHL authorization page
     return NextResponse.redirect(authUrl);

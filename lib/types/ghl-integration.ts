@@ -60,6 +60,7 @@ export type GHLWebhookPayload = {
 export type GHLTokenResponse = {
   access_token: string;
   refresh_token: string;
+  locationId: string;
   expires_in: number; // seconds until expiration
   token_type: string;
   scope?: string;

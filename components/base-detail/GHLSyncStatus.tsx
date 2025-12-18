@@ -46,7 +46,8 @@ export const GHLSyncStatus = ({ baseId, onOpenSettings, showConnectButton = fals
 
   const handleClick = () => {
     if (onOpenSettings) {
-      onOpenSettings();
+      if (integration) onOpenSettings();
+      else window.location.href = `/api/ghl/auth?base_id=${baseId}`;
     }
   };
 
