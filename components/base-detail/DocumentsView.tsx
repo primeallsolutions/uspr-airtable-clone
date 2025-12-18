@@ -7,7 +7,11 @@ import { DocumentsList } from "./documents/DocumentsList";
 import { DocumentPreview } from "./documents/DocumentPreview";
 import { PlateEditor } from "./documents/PlateEditor";
 import { PdfEditor } from "./documents/PdfEditor";
+import { TemplateManagementModal } from "./documents/TemplateManagementModal";
+import { TemplateFieldEditor } from "./documents/TemplateFieldEditor";
+import { DocumentGeneratorForm } from "./documents/DocumentGeneratorForm";
 import { isFolder, isPdf } from "./documents/utils";
+import type { DocumentTemplate } from "@/lib/services/template-service";
 
 type DocumentsViewProps = {
   baseId: string;
@@ -39,6 +43,10 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable }: Docu
   const [isInitialLoad, setIsInitialLoad] = useState<boolean>(true);
   const [editorDoc, setEditorDoc] = useState<StoredDocument | null>(null);
   const [editorSignedUrl, setEditorSignedUrl] = useState<string | null>(null);
+  const [showTemplateManagement, setShowTemplateManagement] = useState<boolean>(false);
+  const [showTemplateFieldEditor, setShowTemplateFieldEditor] = useState<boolean>(false);
+  const [showDocumentGenerator, setShowDocumentGenerator] = useState<boolean>(false);
+  const [selectedTemplate, setSelectedTemplate] = useState<DocumentTemplate | null>(null);
 
   const currentPrefix = useMemo(
     () => (folderPath && !folderPath.endsWith("/") ? `${folderPath}/` : folderPath),
@@ -519,6 +527,36 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable }: Docu
         uploadProgress={uploadProgress}
         onAddFolder={handleAddFolder}
         onUpload={handleUpload}
+        onManageTemplates={() => setShowTemplateManagement(true)}
+        onGenerateDocument={async () => {
+          // Load templates and show selection
+          try {
+            const response = await fetch(
+              `/api/templates?baseId=${baseId}${selectedTable?.id ? `&tableId=${selectedTable.id}` : ""}`
+            );
+            if (!response.ok) throw new Error("Failed to load templates");
+            const data = await response.json();
+            const templates = data.templates || [];
+            
+            if (templates.length === 0) {
+              alert("No templates found. Please create a template first.");
+              setShowTemplateManagement(true);
+              return;
+            }
+
+            // Show template selection
+            if (templates.length === 1) {
+              setSelectedTemplate(templates[0]);
+              setShowDocumentGenerator(true);
+            } else {
+              // For multiple templates, show management modal with selection
+              setShowTemplateManagement(true);
+            }
+          } catch (err) {
+            console.error("Failed to load templates", err);
+            setShowTemplateManagement(true);
+          }
+        }}
       />
 
       <div className="flex flex-1 min-h-0">
@@ -578,6 +616,53 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable }: Docu
           isOpen={Boolean(editorDoc)}
           onClose={handleEditorClose}
           onSave={handleEditorSave}
+        />
+      )}
+
+      {/* Template Management Modal */}
+      <TemplateManagementModal
+        isOpen={showTemplateManagement}
+        onClose={() => setShowTemplateManagement(false)}
+        baseId={baseId}
+        tableId={selectedTable?.id ?? null}
+        onTemplateSelect={(template) => {
+          setSelectedTemplate(template);
+          setShowTemplateManagement(false);
+          setShowDocumentGenerator(true);
+        }}
+        onEditFields={(template) => {
+          setSelectedTemplate(template);
+          setShowTemplateManagement(false);
+          setShowTemplateFieldEditor(true);
+        }}
+      />
+
+      {/* Template Field Editor */}
+      {selectedTemplate && (
+        <TemplateFieldEditor
+          isOpen={showTemplateFieldEditor}
+          onClose={() => {
+            setShowTemplateFieldEditor(false);
+            setSelectedTemplate(null);
+          }}
+          template={selectedTemplate}
+          baseId={baseId}
+          tableId={selectedTable?.id ?? null}
+        />
+      )}
+
+      {/* Document Generator Form */}
+      {selectedTemplate && (
+        <DocumentGeneratorForm
+          isOpen={showDocumentGenerator}
+          onClose={() => {
+            setShowDocumentGenerator(false);
+            setSelectedTemplate(null);
+          }}
+          template={selectedTemplate}
+          baseId={baseId}
+          tableId={selectedTable?.id ?? null}
+          onDocumentGenerated={refresh}
         />
       )}
     </div>
