@@ -48,7 +48,7 @@ export class GHLService {
       client_id: clientId,
       redirect_uri: redirectUri,
       state,
-      scope: 'contacts.readonly contacts.write'
+      scope: 'contacts.readonly contacts.write locations/customFields.readonly'
     });
 
     return `${GHL_OAUTH_URL}?${params.toString()}`;
