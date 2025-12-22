@@ -194,6 +194,8 @@ export default function BaseDetailPage() {
   const viewControlsRef = useRef<HTMLDivElement | null>(null);
   const viewPanelRef = useRef<HTMLDivElement | null>(null);
   const [panelPosition, setPanelPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  // Track visibility of the Created At system field
+  const [showCreatedAt, setShowCreatedAt] = useState(false);
 
   // Mark base as opened on mount/id change
   useEffect(() => {
@@ -942,6 +944,8 @@ export default function BaseDetailPage() {
               activePanel={activeViewPanel}
               searchQuery={searchQuery}
               onSearchChange={setSearchQuery}
+              showCreatedAt={showCreatedAt}
+              onToggleCreatedAt={() => setShowCreatedAt((prev) => !prev)}
             />
             {activeViewPanel && (
               <div
@@ -1046,6 +1050,7 @@ export default function BaseDetailPage() {
                   groupFieldIds={groupFieldIds}
                   colorFieldId={colorFieldId}
                   colorAssignments={colorAssignments}
+                  showCreatedAt={showCreatedAt}
                 />
               ) : (
                 <KanbanView

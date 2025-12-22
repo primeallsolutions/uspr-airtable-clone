@@ -26,6 +26,7 @@ interface GridViewProps {
   groupFieldIds?: string[];
   colorFieldId?: string | null;
   colorAssignments?: Record<string, string>;
+  showCreatedAt?: boolean;
 }
 
 export const GridView = ({
@@ -47,7 +48,8 @@ export const GridView = ({
   onReorderFields,
   groupFieldIds,
   colorFieldId,
-  colorAssignments = {}
+  colorAssignments = {},
+  showCreatedAt = false
 }: GridViewProps) => {
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
   const initialOrderRef = useRef<string[] | null>(null);
@@ -303,6 +305,7 @@ export const GridView = ({
           onSelectRow={handleSelectRow}
           colorFieldId={colorFieldId}
           colorAssignments={colorAssignments}
+          showCreatedAt={showCreatedAt}
         />
       ));
 
@@ -341,6 +344,7 @@ export const GridView = ({
               onFieldContextMenu={onFieldContextMenu}
               onSelectAll={handleSelectAll}
               onReorderFields={onReorderFields}
+              showCreatedAt={showCreatedAt}
             />
           </div>
           

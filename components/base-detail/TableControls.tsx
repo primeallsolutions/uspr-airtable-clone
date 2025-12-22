@@ -14,7 +14,9 @@ import {
   Upload,
   MoreVertical,
   Edit,
-  Trash2
+  Trash2,
+  CalendarPlus,
+  CalendarX2
 } from "lucide-react";
 import type { TableRow } from "@/lib/types/base-detail";
 
@@ -49,6 +51,8 @@ interface TableControlsProps {
   activePanel?: ViewControlPanel | null;
   searchQuery: string;
   onSearchChange: (value: string) => void;
+  showCreatedAt?: boolean;
+  onToggleCreatedAt?: () => void;
 }
 
 export const TableControls = ({
@@ -73,7 +77,9 @@ export const TableControls = ({
   viewState,
   activePanel = null,
   searchQuery,
-  onSearchChange
+  onSearchChange,
+  showCreatedAt = false,
+  onToggleCreatedAt
 }: TableControlsProps) => {
   const [contextMenu, setContextMenu] = useState<{
     tableId: string;
@@ -295,6 +301,23 @@ export const TableControls = ({
                     ref={settingsMenuRef}
                     className="absolute right-0 mt-2 w-56 bg-white border border-gray-200 rounded-lg shadow-xl py-1 z-50"
                   >
+                    <button
+                      type="button"
+                      onClick={onToggleCreatedAt}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:bg-gray-100 transition-colors text-left"
+                    >
+                      {showCreatedAt ? (
+                        <>
+                          <CalendarX2 size={14} className="text-gray-600" />
+                          <span>Hide Record Creation Dates</span>
+                        </>
+                      ) : (
+                        <>
+                          <CalendarPlus size={14} />
+                          <span>Show Record Creation Dates</span>
+                        </>
+                      )}
+                    </button>
                     <button
                       type="button"
                       onClick={() => {
