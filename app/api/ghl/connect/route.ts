@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       integrationId: integration.id,
-      message: 'Go High Level connected successfully',
+      message: 'GoHighLevel connected successfully',
     });
   } catch (error) {
     console.error('GHL connect error:', error);

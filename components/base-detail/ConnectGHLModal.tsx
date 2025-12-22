@@ -197,7 +197,7 @@ export const ConnectGHLModal = ({
         throw new Error(error.error || 'Failed to connect');
       }
 
-      toast.success('Go High Level connected successfully!');
+      toast.success('GoHighLevel connected successfully!');
       await loadIntegration();
       if (onConnected) onConnected();
     } catch (error) {
@@ -212,7 +212,7 @@ export const ConnectGHLModal = ({
     if (!integration) return;
 
     const confirmed = confirm(
-      'Are you sure you want to disconnect Go High Level? This will stop all syncing.'
+      'Are you sure you want to disconnect GoHighLevel? This will stop all syncing.'
     );
     if (!confirmed) return;
 
@@ -231,7 +231,7 @@ export const ConnectGHLModal = ({
       setFieldMappings([]);
       setAccessToken("");
       setLocationId("");
-      toast.success('Go High Level disconnected successfully');
+      toast.success('GoHighLevel disconnected successfully');
       if (onConnected) onConnected();
     } catch (error) {
       console.error('Failed to disconnect:', error);
@@ -444,7 +444,7 @@ export const ConnectGHLModal = ({
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <h2 className="text-xl font-semibold text-gray-900">
-            {integration ? 'Go High Level Settings' : 'Connect Go High Level'}
+            {integration ? 'GoHighLevel Settings' : 'Connect GoHighLevel'}
           </h2>
           <button
             onClick={onClose}
@@ -467,11 +467,30 @@ export const ConnectGHLModal = ({
                 <div className="flex items-start gap-3">
                   <LinkIcon className="text-blue-600 mt-1" size={20} />
                   <div>
-                    <h3 className="font-medium text-gray-900">Sync Contacts from Go High Level</h3>
+                    <h3 className="font-medium text-gray-900">Sync Contacts from GoHighLevel</h3>
                     <p className="text-sm text-gray-600 mt-1">
-                      Connect your Go High Level Private Integration to automatically sync contacts into this base.
+                      Connect your GoHighLevel account to automatically sync contacts into this base.
                     </p>
                   </div>
+                </div>
+
+                {/* OAuth Sign In Option */}
+                <div className="border-2 border-blue-300 bg-blue-50 rounded-lg p-4">
+                  <p className="text-sm font-medium text-gray-900 mb-3">Easiest option: Sign in with GoHighLevel</p>
+                  <a
+                    href={`/api/ghl/auth?base_id=${baseId}`}
+                    className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors"
+                  >
+                    <LinkIcon size={16} />
+                    Sign In with GoHighLevel
+                  </a>
+                </div>
+
+                {/* Or Divider */}
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 h-px bg-gray-200"></div>
+                  <span className="text-xs text-gray-500 font-medium">OR</span>
+                  <div className="flex-1 h-px bg-gray-200"></div>
                 </div>
 
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
@@ -480,8 +499,8 @@ export const ConnectGHLModal = ({
                     <div className="text-sm text-blue-800">
                       <p className="font-medium mb-1">How to get your credentials:</p>
                       <ol className="list-decimal list-inside space-y-1 text-blue-700">
-                        <li>Go to GHL Settings → Integrations → Private Integrations</li>
-                        <li>Create a new Private Integration (or use existing)</li>
+                        <li>Go to GHL Settings → Private Integrations</li>
+                        <li>Create a new Private Integration (or use existing) with permissions to read and write contacts and custom fields</li>
                         <li>Copy the Access Token</li>
                         <li>Your Location ID is in your GHL URL or Settings</li>
                       </ol>
@@ -562,9 +581,12 @@ export const ConnectGHLModal = ({
                   <div className="flex items-center gap-2">
                     <CheckCircle className="text-green-600" size={20} />
                     <div>
-                      <p className="font-medium text-green-900">Connected to Go High Level</p>
+                      <p className="font-medium text-green-900">Connected to GoHighLevel</p>
                       <p className="text-sm text-green-700 mt-1">
                         Location ID: {integration.location_id}
+                      </p>
+                      <p className="text-sm text-green-700">
+                        Authenticated via: {integration.access_token?.startsWith('pit') ? 'Private Integration Token (PIT)' : 'GHL Login'}
                       </p>
                       {integration.last_sync_at && (
                         <p className="text-sm text-green-700">
@@ -599,7 +621,7 @@ export const ConnectGHLModal = ({
                       onClick={() => handleSyncNow(true)}
                       disabled={syncing}
                       className="px-4 py-2 text-sm font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 disabled:opacity-50 flex items-center gap-2"
-                      title="Sync all contacts from Go High Level"
+                      title="Sync all contacts from GoHighLevel"
                     >
                       {syncing && syncType === 'full' ? (
                         <>
@@ -645,8 +667,8 @@ export const ConnectGHLModal = ({
                     <p className="text-xs text-blue-600 mt-2">
                       {syncProgress.phase === 'fetching' 
                         ? syncType === 'incremental'
-                          ? 'Retrieving new or modified contacts from Go High Level...'
-                          : 'Retrieving all contacts from Go High Level...'
+                          ? 'Retrieving new or modified contacts from GoHighLevel...'
+                          : 'Retrieving all contacts from GoHighLevel...'
                         : 'Saving contacts to your base...'}
                     </p>
                   </div>
@@ -659,7 +681,7 @@ export const ConnectGHLModal = ({
                   <div>
                     <h3 className="font-medium text-gray-900">Field Mapping</h3>
                     <p className="text-sm text-gray-600">
-                      Map Go High Level contact fields to fields in your base.
+                      Map GoHighLevel contact fields to fields in your base.
                     </p>
                   </div>
                   <div className="flex gap-2">

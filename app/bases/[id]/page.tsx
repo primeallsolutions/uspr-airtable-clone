@@ -76,7 +76,7 @@ export default function BaseDetailPage() {
   // Check for GHL connection success message
   useEffect(() => {
     if (searchParams?.get('ghl_connected') === 'true') {
-      toast.success('Go High Level connected successfully!');
+      toast.success('GoHighLevel connected successfully!');
       // Remove query param from URL
       window.history.replaceState({}, '', window.location.pathname);
     }
@@ -169,8 +169,12 @@ export default function BaseDetailPage() {
 
   // Add state for GHL integration modal
   const [isGHLModalOpen, setIsGHLModalOpen] = useState(false);
+  const [GHLCheckStatus, setGHLCheckStatus] = useState(true); // assume connected, will force reload GHLSyncStatus if set to false
   const openGHLModal = () => setIsGHLModalOpen(true);
-  const closeGHLModal = () => setIsGHLModalOpen(false);
+  const closeGHLModal = () => {
+    setIsGHLModalOpen(false);
+    setGHLCheckStatus(true)
+  }
   
   const { contextMenu, setContextMenu, showContextMenu, hideContextMenu } = useContextMenu();
   const { role, can } = useRole({ baseId });
@@ -908,6 +912,8 @@ export default function BaseDetailPage() {
           showFormsTab={false}
           baseId={baseId}
           onConnectGHL={openGHLModal}
+          GHLCheckStatus={GHLCheckStatus}
+          setGHLCheckStatus={setGHLCheckStatus}
         />
 
         {/* Table Controls */}
@@ -1224,10 +1230,7 @@ export default function BaseDetailPage() {
           onClose={closeGHLModal}
           baseId={baseId}
           tableId={selectedTableId}
-          onConnected={() => {
-            closeGHLModal();
-            // Optionally reload data here if needed
-          }}
+          onConnected={closeGHLModal}
         />
       )}
     </div>
