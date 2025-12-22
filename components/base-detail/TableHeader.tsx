@@ -14,6 +14,7 @@ interface TableHeaderProps {
   onFieldContextMenu: (e: React.MouseEvent, field: FieldRow) => void;
   onSelectAll: (checked: boolean) => void;
   onReorderFields?: (reorderedFields: FieldRow[]) => void;
+  showCreatedAt?: boolean;
 }
 
 export const TableHeader = ({
@@ -26,7 +27,8 @@ export const TableHeader = ({
   onAddField,
   onFieldContextMenu,
   onSelectAll,
-  onReorderFields
+  onReorderFields,
+  showCreatedAt
 }: TableHeaderProps) => {
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
@@ -80,8 +82,8 @@ export const TableHeader = ({
     setDragOverIndex(null);
   };
 
-  const { selectWidth, actionsWidth, rowNumberWidth, addFieldWidth } = tableLayout;
-  const firstDataLeftOffset = `calc(${selectWidth} + ${actionsWidth} + ${rowNumberWidth})`;
+  const { selectWidth, actionsWidth, rowNumberWidth, createdAtWidth, addFieldWidth } = tableLayout;
+  const firstDataLeftOffset = `calc(${selectWidth} + ${actionsWidth} + ${rowNumberWidth} + ${showCreatedAt ? createdAtWidth : '0rem'})`;
 
   return (
     <div className="flex border-b border-gray-200 bg-gray-50 min-w-max">
@@ -119,6 +121,16 @@ export const TableHeader = ({
       >
         <span className="text-xs text-gray-500 font-medium">#</span>
       </div>
+      
+      {/* Record creation time */}
+      { showCreatedAt && (
+        <div
+          className="border-r border-gray-200 bg-gray-50 flex items-center justify-center group relative transition-all sticky z-20 bg-white shadow-[4px_0_6px_-4px_rgba(0,0,0,0.1)]"
+          style={{ left: `calc(${selectWidth} + ${actionsWidth} + ${rowNumberWidth})`, width: createdAtWidth }}
+        >
+          <span className="text-sm font-medium text-gray-900 truncate text-center flex-1">Created At</span>
+        </div>
+      )}
       
       {/* Field columns */}
       {fields.map((field, idx) => {
