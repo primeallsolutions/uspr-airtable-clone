@@ -10,10 +10,12 @@ import { useTimezone } from "@/lib/hooks/useTimezone";
 interface GHLSyncStatusProps {
   baseId: string;
   onOpenSettings?: () => void;
+  GHLCheckStatus?: boolean;
+  setGHLCheckStatus?: (status: boolean) => void;
   showConnectButton?: boolean;
 }
 
-export const GHLSyncStatus = ({ baseId, onOpenSettings, showConnectButton = false }: GHLSyncStatusProps) => {
+export const GHLSyncStatus = ({ baseId, onOpenSettings, GHLCheckStatus, setGHLCheckStatus, showConnectButton = false }: GHLSyncStatusProps) => {
   const { timezone } = useTimezone();
   const [integration, setIntegration] = useState<GHLIntegration | null>(null);
   const [loading, setLoading] = useState(true);
@@ -23,6 +25,7 @@ export const GHLSyncStatus = ({ baseId, onOpenSettings, showConnectButton = fals
       setLoading(true);
       const data = await GHLService.getIntegrationByBaseId(baseId);
       setIntegration(data);
+      setGHLCheckStatus?.(false);
     } catch (error) {
       console.error('Failed to load GHL integration:', error);
       setIntegration(null);
@@ -32,8 +35,8 @@ export const GHLSyncStatus = ({ baseId, onOpenSettings, showConnectButton = fals
   }, [baseId]);
 
   useEffect(() => {
-    loadIntegration();
-  }, [loadIntegration]);
+    if (GHLCheckStatus) loadIntegration();
+  }, [loadIntegration, GHLCheckStatus]);
 
   if (loading) {
     return (
@@ -56,7 +59,7 @@ export const GHLSyncStatus = ({ baseId, onOpenSettings, showConnectButton = fals
       <button
         onClick={handleClick}
         className="px-3 py-2 text-sm font-medium text-blue-700 border border-blue-300 rounded-md hover:bg-blue-50 flex items-center gap-2"
-        title="Connect Go High Level"
+        title="Connect GoHighLevel"
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
@@ -76,7 +79,7 @@ export const GHLSyncStatus = ({ baseId, onOpenSettings, showConnectButton = fals
     <button
       onClick={handleClick}
       className="flex items-center gap-2 px-3 py-1.5 text-sm bg-green-50 border border-green-200 rounded-md hover:bg-green-100 transition-colors cursor-pointer"
-      title="Go High Level connected - Click to manage"
+      title="GoHighLevel connected - Click to manage"
     >
       <CheckCircle size={14} className="text-green-600" />
       <span className="text-green-700 font-medium">GHL Connected</span>

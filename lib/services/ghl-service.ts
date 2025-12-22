@@ -39,7 +39,7 @@ export class GHLService {
   /**
    * Generate OAuth authorization URL
    */
-  static getAuthorizationUrl(state: string): string {
+  static getAuthorizationUrl(baseId: string, state: string): string {
     const clientId = this.getClientId();
     const redirectUri = this.getRedirectUri();
     
@@ -48,7 +48,7 @@ export class GHLService {
       client_id: clientId,
       redirect_uri: redirectUri,
       state,
-      scope: 'contacts.readonly contacts.write'
+      scope: 'contacts.readonly contacts.write locations/customFields.readonly'
     });
 
     return `${GHL_OAUTH_URL}?${params.toString()}`;
@@ -57,10 +57,7 @@ export class GHLService {
   /**
    * Exchange authorization code for access token
    */
-  static async exchangeCodeForToken(
-    code: string,
-    locationId: string
-  ): Promise<GHLTokenResponse> {
+  static async exchangeCodeForToken(code: string): Promise<GHLTokenResponse> {
     const clientId = this.getClientId();
     const clientSecret = this.getClientSecret();
     const redirectUri = this.getRedirectUri();
@@ -68,15 +65,15 @@ export class GHLService {
     const response = await fetch(`${GHL_API_BASE_URL}/oauth/token`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Accept': 'application/json',
       },
-      body: JSON.stringify({
+      body: new URLSearchParams({
         grant_type: 'authorization_code',
         code,
         client_id: clientId,
         client_secret: clientSecret,
         redirect_uri: redirectUri,
-        locationId
       }),
     });
 
@@ -101,9 +98,10 @@ export class GHLService {
     const response = await fetch(`${GHL_API_BASE_URL}/oauth/token`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Accept': 'application/json',
       },
-      body: JSON.stringify({
+      body: new URLSearchParams({
         grant_type: 'refresh_token',
         refresh_token: refreshToken,
         client_id: clientId,

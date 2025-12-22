@@ -22,6 +22,8 @@ interface TopNavigationProps {
   showFormsTab?: boolean;
   baseId?: string;
   onConnectGHL?: () => void;
+  GHLCheckStatus?: boolean;
+  setGHLCheckStatus?: (status: boolean) => void;
 }
 
 export const TopNavigation = ({
@@ -41,7 +43,9 @@ export const TopNavigation = ({
   showInterfacesTab = true,
   showFormsTab = true,
   baseId,
-  onConnectGHL
+  onConnectGHL,
+  GHLCheckStatus,
+  setGHLCheckStatus
 }: TopNavigationProps) => {
   const router = useRouter();
   const [isTableDropdownOpen, setIsTableDropdownOpen] = useState(false);
@@ -196,6 +200,8 @@ export const TopNavigation = ({
             <GHLSyncStatus 
               baseId={baseId} 
               onOpenSettings={onConnectGHL}
+              GHLCheckStatus={GHLCheckStatus}
+              setGHLCheckStatus={setGHLCheckStatus}
               showConnectButton={onConnectGHL !== undefined}
             />
           )}

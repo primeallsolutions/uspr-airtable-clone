@@ -26,6 +26,7 @@ interface GridViewProps {
   groupFieldIds?: string[];
   colorFieldId?: string | null;
   colorAssignments?: Record<string, string>;
+  showCreatedAt?: boolean;
 }
 
 export const GridView = ({
@@ -47,7 +48,8 @@ export const GridView = ({
   onReorderFields,
   groupFieldIds,
   colorFieldId,
-  colorAssignments = {}
+  colorAssignments = {},
+  showCreatedAt = false
 }: GridViewProps) => {
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
   const initialOrderRef = useRef<string[] | null>(null);
@@ -303,6 +305,7 @@ export const GridView = ({
           onSelectRow={handleSelectRow}
           colorFieldId={colorFieldId}
           colorAssignments={colorAssignments}
+          showCreatedAt={showCreatedAt}
         />
       ));
 
@@ -341,6 +344,7 @@ export const GridView = ({
               onFieldContextMenu={onFieldContextMenu}
               onSelectAll={handleSelectAll}
               onReorderFields={onReorderFields}
+              showCreatedAt={showCreatedAt}
             />
           </div>
           
@@ -370,17 +374,6 @@ export const GridView = ({
           ) : (
             <>
               {rowContent}
-              
-              {/* Floating Add Row button pinned to viewport, as opposed to a button on a row that scrolls out of view */}
-              <div className="pointer-events-none fixed bottom-2 right-6 z-20">
-                <button
-                  onClick={() => onAddRow()}
-                  className="pointer-events-auto inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg shadow-lg hover:bg-blue-700 transition-colors"
-                >
-                  <Plus size={16} />
-                  <span>Add Row</span>
-                </button>
-              </div>
             </>
           )}
         </div>
@@ -466,6 +459,15 @@ export const GridView = ({
                 <ChevronsRight size={18} className="text-gray-600" />
               </button>
             </div>
+              
+            {/* Add Row button */}
+            <button
+              onClick={() => onAddRow()}
+              className="pointer-events-auto inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg shadow-lg hover:bg-blue-700 transition-colors cursor-pointer"
+            >
+              <Plus size={16} />
+              <span>Add Row</span>
+            </button>
           </div>
         )}
       </div>

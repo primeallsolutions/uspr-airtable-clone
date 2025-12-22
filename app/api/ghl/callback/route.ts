@@ -23,7 +23,6 @@ export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     const code = searchParams.get('code');
-    const locationId = searchParams.get('locationId');
     const state = searchParams.get('state');
     const error = searchParams.get('error');
 
@@ -39,7 +38,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Validate required parameters
-    if (!code || !locationId || !state) {
+    if (!code || !state) {
       return NextResponse.redirect(
         new URL(
           '/bases?error=ghl_oauth_invalid_params',
@@ -49,7 +48,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Extract base_id from state (format: baseId-timestamp)
-    const baseId = state.split('-')[0];
+    const baseId = state.split('_')[0];
     if (!baseId) {
       return NextResponse.redirect(
         new URL(
@@ -76,7 +75,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Exchange code for tokens
-    const tokens = await GHLService.exchangeCodeForToken(code, locationId);
+    const tokens = await GHLService.exchangeCodeForToken(code);
 
     // Get webhook URL
     const webhookUrl = new URL('/api/ghl/webhook', request.url).toString();
@@ -87,7 +86,7 @@ export async function GET(request: NextRequest) {
       // First create integration to get access token
       const tempIntegration = await GHLService.upsertIntegration(
         baseId,
-        locationId,
+        tokens.locationId,
         tokens
       );
 
@@ -103,7 +102,7 @@ export async function GET(request: NextRequest) {
     // Create/update integration
     await GHLService.upsertIntegration(
       baseId,
-      locationId,
+      tokens.locationId,
       tokens,
       webhookId
     );
