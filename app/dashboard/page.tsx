@@ -1,6 +1,6 @@
 "use client";
-import { useEffect, useCallback, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useCallback, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { ContextMenu, useContextMenu } from "@/components/ui/context-menu";
 import { RenameModal } from "@/components/ui/rename-modal";
@@ -33,8 +33,10 @@ import { useRole } from "@/lib/hooks/useRole";
 // Types
 import type { BaseRecord } from "@/lib/types/dashboard";
 
-export default function Dashboard() {
+function DashboardContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const workspaceIdFromQuery = searchParams?.get("workspaceId");
   const { contextMenu, showContextMenu, hideContextMenu } = useContextMenu();
 
   // Custom hooks
@@ -110,15 +112,22 @@ export default function Dashboard() {
   const [isImportBaseModalOpen, setIsImportBaseModalOpen] = useState(false);
 
   // Initialize data on component mount
-  const initializeDashboard = useCallback(async () => {
+  const initializeDashboard = useCallback(async (preferredWorkspaceId?: string | null) => {
     // Ensure user is present before loading data
     if (!user) return;
     const defaultWorkspaceId = await loadWorkspaces();
-    if (defaultWorkspaceId) {
-      setSelectedWorkspaceId(defaultWorkspaceId);
+    const workspaceToSelect = preferredWorkspaceId ?? defaultWorkspaceId;
+
+    if (workspaceToSelect) {
+      setSelectedWorkspaceId(workspaceToSelect);
+    }
+
+    if (preferredWorkspaceId && workspaceToSelect) {
+      switchToWorkspaceView(workspaceToSelect);
+      await loadWorkspaceBases(workspaceToSelect);
     }
     await loadRecentBases();
-  }, [user, loadWorkspaces, loadRecentBases, setSelectedWorkspaceId]);
+  }, [user, loadWorkspaces, loadRecentBases, setSelectedWorkspaceId, switchToWorkspaceView, loadWorkspaceBases]);
 
   // Event handlers
   const handleBaseContextMenu = useCallback((e: React.MouseEvent, base: BaseRecord) => {
@@ -244,8 +253,8 @@ export default function Dashboard() {
 
   // Initialize dashboard on mount
   useEffect(() => {
-    initializeDashboard();
-  }, [initializeDashboard]);
+    initializeDashboard(workspaceIdFromQuery);
+  }, [initializeDashboard, workspaceIdFromQuery]);
 
   if (loading) {
     return (
@@ -427,5 +436,19 @@ export default function Dashboard() {
         </section>
       </div>
     </div>
+  );
+}
+
+export default function DashboardPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center min-h-screen bg-gray-50">
+          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+        </div>
+      }
+    >
+      <DashboardContent />
+    </Suspense>
   );
 }

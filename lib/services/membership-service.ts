@@ -35,34 +35,72 @@ export type Invite = {
 export class MembershipService {
   // Workspace membership
   static async listWorkspaceMembers(workspaceId: string): Promise<WorkspaceMember[]> {
-    const { data, error } = await supabase
-      .from('workspace_memberships')
-      .select('id, user_id, role, created_at')
-      .eq('workspace_id', workspaceId)
-      .order('created_at', { ascending: true });
-    if (error) throw error;
-    const memberships = (data ?? []).map((m: { id: string; user_id: string; role: string; created_at: string }) => ({
+    const [membershipResp, workspaceResp] = await Promise.all([
+      supabase
+        .from('workspace_memberships')
+        .select('id, user_id, role, created_at')
+        .eq('workspace_id', workspaceId)
+        .order('created_at', { ascending: true }),
+      supabase
+        .from('workspaces')
+        .select('owner, created_at')
+        .eq('id', workspaceId)
+        .single(),
+    ]);
+
+    if (membershipResp.error) throw membershipResp.error;
+
+    const memberships = (membershipResp.data ?? []).map((m: { id: string; user_id: string; role: string; created_at: string }) => ({
       membership_id: m.id,
       user_id: m.user_id,
       role: m.role,
       created_at: m.created_at,
     })) as WorkspaceMember[];
 
+    const ownerId = (workspaceResp.data as { owner?: string | null; created_at?: string })?.owner ?? null;
+    const ownerCreatedAt = (workspaceResp.data as { owner?: string | null; created_at?: string })?.created_at ?? new Date().toISOString();
+
+    let combinedMemberships = memberships;
+    if (ownerId) {
+      const ownerIndex = memberships.findIndex(m => m.user_id === ownerId);
+      if (ownerIndex >= 0) {
+        combinedMemberships = memberships.map((m, idx) => idx === ownerIndex ? { ...m, role: 'owner' } : m);
+      } else {
+        combinedMemberships = [
+          {
+            membership_id: `owner-${workspaceId}`,
+            user_id: ownerId,
+            role: 'owner',
+            created_at: ownerCreatedAt,
+          },
+          ...memberships,
+        ];
+      }
+    }
+
     // Fetch profile names in one batch for all user_ids
-    const userIds = Array.from(new Set(memberships.map(m => m.user_id)));
-    if (userIds.length === 0) return memberships;
+    const userIds = Array.from(new Set(combinedMemberships.map(m => m.user_id)));
+    if (userIds.length === 0) return combinedMemberships;
 
     const { data: profiles, error: pErr } = await supabase
       .from('profiles')
-      .select('id, full_name')
+      .select('id, full_name, email')
       .in('id', userIds);
     if (pErr) {
       // Non-fatal: return without names
       console.warn('Failed to load profile names for workspace members:', pErr);
-      return memberships;
+      return combinedMemberships;
     }
-    const idToName = new Map<string, string | null>((profiles ?? []).map((p: { id: string; full_name: string | null }) => [p.id, p.full_name ?? null]));
-    return memberships.map(m => ({ ...m, full_name: idToName.get(m.user_id) ?? null }));
+    const idToProfile = new Map<string, { full_name: string | null; email?: string | null }>(
+      (profiles ?? []).map((p: { id: string; full_name: string | null; email?: string | null }) => [
+        p.id,
+        { full_name: p.full_name ?? null, email: p.email ?? null },
+      ])
+    );
+    return combinedMemberships.map(m => {
+      const profile = idToProfile.get(m.user_id);
+      return { ...m, full_name: profile?.full_name ?? null, email: profile?.email ?? null };
+    });
   }
 
   static async addWorkspaceMember(workspaceId: string, userId: string, role: RoleType = 'member'): Promise<void> {
@@ -179,7 +217,11 @@ export class MembershipService {
     return (data ?? []) as Invite[];
   }
 
-  static async acceptInvite(token: string, currentUserId: string, currentUserEmail?: string | null): Promise<{ redirectPath: string }> {
+  static async acceptInvite(
+    token: string,
+    currentUserId: string,
+    currentUserEmail?: string | null
+  ): Promise<{ redirectPath: string; workspaceId?: string | null; baseId?: string | null }> {
     // Read the invite by token
     const { data: invite, error: fetchError } = await supabase
       .from('invites')
@@ -195,10 +237,28 @@ export class MembershipService {
     }
 
     // Ensure a profile row exists so FK constraints on memberships do not fail
-    const { error: profileErr } = await supabase
+    const upsertProfile = async (payload: Record<string, unknown>) => supabase
       .from('profiles')
-      .upsert({ id: currentUserId, full_name: currentUserEmail ?? null });
-    if (profileErr) throw profileErr;
+      .upsert(payload);
+
+    const { error: profileErr } = await upsertProfile({
+      id: currentUserId,
+      full_name: currentUserEmail ?? null,
+      email: currentUserEmail ?? null,
+    });
+
+    if (profileErr) {
+      // Fallback for environments where profiles.email does not exist
+      if ((profileErr as { code?: string })?.code === '42703') {
+        const { error: fallbackErr } = await upsertProfile({
+          id: currentUserId,
+          full_name: currentUserEmail ?? null,
+        });
+        if (fallbackErr) throw fallbackErr;
+      } else {
+        throw profileErr;
+      }
+    }
     try {
       await supabase
         .from('notification_preferences')
@@ -240,6 +300,21 @@ export class MembershipService {
       throw new Error('Invite scope is invalid');
     }
 
+    // Resolve workspace to land on after acceptance
+    let workspaceId: string | null = invite.workspace_id ?? null;
+    if (!workspaceId && invite.base_id) {
+      const { data: baseRow, error: baseErr } = await supabase
+        .from('bases')
+        .select('workspace_id')
+        .eq('id', invite.base_id)
+        .single();
+      if (baseErr) throw baseErr;
+      workspaceId = baseRow?.workspace_id ?? null;
+      if (!workspaceId) {
+        throw new Error('Workspace not found for invited base');
+      }
+    }
+
     // Mark invite as accepted
     const { error: updateError } = await supabase
       .from('invites')
@@ -247,13 +322,11 @@ export class MembershipService {
       .eq('id', invite.id);
     if (updateError) throw updateError;
 
-    const redirectPath = invite.workspace_id
-      ? `/workspaces/${invite.workspace_id}`
-      : invite.base_id
-        ? `/bases/${invite.base_id}`
-        : '/dashboard';
+    const redirectPath = workspaceId
+      ? `/dashboard?workspaceId=${workspaceId}`
+      : '/dashboard';
 
-    return { redirectPath };
+    return { redirectPath, workspaceId, baseId: invite.base_id ?? null };
   }
 
   static async revokeInvite(inviteId: string): Promise<void> {

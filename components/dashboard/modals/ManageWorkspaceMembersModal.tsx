@@ -3,7 +3,6 @@ import { X } from "lucide-react";
 import { MembershipService, type RoleType } from "@/lib/services/membership-service";
 import { useTimezone } from "@/lib/hooks/useTimezone";
 import { formatInTimezone } from "@/lib/utils/date-helpers";
-import { supabase } from "@/lib/supabaseClient";
 
 interface ManageWorkspaceMembersModalProps {
   isOpen: boolean;
@@ -15,6 +14,7 @@ type WorkspaceMemberRow = {
   membership_id: string;
   user_id: string;
   full_name?: string | null;
+  email?: string | null;
   role: RoleType;
   created_at: string;
 };
@@ -34,9 +34,12 @@ export const ManageWorkspaceMembersModal = ({ isOpen, onClose, workspaceId }: Ma
     if (!workspaceId) return;
     setLoading(true);
     setError(null);
+    setOwnerId(null);
     try {
       const data = await MembershipService.listWorkspaceMembers(workspaceId);
       setMembers(data as WorkspaceMemberRow[]);
+      const owner = (data as WorkspaceMemberRow[]).find(m => m.role === 'owner');
+      setOwnerId(owner?.user_id ?? null);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to load members");
     } finally {
@@ -50,25 +53,11 @@ export const ManageWorkspaceMembersModal = ({ isOpen, onClose, workspaceId }: Ma
     }
   }, [isOpen, loadMembers]);
 
-  // Load workspace owner id
-  useEffect(() => {
-    const run = async () => {
-      if (!isOpen || !workspaceId) return;
-      const { data, error } = await supabase
-        .from('workspaces')
-        .select('owner')
-        .eq('id', workspaceId)
-        .single();
-      if (!error && data) setOwnerId((data as { owner?: string | null })?.owner ?? null);
-    };
-    void run();
-  }, [isOpen, workspaceId]);
-
   const handleRoleChange = async (membershipId: string, role: RoleType) => {
     setError(null);
     try {
       const member = members.find(m => m.membership_id === membershipId);
-      if (member && ownerId && member.user_id === ownerId) {
+      if (member && (member.role === 'owner' || (ownerId && member.user_id === ownerId))) {
         setError("Owner role cannot be changed.");
         return;
       }
@@ -83,7 +72,7 @@ export const ManageWorkspaceMembersModal = ({ isOpen, onClose, workspaceId }: Ma
     setError(null);
     try {
       const member = members.find(m => m.membership_id === membershipId);
-      if (member && ownerId && member.user_id === ownerId) {
+      if (member && (member.role === 'owner' || (ownerId && member.user_id === ownerId))) {
         setError("Owner cannot be removed from their workspace.");
         return;
       }
@@ -147,11 +136,12 @@ export const ManageWorkspaceMembersModal = ({ isOpen, onClose, workspaceId }: Ma
                   <div className="p-4 text-sm text-gray-500">No members yet</div>
                 ) : (
                   members.map((m) => {
-                    const isOwner = ownerId && m.user_id === ownerId;
+                    const isOwner = m.role === 'owner' || (ownerId && m.user_id === ownerId);
+                    const displayName = m.full_name || m.email || 'Unknown user';
                     return (
                     <div key={m.membership_id} className="grid grid-cols-4 items-center px-4 py-2 text-sm">
                       <div className="truncate" title={m.user_id}>
-                        <span>{m.full_name || 'Unknown user'}</span>
+                        <span>{displayName}</span>
                         <span className="ml-2 text-xs text-gray-400 hidden sm:inline">({m.user_id})</span>
                       </div>
                       <div>
