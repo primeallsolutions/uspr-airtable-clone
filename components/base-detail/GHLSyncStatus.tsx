@@ -32,7 +32,7 @@ export const GHLSyncStatus = ({ baseId, onOpenSettings, GHLCheckStatus, setGHLCh
     } finally {
       setLoading(false);
     }
-  }, [baseId]);
+  }, [baseId, setGHLCheckStatus]);
 
   useEffect(() => {
     if (GHLCheckStatus) loadIntegration();

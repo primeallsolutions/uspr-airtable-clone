@@ -11,7 +11,7 @@ interface WorkspaceActivityModalProps {
 }
 
 function formatAction(log: AuditLogRow): string {
-  const actor = log.actor?.full_name || "Someone";
+  const actor = log.actor?.full_name || log.actor?.email || "Someone";
   const entity = log.entity_type;
   const action = log.action;
   if (entity === 'base' && action === 'create') return `${actor} created a new base`;

@@ -856,6 +856,7 @@ export class BaseDetailService {
       .single();
 
     if (fetchError) throw fetchError;
+    const previousValue = record.values?.[fieldId];
 
     // Get table info to check if it's masterlist and get base_id
     const { data: table, error: tableError } = await supabase
@@ -877,13 +878,15 @@ export class BaseDetailService {
 
     // Field name (used for propagation)
     let masterFieldName: string | null = null;
+    let masterFieldType: string | null = null;
     if (baseId) {
       const { data: fieldMeta } = await supabase
         .from("fields")
-        .select("name")
+        .select("name, type")
         .eq("id", fieldId)
         .maybeSingle();
       masterFieldName = fieldMeta?.name || null;
+      masterFieldType = fieldMeta?.type || null;
     }
 
     // Update the specific field value
@@ -902,7 +905,7 @@ export class BaseDetailService {
         ? updatedValues._source_record_id
         : sourceMasterRecordId;
 
-    console.log(`📝 UPDATED VALUES:`, updatedValues);
+    console.log(`[cell] updated values:`, updatedValues);
 
     // Save back to database
     const { error: updateError } = await supabase
@@ -912,7 +915,30 @@ export class BaseDetailService {
 
     if (updateError) throw updateError;
 
-    console.log(`✅ CELL SAVED: Cell update successful`);
+    console.log(`[cell] update saved successfully`);
+
+    // Record audit trail for the change
+    try {
+      const { data: userResp } = await supabase.auth.getUser();
+      const actorId = userResp.user?.id ?? null;
+      await supabase.from('audit_logs').insert({
+        actor_id: actorId,
+        action: 'update',
+        entity_type: 'record',
+        entity_id: recordId,
+        scope_type: 'base',
+        scope_id: baseId,
+        metadata: {
+          field_id: fieldId,
+          field_name: masterFieldName,
+          field_type: masterFieldType,
+          previous_value: previousValue ?? null,
+          new_value: value ?? null,
+        },
+      });
+    } catch (logError) {
+      console.warn('Failed to write audit log for cell update', logError);
+    }
 
     let masterlistTableId: string | null = null;
     let mergedMasterlistValues: Record<string, unknown> | null = null;

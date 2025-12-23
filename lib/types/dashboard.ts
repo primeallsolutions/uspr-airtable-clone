@@ -17,6 +17,8 @@ export type WorkspaceRecord = {
   id: string;
   name: string;
   created_at?: string;
+  accessRole?: 'owner' | 'admin' | 'member';
+  isShared?: boolean;
 };
 
 export type ActiveView = 'home' | 'workspace' | 'starred' | 'shared' | 'account';
