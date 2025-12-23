@@ -90,11 +90,11 @@ export const Sidebar = ({
         </button>
         
         <button
-          /* TODO: Add onClick attribute when "Shared" page is created */
-          className={`flex w-full items-center gap-2 rounded-md px-2 py-2 ${
+          onClick={() => onViewChange('shared')}
+          className={`flex w-full items-center gap-2 rounded-md px-2 py-2 cursor-pointer ${
             activeView === 'shared'
               ? 'bg-blue-100 text-blue-700 font-medium'
-              : 'text-gray-400' // Currently disabled; enabled state: 'text-gray-900 hover:bg-gray-100'
+              : 'text-gray-900 hover:bg-gray-100'
           }`}
         >
           <Share2 size={18} />

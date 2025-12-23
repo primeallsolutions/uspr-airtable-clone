@@ -32,6 +32,7 @@ import { useRole } from "@/lib/hooks/useRole";
 
 // Types
 import type { BaseRecord } from "@/lib/types/dashboard";
+import { SharedView } from "@/components/dashboard/views/SharedView";
 
 function DashboardContent() {
   const router = useRouter();
@@ -45,9 +46,11 @@ function DashboardContent() {
     recentBases,
     workspaceBases,
     starredBases,
+    sharedBases,
     loadRecentBases,
     loadWorkspaceBases,
     loadStarredBases,
+    loadSharedBases,
     createBase,
     renameBase,
     updateBaseDetails,
@@ -92,6 +95,7 @@ function DashboardContent() {
     switchToWorkspaceView,
     switchToHomeView,
     switchToStarredView,
+    switchToSharedView,
     switchToAccountView,
     openCreateModal,
     closeCreateModal,
@@ -201,6 +205,11 @@ function DashboardContent() {
     loadStarredBases();
   }, [switchToStarredView, loadStarredBases]);
 
+  const handleSharedViewSelect = useCallback(() => {
+    switchToSharedView();
+    loadSharedBases();
+  }, [switchToSharedView, loadSharedBases]);
+
   // Handle duplicate base
   const handleDuplicateBase = useCallback(async (base: BaseRecord) => {
     const toastId = toast.loading(`Duplicating "${base.name}"...`, {
@@ -279,6 +288,7 @@ function DashboardContent() {
           onViewChange={(view) => {
             if (view === 'home') switchToHomeView();
             else if (view === 'starred') handleStarredViewSelect();
+            else if (view === 'shared') handleSharedViewSelect();
           }}
           onWorkspaceSelect={handleWorkspaceSelect}
           onWorkspacesToggle={() => setWorkspacesCollapsed(!workspacesCollapsed)}
@@ -335,6 +345,16 @@ function DashboardContent() {
             {activeView === 'starred' && (
               <StarredView
                 starredBases={starredBases}
+                collectionView={collectionView}
+                onCollectionViewChange={setCollectionView}
+                onBaseStarToggle={toggleStar}
+                onBaseContextMenu={handleBaseContextMenu}
+              />
+            )}
+            
+            {activeView === 'shared' && (
+              <SharedView
+                sharedBases={sharedBases}
                 collectionView={collectionView}
                 onCollectionViewChange={setCollectionView}
                 onBaseStarToggle={toggleStar}
