@@ -27,6 +27,7 @@ interface GridViewProps {
   colorFieldId?: string | null;
   colorAssignments?: Record<string, string>;
   showCreatedAt?: boolean;
+  scrollContainerRef?: React.Ref<HTMLDivElement>;
 }
 
 export const GridView = ({
@@ -49,7 +50,8 @@ export const GridView = ({
   groupFieldIds,
   colorFieldId,
   colorAssignments = {},
-  showCreatedAt = false
+  showCreatedAt = false,
+  scrollContainerRef
 }: GridViewProps) => {
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
   const initialOrderRef = useRef<string[] | null>(null);
@@ -329,7 +331,7 @@ export const GridView = ({
       )}
 
       {/* Single Scrollable Container for Table */}
-      <div className="flex-1 min-h-0 overflow-auto" style={{ scrollbarGutter: 'stable' }}>
+      <div ref={scrollContainerRef} className="flex-1 min-h-0 overflow-auto" style={{ scrollbarGutter: 'stable' }}>
         <div className="min-w-max">
           {/* Sticky Table Header */}
           <div className="sticky top-0 z-10 bg-gray-50">
