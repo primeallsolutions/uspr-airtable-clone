@@ -302,7 +302,7 @@ function DashboardContent() {
         />
 
         {/* Main Content */}
-        <section className="flex min-w-0 flex-1 flex-col">
+        <section className="flex min-w-0 flex-1 flex-col md:ml-64"> {/* offset left-margin by 64 to account for fixed sidebar */}
           {/* Top Bar */}
           <TopBar user={user} onSignOut={signOut} onOpenAccount={switchToAccountView} />
 

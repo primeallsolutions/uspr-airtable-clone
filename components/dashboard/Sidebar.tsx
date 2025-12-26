@@ -58,7 +58,7 @@ export const Sidebar = ({
   const dotColors = ["bg-blue-600", "bg-gray-400", "bg-purple-600", "bg-green-600", "bg-amber-500"];
 
   return (
-    <aside className="hidden w-64 flex-col border-r bg-white md:flex">
+    <aside className="hidden fixed top-0 left-0 w-64 h-screen flex-col border-r bg-white md:flex">
       <div className="flex items-center gap-2 px-4 py-4">
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-xs font-bold text-white">US</div>
         <div className="text-base font-semibold text-gray-900">Prime Database</div>
@@ -115,7 +115,7 @@ export const Sidebar = ({
       </div>
       
       {!workspacesCollapsed && (
-        <div className="space-y-1 px-2 py-2">
+        <div className="flex-1 min-h-0 overflow-y-auto space-y-1 px-2 py-2">
           {workspaceList.length === 0 ? (
             <div className="px-2 py-2 text-sm text-gray-500">No workspaces</div>
           ) : (
