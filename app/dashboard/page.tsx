@@ -332,7 +332,10 @@ function DashboardContent() {
                 selectedWorkspaceId={selectedWorkspaceId}
                 collectionView={collectionView}
                 sortOption={sortOption}
+                isSortOpen={isSortOpen}
                 onCollectionViewChange={setCollectionView}
+                onSortOptionChange={setSortOption}
+                onSortToggle={setIsSortOpen}
                 onCreateBase={openCreateModal}
                 onBaseStarToggle={toggleStar}
                 onBaseContextMenu={handleBaseContextMenu}
@@ -346,7 +349,11 @@ function DashboardContent() {
               <StarredView
                 starredBases={starredBases}
                 collectionView={collectionView}
+                sortOption={sortOption}
+                isSortOpen={isSortOpen}
                 onCollectionViewChange={setCollectionView}
+                onSortOptionChange={setSortOption}
+                onSortToggle={setIsSortOpen}
                 onBaseStarToggle={toggleStar}
                 onBaseContextMenu={handleBaseContextMenu}
               />
@@ -356,7 +363,11 @@ function DashboardContent() {
               <SharedView
                 sharedBases={sharedBases}
                 collectionView={collectionView}
+                sortOption={sortOption}
+                isSortOpen={isSortOpen}
                 onCollectionViewChange={setCollectionView}
+                onSortOptionChange={setSortOption}
+                onSortToggle={setIsSortOpen}
                 onBaseStarToggle={toggleStar}
                 onBaseContextMenu={handleBaseContextMenu}
               />

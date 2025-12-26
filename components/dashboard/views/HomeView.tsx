@@ -84,7 +84,7 @@ export const HomeView = ({
               {earlier.length === 0 ? (
                 <EmptyState type="earlier" />
               ) : (
-                earlier.map((base) => (
+                sortBases(earlier, sortOption).map((base) => (
                   <BaseTile 
                     key={base.id} 
                     base={base}

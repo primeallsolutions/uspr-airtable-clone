@@ -2,13 +2,19 @@ import { Star } from "lucide-react";
 import { BaseTile } from "../BaseTile";
 import { BaseRow } from "../BaseRow";
 import { EmptyState } from "../EmptyState";
+import { SortDropdown } from "../SortDropdown";
 import { ViewToggle } from "../ViewToggle";
-import type { BaseRecord, CollectionView } from "@/lib/types/dashboard";
+import { sortBases } from "@/lib/utils/sort-helpers";
+import type { BaseRecord, CollectionView, SortOption } from "@/lib/types/dashboard";
 
 interface SharedViewProps {
   sharedBases: BaseRecord[];
   collectionView: CollectionView;
+  sortOption: SortOption;
+  isSortOpen: boolean;
   onCollectionViewChange: (view: CollectionView) => void;
+  onSortOptionChange: (option: SortOption) => void;
+  onSortToggle: (open: boolean) => void;
   onBaseStarToggle?: (base: BaseRecord) => void;
   onBaseContextMenu: (e: React.MouseEvent, base: BaseRecord) => void;
 }
@@ -16,14 +22,24 @@ interface SharedViewProps {
 export const SharedView = ({
   sharedBases,
   collectionView,
+  sortOption,
+  isSortOpen,
   onCollectionViewChange,
+  onSortOptionChange,
+  onSortToggle,
   onBaseStarToggle,
   onBaseContextMenu
 }: SharedViewProps) => {
   return (
     <>
-      <div className="mb-4 flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Shared</h1>
+      <h1 className="mb-4 text-2xl font-bold text-gray-900">Shared</h1>
+      <div className="mb-6 flex items-center justify-between">
+        <SortDropdown
+          sortOption={sortOption}
+          setSortOption={onSortOptionChange}
+          isOpen={isSortOpen}
+          setIsOpen={onSortToggle}
+        />
         <ViewToggle
           collectionView={collectionView}
           setCollectionView={onCollectionViewChange}
@@ -35,7 +51,7 @@ export const SharedView = ({
           {sharedBases.length === 0 ? (
             <EmptyState type="shared" />
           ) : (
-            sharedBases.map((base) => (
+            sortBases(sharedBases, sortOption).map((base) => (
               <BaseTile 
                 key={base.id} 
                 base={base}
@@ -57,7 +73,7 @@ export const SharedView = ({
               No shared bases yet
             </div>
           ) : (
-            sharedBases.map((base) => (
+            sortBases(sharedBases, sortOption).map((base) => (
               <BaseRow
                 key={base.id}
                 base={base}
