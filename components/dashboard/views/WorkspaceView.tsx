@@ -2,6 +2,7 @@ import { Plus } from "lucide-react";
 import { BaseTile } from "../BaseTile";
 import { BaseRow } from "../BaseRow";
 import { EmptyState } from "../EmptyState";
+import { SortDropdown } from "../SortDropdown";
 import { ViewToggle } from "../ViewToggle";
 import { sortBases } from "@/lib/utils/sort-helpers";
 import type { BaseRecord, CollectionView, SortOption, WorkspaceRecord } from "@/lib/types/dashboard";
@@ -39,8 +40,11 @@ interface WorkspaceViewProps {
   selectedWorkspaceId: string | null;
   collectionView: CollectionView;
   sortOption: SortOption;
+  isSortOpen: boolean;
   loading?: boolean;
   onCollectionViewChange: (view: CollectionView) => void;
+  onSortOptionChange: (option: SortOption) => void;
+  onSortToggle: (open: boolean) => void;
   onCreateBase: () => void;
   onBaseStarToggle?: (base: BaseRecord) => void;
   onBaseContextMenu: (e: React.MouseEvent, base: BaseRecord) => void;
@@ -55,8 +59,11 @@ export const WorkspaceView = ({
   selectedWorkspaceId,
   collectionView,
   sortOption,
+  isSortOpen,
   loading = false,
   onCollectionViewChange,
+  onSortOptionChange,
+  onSortToggle,
   onCreateBase,
   onBaseStarToggle,
   onBaseContextMenu,
@@ -69,8 +76,14 @@ export const WorkspaceView = ({
 
   return (
     <>
-      <div className="mb-4 flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">{currentWorkspace?.name || 'Workspace'}</h1>
+      <h1 className="mb-4 text-2xl font-bold text-gray-900">{currentWorkspace?.name || 'Workspace'}</h1>
+      <div className="mb-6 flex items-center justify-between">
+        <SortDropdown
+          sortOption={sortOption}
+          setSortOption={onSortOptionChange}
+          isOpen={isSortOpen}
+          setIsOpen={onSortToggle}
+        />
         <div className="flex items-center gap-3">
           {canManageMembers && onManageMembers && (
             <button

@@ -38,6 +38,10 @@ export const useDashboardState = () => {
     setActiveView('starred');
   }, []);
 
+  const switchToSharedView = useCallback(() => {
+    setActiveView('shared');
+  }, []);
+
   const switchToAccountView = useCallback(() => {
     setActiveView('account');
   }, []);
@@ -137,6 +141,7 @@ export const useDashboardState = () => {
     switchToWorkspaceView,
     switchToHomeView,
     switchToStarredView,
+    switchToSharedView,
     switchToAccountView,
     openCreateModal,
     closeCreateModal,

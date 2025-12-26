@@ -4,8 +4,6 @@ export const getSortLabel = (option: SortOption): string => {
   switch (option) {
     case 'lastOpened':
       return 'Last opened';
-    case 'lastModified':
-      return 'Last modified by anyone';
     case 'alphabetical':
       return 'Alphabetical';
     case 'oldestToNewest':
@@ -26,7 +24,6 @@ export const sortBases = <T extends BaseRecord>(list: T[], sortOption: SortOptio
       return copy.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
     case 'newestToOldest':
       return copy.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-    case 'lastModified':
     case 'lastOpened':
     default:
       return copy.sort((a, b) => {

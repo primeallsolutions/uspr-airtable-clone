@@ -7,37 +7,11 @@ import { ViewToggle } from "../ViewToggle";
 import { sortBases } from "@/lib/utils/sort-helpers";
 import type { BaseRecord, CollectionView, SortOption } from "@/lib/types/dashboard";
 
-// Skeleton component for grid view tiles
-const SkeletonTile = () => (
-  <div className="animate-pulse rounded-lg border border-gray-200 bg-white p-4">
-    <div className="flex items-start justify-between">
-      <div className="h-10 w-10 rounded-lg bg-gray-200" />
-      <div className="h-5 w-5 rounded bg-gray-200" />
-    </div>
-    <div className="mt-3 h-5 w-3/4 rounded bg-gray-200" />
-    <div className="mt-2 h-4 w-1/2 rounded bg-gray-200" />
-  </div>
-);
-
-// Skeleton component for list view rows
-const SkeletonRow = () => (
-  <div className="animate-pulse grid grid-cols-2 gap-4 border-b border-gray-100 px-4 py-3">
-    <div className="flex items-center gap-3">
-      <div className="h-8 w-8 rounded bg-gray-200" />
-      <div className="h-4 w-32 rounded bg-gray-200" />
-    </div>
-    <div className="flex items-center justify-end">
-      <div className="h-4 w-24 rounded bg-gray-200" />
-    </div>
-  </div>
-);
-
-interface StarredViewProps {
-  starredBases: BaseRecord[];
+interface SharedViewProps {
+  sharedBases: BaseRecord[];
   collectionView: CollectionView;
   sortOption: SortOption;
   isSortOpen: boolean;
-  loading?: boolean;
   onCollectionViewChange: (view: CollectionView) => void;
   onSortOptionChange: (option: SortOption) => void;
   onSortToggle: (open: boolean) => void;
@@ -45,21 +19,20 @@ interface StarredViewProps {
   onBaseContextMenu: (e: React.MouseEvent, base: BaseRecord) => void;
 }
 
-export const StarredView = ({
-  starredBases,
+export const SharedView = ({
+  sharedBases,
   collectionView,
   sortOption,
   isSortOpen,
-  loading = false,
   onCollectionViewChange,
   onSortOptionChange,
   onSortToggle,
   onBaseStarToggle,
   onBaseContextMenu
-}: StarredViewProps) => {
+}: SharedViewProps) => {
   return (
     <>
-      <h1 className="mb-4 text-2xl font-bold text-gray-900">Starred</h1>
+      <h1 className="mb-4 text-2xl font-bold text-gray-900">Shared</h1>
       <div className="mb-6 flex items-center justify-between">
         <SortDropdown
           sortOption={sortOption}
@@ -75,17 +48,10 @@ export const StarredView = ({
       
       {collectionView === 'grid' ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {loading ? (
-            <>
-              <SkeletonTile />
-              <SkeletonTile />
-              <SkeletonTile />
-              <SkeletonTile />
-            </>
-          ) : starredBases.length === 0 ? (
-            <EmptyState type="starred" />
+          {sharedBases.length === 0 ? (
+            <EmptyState type="shared" />
           ) : (
-            sortBases(starredBases, sortOption).map((base) => (
+            sortBases(sharedBases, sortOption).map((base) => (
               <BaseTile 
                 key={base.id} 
                 base={base}
@@ -101,21 +67,13 @@ export const StarredView = ({
             <div>Name</div>
             <div className="text-right">Last opened</div>
           </div>
-          {loading ? (
-            <>
-              <SkeletonRow />
-              <SkeletonRow />
-              <SkeletonRow />
-              <SkeletonRow />
-              <SkeletonRow />
-            </>
-          ) : starredBases.length === 0 ? (
+          {sharedBases.length === 0 ? (
             <div className="px-4 py-8 text-center text-sm text-gray-500">
               <Star className="mx-auto mb-2 h-8 w-8 text-gray-400" />
-              No starred bases yet
+              No shared bases yet
             </div>
           ) : (
-            sortBases(starredBases, sortOption).map((base) => (
+            sortBases(sharedBases, sortOption).map((base) => (
               <BaseRow
                 key={base.id}
                 base={base}

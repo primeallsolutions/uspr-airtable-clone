@@ -98,6 +98,37 @@ export class BaseService {
     return (data ?? []) as BaseRecord[];
   }
 
+  static async getSharedBases(): Promise<BaseRecord[]> {
+    const { data: userResp, error: userError } = await supabase.auth.getUser();
+    if (userError || !userResp.user?.id) {
+      return [];
+    }
+    const uid = userResp.user.id;
+
+    // Collect workspace_ids from workspace_memberships
+    const { data: sharedWorkspaces, error: workspaceMembershipError } = await supabase
+      .from('workspace_memberships')
+      .select('workspace_id')
+      .eq('user_id', uid);
+
+    if (workspaceMembershipError) {
+      throw workspaceMembershipError;
+    }
+
+    const accessFilter = await this.getBaseAccessFilter();
+    if (!accessFilter) return [];
+
+    const { data, error } = await supabase
+      .from('bases')
+      .select('id, name, description, created_at, last_opened_at, is_starred')
+      .in('workspace_id', sharedWorkspaces.map(w => w.workspace_id))
+      .or(accessFilter)
+      .order('last_opened_at', { ascending: false, nullsFirst: false });
+
+    if (error) throw error;
+    return (data ?? []) as BaseRecord[];
+  }
+
   static async createBase(formData: CreateBaseFormData): Promise<string> {
     // Validate that we have a workspace ID
     if (!formData.workspaceId) {
