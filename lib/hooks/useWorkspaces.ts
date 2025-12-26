@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { WorkspaceService } from '../services/workspace-service';
 import type { WorkspaceRecord, CreateWorkspaceFormData } from '../types/dashboard';
 import { supabase } from '../supabaseClient';
@@ -71,7 +71,11 @@ export const useWorkspaces = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Request ID to prevent stale responses from updating state (race condition fix)
+  const loadWorkspacesRequestId = useRef(0);
+
   const loadWorkspaces = useCallback(async (): Promise<string | null> => {
+    const requestId = ++loadWorkspacesRequestId.current;
     try {
       setLoading(true);
       setError(null);
@@ -79,8 +83,10 @@ export const useWorkspaces = () => {
       const { data: userResp } = await supabase.auth.getUser();
       const uid = userResp.user?.id;
       if (!uid) {
-        setWorkspaces([]);
-        setSharedWorkspaces([]);
+        if (requestId === loadWorkspacesRequestId.current) {
+          setWorkspaces([]);
+          setSharedWorkspaces([]);
+        }
         return null;
       }
       
@@ -117,10 +123,11 @@ export const useWorkspaces = () => {
             accessRole: 'owner',
             isShared: false,
           };
-          setWorkspaces([decoratedDefault]);
-          
-          // Still try to get shared workspaces (will be empty here)
-          setSharedWorkspaces([]);
+          // Only update state if this is still the latest request
+          if (requestId === loadWorkspacesRequestId.current) {
+            setWorkspaces([decoratedDefault]);
+            setSharedWorkspaces([]);
+          }
           
           return decoratedDefault.id;
         } catch (createErr) {
@@ -129,18 +136,26 @@ export const useWorkspaces = () => {
         }
       }
       
-      // Set state with results
-      setWorkspaces(mergedWorkspaces);
-      setSharedWorkspaces(shared);
+      // Only update state if this is still the latest request
+      if (requestId === loadWorkspacesRequestId.current) {
+        setWorkspaces(mergedWorkspaces);
+        setSharedWorkspaces(shared);
+      }
       
       return mergedWorkspaces[0]?.id ?? null;
     } catch (err) {
-      const message = err instanceof Error && err.message ? err.message : 'Failed to load workspaces';
-      setError(message);
-      console.error('Error loading workspaces:', err);
+      // Only update error state if this is still the latest request
+      if (requestId === loadWorkspacesRequestId.current) {
+        const message = err instanceof Error && err.message ? err.message : 'Failed to load workspaces';
+        setError(message);
+        console.error('Error loading workspaces:', err);
+      }
       return null;
     } finally {
-      setLoading(false);
+      // Only update loading state if this is still the latest request
+      if (requestId === loadWorkspacesRequestId.current) {
+        setLoading(false);
+      }
     }
   }, []);
 

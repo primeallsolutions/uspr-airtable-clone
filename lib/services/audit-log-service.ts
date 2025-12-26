@@ -1,19 +1,53 @@
 import { supabase } from '../supabaseClient';
 
+export type AuditAction = 'create' | 'update' | 'delete' | 'duplicate' | 'import' | 'export';
+export type AuditEntityType = 'workspace' | 'base' | 'table' | 'field' | 'record' | 'automation' | 'member';
+export type AuditScopeType = 'workspace' | 'base';
+
 export type AuditLogRow = {
   id: string;
   actor_id: string | null;
-  action: 'create' | 'update' | 'delete' | string;
-  entity_type: 'workspace' | 'base' | 'table' | 'field' | 'record' | 'automation' | string;
+  action: AuditAction | string;
+  entity_type: AuditEntityType | string;
   entity_id: string;
-  scope_type: 'workspace' | 'base' | null;
+  scope_type: AuditScopeType | null;
   scope_id: string | null;
   metadata: Record<string, unknown>;
   created_at: string;
   actor?: { id: string; full_name: string | null; email?: string | null } | null;
 };
 
+export type AuditLogInput = {
+  action: AuditAction;
+  entity_type: AuditEntityType;
+  entity_id: string;
+  scope_type: AuditScopeType;
+  scope_id: string;
+  metadata?: Record<string, unknown>;
+};
+
 export class AuditLogService {
+  /**
+   * Write an audit log entry. Non-fatal: failures are logged to console but don't throw.
+   */
+  static async log(input: AuditLogInput): Promise<void> {
+    try {
+      const { data: userResp } = await supabase.auth.getUser();
+      const actorId = userResp.user?.id ?? null;
+
+      await supabase.from('audit_logs').insert({
+        actor_id: actorId,
+        action: input.action,
+        entity_type: input.entity_type,
+        entity_id: input.entity_id,
+        scope_type: input.scope_type,
+        scope_id: input.scope_id,
+        metadata: input.metadata ?? {},
+      });
+    } catch (error) {
+      console.warn('Failed to write audit log:', error, input);
+    }
+  }
   static async getWorkspaceLogs(workspaceId: string, limit = 50, before?: string): Promise<AuditLogRow[]> {
     let query = supabase
       .from('audit_logs')

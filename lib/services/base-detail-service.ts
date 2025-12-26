@@ -10,6 +10,7 @@ import type {
   CreateFieldData,
   FieldType
 } from '../types/base-detail';
+import { AuditLogService } from './audit-log-service';
 
 // Simple in-memory cache for automations per base to reduce repeated fetches on cell updates
 const automationCache = new Map<string, Automation[]>();
@@ -228,7 +229,28 @@ export class BaseDetailService {
       .single();
 
     if (error) throw error;
-    return data as TableRow;
+
+    const table = data as TableRow;
+
+    // Get workspace_id from base for audit log scope
+    const { data: baseData } = await supabase
+      .from("bases")
+      .select("workspace_id")
+      .eq("id", tableData.base_id)
+      .single();
+
+    if (baseData?.workspace_id) {
+      await AuditLogService.log({
+        action: 'create',
+        entity_type: 'table',
+        entity_id: table.id,
+        scope_type: 'workspace',
+        scope_id: baseData.workspace_id,
+        metadata: { name: tableData.name, base_id: tableData.base_id },
+      });
+    }
+
+    return table;
   }
 
   static async updateTable(tableId: string, updates: Partial<TableRow>): Promise<void> {
@@ -241,6 +263,24 @@ export class BaseDetailService {
   }
 
   static async deleteTable(tableId: string): Promise<void> {
+    // Get table info before deletion for audit log
+    const { data: tableData } = await supabase
+      .from("tables")
+      .select("name, base_id")
+      .eq("id", tableId)
+      .single();
+
+    // Get workspace_id from base for audit log scope
+    let workspaceId: string | null = null;
+    if (tableData?.base_id) {
+      const { data: baseData } = await supabase
+        .from("bases")
+        .select("workspace_id")
+        .eq("id", tableData.base_id)
+        .single();
+      workspaceId = baseData?.workspace_id ?? null;
+    }
+
     // First delete records and fields to avoid FK violations
     const { error: recordsError } = await supabase
       .from("records")
@@ -268,6 +308,18 @@ export class BaseDetailService {
     if (error) {
       console.error('Failed to delete table', tableId, error);
       throw error;
+    }
+
+    // Log table deletion
+    if (workspaceId) {
+      await AuditLogService.log({
+        action: 'delete',
+        entity_type: 'table',
+        entity_id: tableId,
+        scope_type: 'workspace',
+        scope_id: workspaceId,
+        metadata: { name: tableData?.name, base_id: tableData?.base_id },
+      });
     }
   }
 
@@ -511,7 +563,29 @@ export class BaseDetailService {
     }
     
     console.log('✅ Field created successfully in table:', tableData.name);
-    return data as FieldRow;
+
+    const field = data as FieldRow;
+
+    // Get workspace_id from table -> base for audit log scope
+    const { data: tableWithBase } = await supabase
+      .from("tables")
+      .select("base_id, bases(workspace_id)")
+      .eq("id", fieldData.table_id)
+      .single();
+
+    const workspaceId = (tableWithBase?.bases as { workspace_id?: string } | null)?.workspace_id;
+    if (workspaceId) {
+      await AuditLogService.log({
+        action: 'create',
+        entity_type: 'field',
+        entity_id: field.id,
+        scope_type: 'workspace',
+        scope_id: workspaceId,
+        metadata: { name: fieldData.name, type: sanitizedType, table_id: fieldData.table_id },
+      });
+    }
+
+    return field;
   }
 
   static async updateField(fieldId: string, updates: Partial<FieldRow>): Promise<void> {
@@ -608,12 +682,33 @@ export class BaseDetailService {
   }
 
   static async deleteField(fieldId: string): Promise<void> {
+    // Get field info before deletion for audit log
+    const { data: fieldData } = await supabase
+      .from("fields")
+      .select("name, table_id, tables(base_id, bases(workspace_id))")
+      .eq("id", fieldId)
+      .single();
+
     const { error } = await supabase
       .from("fields")
       .delete()
       .eq("id", fieldId);
 
     if (error) throw error;
+
+    // Log field deletion
+    const tableInfo = fieldData?.tables as { base_id?: string; bases?: { workspace_id?: string } } | null;
+    const workspaceId = tableInfo?.bases?.workspace_id;
+    if (workspaceId) {
+      await AuditLogService.log({
+        action: 'delete',
+        entity_type: 'field',
+        entity_id: fieldId,
+        scope_type: 'workspace',
+        scope_id: workspaceId,
+        metadata: { name: fieldData?.name, table_id: fieldData?.table_id },
+      });
+    }
   }
 
   static async deleteAllFields(tableId: string): Promise<void> {
@@ -807,6 +902,24 @@ export class BaseDetailService {
       // Don't throw here as the record creation was successful
     }
 
+    // Log record creation
+    const { data: baseData } = await supabase
+      .from("bases")
+      .select("workspace_id")
+      .eq("id", table.base_id)
+      .single();
+
+    if (baseData?.workspace_id) {
+      await AuditLogService.log({
+        action: 'create',
+        entity_type: 'record',
+        entity_id: masterRecordId,
+        scope_type: 'workspace',
+        scope_id: baseData.workspace_id,
+        metadata: { table_id: tableId },
+      });
+    }
+
     return data as RecordRow;
   }
 
@@ -837,12 +950,33 @@ export class BaseDetailService {
   }
 
   static async deleteRecord(recordId: string): Promise<void> {
+    // Get record info before deletion for audit log
+    const { data: recordData } = await supabase
+      .from("records")
+      .select("table_id, tables(base_id, bases(workspace_id))")
+      .eq("id", recordId)
+      .single();
+
     const { error } = await supabase
       .from("records")
       .delete()
       .eq("id", recordId);
 
     if (error) throw error;
+
+    // Log record deletion
+    const tableInfo = recordData?.tables as { base_id?: string; bases?: { workspace_id?: string } } | null;
+    const workspaceId = tableInfo?.bases?.workspace_id;
+    if (workspaceId) {
+      await AuditLogService.log({
+        action: 'delete',
+        entity_type: 'record',
+        entity_id: recordId,
+        scope_type: 'workspace',
+        scope_id: workspaceId,
+        metadata: { table_id: recordData?.table_id },
+      });
+    }
   }
 
   static async updateCell(recordId: string, fieldId: string, value: unknown): Promise<void> {

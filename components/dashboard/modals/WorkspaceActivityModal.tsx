@@ -14,9 +14,106 @@ function formatAction(log: AuditLogRow): string {
   const actor = log.actor?.full_name || log.actor?.email || "Someone";
   const entity = log.entity_type;
   const action = log.action;
-  if (entity === 'base' && action === 'create') return `${actor} created a new base`;
-  if (entity === 'workspace' && action === 'update') return `${actor} updated workspace`;
-  return `${actor} ${action} ${entity}`;
+  const meta = log.metadata as { name?: string; old_name?: string; new_name?: string; original_name?: string } | undefined;
+
+  // Workspace actions
+  if (entity === 'workspace') {
+    if (action === 'create') return `${actor} created this workspace`;
+    if (action === 'update') {
+      if (meta?.old_name && meta?.new_name) {
+        return `${actor} renamed workspace from "${meta.old_name}" to "${meta.new_name}"`;
+      }
+      return `${actor} updated workspace settings`;
+    }
+    if (action === 'delete') return `${actor} deleted workspace "${meta?.name || 'unknown'}"`;
+  }
+
+  // Base actions
+  if (entity === 'base') {
+    const baseMeta = meta as { 
+      name?: string; 
+      base_name?: string;
+      old_name?: string; 
+      new_name?: string; 
+      original_name?: string;
+      source?: string;
+      contacts_synced?: number;
+      contacts_created?: number;
+      contacts_updated?: number;
+    } | undefined;
+    
+    if (action === 'create') return `${actor} created base "${baseMeta?.name || 'unknown'}"`;
+    if (action === 'update') {
+      if (baseMeta?.old_name && baseMeta?.new_name) {
+        return `${actor} renamed base from "${baseMeta.old_name}" to "${baseMeta.new_name}"`;
+      }
+      return `${actor} updated base "${baseMeta?.name || 'unknown'}"`;
+    }
+    if (action === 'delete') return `${actor} deleted base "${baseMeta?.name || 'unknown'}"`;
+    if (action === 'duplicate') return `${actor} duplicated base "${baseMeta?.original_name || 'unknown'}"`;
+    if (action === 'import') {
+      if (baseMeta?.source === 'ghl') {
+        const synced = baseMeta.contacts_synced ?? 0;
+        const created = baseMeta.contacts_created ?? 0;
+        const updated = baseMeta.contacts_updated ?? 0;
+        return `${actor} synced ${synced} contacts from GoHighLevel (${created} new, ${updated} updated)`;
+      }
+      return `${actor} imported data to base "${baseMeta?.base_name || baseMeta?.name || 'unknown'}"`;
+    }
+  }
+
+  // Table actions
+  if (entity === 'table') {
+    if (action === 'create') return `${actor} created table "${meta?.name || 'unknown'}"`;
+    if (action === 'delete') return `${actor} deleted table "${meta?.name || 'unknown'}"`;
+  }
+
+  // Field actions
+  if (entity === 'field') {
+    if (action === 'create') return `${actor} added field "${meta?.name || 'unknown'}"`;
+    if (action === 'update') return `${actor} updated field "${meta?.name || 'unknown'}"`;
+    if (action === 'delete') return `${actor} removed field "${meta?.name || 'unknown'}"`;
+  }
+
+  // Record actions
+  if (entity === 'record') {
+    if (action === 'create') return `${actor} created a record`;
+    if (action === 'update') return `${actor} updated a record`;
+    if (action === 'delete') return `${actor} deleted a record`;
+  }
+
+  // Automation actions (including GHL integrations)
+  if (entity === 'automation') {
+    const autoMeta = meta as { type?: string; base_name?: string; name?: string } | undefined;
+    if (autoMeta?.type === 'ghl_integration') {
+      if (action === 'create') return `${actor} connected GoHighLevel to base "${autoMeta.base_name || 'unknown'}"`;
+      if (action === 'delete') return `${actor} disconnected GoHighLevel from base "${autoMeta.base_name || 'unknown'}"`;
+    }
+    if (action === 'create') return `${actor} created automation "${meta?.name || 'unknown'}"`;
+    if (action === 'update') return `${actor} updated automation "${meta?.name || 'unknown'}"`;
+    if (action === 'delete') return `${actor} deleted automation "${meta?.name || 'unknown'}"`;
+  }
+
+  // Member actions
+  if (entity === 'member') {
+    const memberMeta = meta as { email?: string; type?: string; old_role?: string; new_role?: string } | undefined;
+    if (action === 'create') {
+      if (memberMeta?.type === 'invite') {
+        return `${actor} invited ${memberMeta.email || 'someone'} to the workspace`;
+      }
+      return `${actor} added a member`;
+    }
+    if (action === 'update') {
+      if (memberMeta?.old_role && memberMeta?.new_role) {
+        return `${actor} changed a member's role from ${memberMeta.old_role} to ${memberMeta.new_role}`;
+      }
+      return `${actor} updated member role`;
+    }
+    if (action === 'delete') return `${actor} removed a member`;
+  }
+
+  // Fallback
+  return `${actor} ${action}d ${entity}`;
 }
 
 export const WorkspaceActivityModal = ({ isOpen, onClose, workspaceId }: WorkspaceActivityModalProps) => {

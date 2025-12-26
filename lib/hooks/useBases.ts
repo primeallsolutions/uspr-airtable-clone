@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { BaseService } from '../services/base-service';
 import type { BaseRecord, CreateBaseFormData } from '../types/dashboard';
 
@@ -6,49 +6,100 @@ export const useBases = () => {
   const [recentBases, setRecentBases] = useState<BaseRecord[]>([]);
   const [workspaceBases, setWorkspaceBases] = useState<BaseRecord[]>([]);
   const [starredBases, setStarredBases] = useState<BaseRecord[]>([]);
+  const [sharedBases, setSharedBases] = useState<BaseRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Request IDs to prevent stale responses from updating state (race condition fix)
+  const recentBasesRequestId = useRef(0);
+  const workspaceBasesRequestId = useRef(0);
+  const starredBasesRequestId = useRef(0);
+
   const loadRecentBases = useCallback(async (): Promise<void> => {
+    const requestId = ++recentBasesRequestId.current;
     try {
       setLoading(true);
       setError(null);
       const bases = await BaseService.getRecentBases();
-      setRecentBases(bases);
+      // Only update state if this is still the latest request
+      if (requestId === recentBasesRequestId.current) {
+        setRecentBases(bases);
+      }
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to load recent bases';
-      setError(message);
-      console.error('Error loading recent bases:', err);
+      // Only update error state if this is still the latest request
+      if (requestId === recentBasesRequestId.current) {
+        const message = err instanceof Error ? err.message : 'Failed to load recent bases';
+        setError(message);
+        console.error('Error loading recent bases:', err);
+      }
     } finally {
-      setLoading(false);
+      // Only update loading state if this is still the latest request
+      if (requestId === recentBasesRequestId.current) {
+        setLoading(false);
+      }
     }
   }, []);
 
   const loadWorkspaceBases = useCallback(async (workspaceId: string): Promise<void> => {
+    const requestId = ++workspaceBasesRequestId.current;
     try {
       setLoading(true);
       setError(null);
       const bases = await BaseService.getWorkspaceBases(workspaceId);
-      setWorkspaceBases(bases);
+      // Only update state if this is still the latest request
+      if (requestId === workspaceBasesRequestId.current) {
+        setWorkspaceBases(bases);
+      }
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to load workspace bases';
-      setError(message);
-      console.error('Error loading workspace bases:', err);
+      // Only update error state if this is still the latest request
+      if (requestId === workspaceBasesRequestId.current) {
+        const message = err instanceof Error ? err.message : 'Failed to load workspace bases';
+        setError(message);
+        console.error('Error loading workspace bases:', err);
+      }
     } finally {
-      setLoading(false);
+      // Only update loading state if this is still the latest request
+      if (requestId === workspaceBasesRequestId.current) {
+        setLoading(false);
+      }
     }
   }, []);
 
   const loadStarredBases = useCallback(async (): Promise<void> => {
+    const requestId = ++starredBasesRequestId.current;
     try {
       setLoading(true);
       setError(null);
       const bases = await BaseService.getStarredBases();
-      setStarredBases(bases);
+      // Only update state if this is still the latest request
+      if (requestId === starredBasesRequestId.current) {
+        setStarredBases(bases);
+      }
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to load starred bases';
+      // Only update error state if this is still the latest request
+      if (requestId === starredBasesRequestId.current) {
+        const message = err instanceof Error ? err.message : 'Failed to load starred bases';
+        setError(message);
+        console.error('Error loading starred bases:', err);
+      }
+    } finally {
+      // Only update loading state if this is still the latest request
+      if (requestId === starredBasesRequestId.current) {
+        setLoading(false);
+      }
+    }
+  }, []);
+
+  const loadSharedBases = useCallback(async (): Promise<void> => {
+    try {
+      setLoading(true);
+      setError(null);
+      const bases = await BaseService.getSharedBases();
+      setSharedBases(bases);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to load shared bases';
       setError(message);
-      console.error('Error loading starred bases:', err);
+      console.error('Error loading shared bases:', err);
     } finally {
       setLoading(false);
     }
@@ -163,11 +214,13 @@ export const useBases = () => {
     recentBases,
     workspaceBases,
     starredBases,
+    sharedBases,
     loading,
     error,
     loadRecentBases,
     loadWorkspaceBases,
     loadStarredBases,
+    loadSharedBases,
     createBase,
     renameBase,
     updateBaseDetails,

@@ -53,7 +53,6 @@ export const BaseTile = ({ base, onStarToggle, onContextMenu, onDeleteClick }: B
           <Rocket size={18} />
         </div>
         <div className="flex items-center gap-2">
-          {base.is_starred && <Star className="w-5 h-5 text-yellow-500 hover:text-yellow-400 fill-current" onClick={handleToggleStarClick} />}
           {onContextMenu && (
             <button 
               className="text-gray-400 hover:text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
@@ -74,7 +73,18 @@ export const BaseTile = ({ base, onStarToggle, onContextMenu, onDeleteClick }: B
           )}
         </div>
       </div>
-      <div className="mb-1 line-clamp-1 font-medium text-gray-900">{base.name}</div>
+      <div className="mb-1 flex items-center gap-2">
+        <div className="line-clamp-1 font-medium text-gray-900">{base.name}</div>
+        {base.is_starred && (
+          <button
+            onClick={handleToggleStarClick}
+            className="shrink-0 text-yellow-500 hover:text-yellow-400 cursor-pointer"
+            title="Remove star"
+          >
+            <Star className="h-5 w-5 fill-current" />
+          </button>
+        )}
+      </div>
       {base.description ? (
         <div className="line-clamp-2 text-sm text-gray-600">{base.description}</div>
       ) : (

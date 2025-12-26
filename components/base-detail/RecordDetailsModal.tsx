@@ -250,6 +250,33 @@ export const RecordDetailsModal = ({
 
   const renderAuditSummary = (log: AuditLogRow): string => {
     const meta = (log.metadata || {}) as Record<string, unknown>;
+    
+    // Handle GHL sync entries
+    if (meta["source"] === "ghl") {
+      const contactName = meta["contact_name"] as string;
+      if (log.action === "create") {
+        return contactName 
+          ? `Record created from GoHighLevel sync (${contactName})`
+          : "Record created from GoHighLevel sync";
+      }
+      if (log.action === "update") {
+        return contactName
+          ? `Record updated from GoHighLevel sync (${contactName})`
+          : "Record updated from GoHighLevel sync";
+      }
+    }
+
+    // Handle record creation
+    if (log.action === "create") {
+      return "Record created";
+    }
+
+    // Handle record deletion
+    if (log.action === "delete") {
+      return "Record deleted";
+    }
+
+    // Handle field changes (update action)
     const fieldLabel = (meta["field_name"] as string) || (meta["field_id"] as string) || "field";
     const prevVal = meta["previous_value"];
     const newVal = meta["new_value"];
@@ -257,6 +284,14 @@ export const RecordDetailsModal = ({
   };
 
   const renderActor = (log: AuditLogRow): string => {
+    // GHL sync is system-initiated (no actor)
+    if (!log.actor_id) {
+      const meta = (log.metadata || {}) as Record<string, unknown>;
+      if (meta["source"] === "ghl") {
+        return "GoHighLevel Sync";
+      }
+      return "System";
+    }
     return log.actor?.full_name || log.actor?.email || "Someone";
   };
 

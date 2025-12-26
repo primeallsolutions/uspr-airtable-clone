@@ -17,6 +17,31 @@ const supabaseAdmin = createClient(
   }
 );
 
+// Helper to log audit events from API routes
+async function logAuditEvent(params: {
+  actorId: string | null;
+  action: string;
+  entityType: string;
+  entityId: string;
+  scopeType: 'workspace' | 'base';
+  scopeId: string;
+  metadata?: Record<string, unknown>;
+}) {
+  try {
+    await supabaseAdmin.from('audit_logs').insert({
+      actor_id: params.actorId,
+      action: params.action,
+      entity_type: params.entityType,
+      entity_id: params.entityId,
+      scope_type: params.scopeType,
+      scope_id: params.scopeId,
+      metadata: params.metadata ?? {},
+    });
+  } catch (error) {
+    console.warn('Failed to write audit log:', error);
+  }
+}
+
 /**
  * POST /api/ghl/sync
  * Manually sync contacts from Go High Level
@@ -187,6 +212,13 @@ export async function POST(request: NextRequest) {
 
     const masterTable = tables[0];
 
+    // Get workspace_id for audit logging
+    const { data: baseData } = await supabaseAdmin
+      .from('bases')
+      .select('workspace_id, name')
+      .eq('id', baseId)
+      .single();
+
     // Get fields for field mapping
     const { data: fields } = await supabaseAdmin
       .from('fields')
@@ -226,6 +258,37 @@ export async function POST(request: NextRequest) {
 
     for (let i = 0; i < contacts.length; i++) {
       const contact = contacts[i];
+      
+      // Check for cancellation every 10 contacts
+      if (i % 10 === 0) {
+        try {
+          const progressResponse = await fetch(`${request.nextUrl.origin}/api/ghl/sync-progress?base_id=${baseId}`);
+          const progressData = await progressResponse.json();
+          if (progressData.progress?.cancelled) {
+            console.log(`Sync cancelled at contact ${i + 1}/${contacts.length}`);
+            // Clear progress
+            await fetch(`${request.nextUrl.origin}/api/ghl/sync-progress`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ baseId, current: null, total: null }),
+            }).catch(() => {});
+            
+            return NextResponse.json({
+              success: false,
+              cancelled: true,
+              message: `Sync cancelled after processing ${created + updated} contacts (${created} created, ${updated} updated)`,
+              synced: created + updated,
+              created,
+              updated,
+              errors,
+              total: i,
+              syncType,
+            });
+          }
+        } catch (checkError) {
+          // Ignore cancellation check errors - continue syncing
+        }
+      }
       
       // Update progress every 10 contacts
       if (i % 10 === 0 || i === contacts.length - 1) {
@@ -280,31 +343,66 @@ export async function POST(request: NextRequest) {
 
         if (existingRecords && existingRecords.length > 0) {
           // Update existing record
+          const recordId = existingRecords[0].id;
           const { error: updateError } = await supabaseAdmin
             .from('records')
             .update({ values: recordValues })
-            .eq('id', existingRecords[0].id);
+            .eq('id', recordId);
 
           if (updateError) {
             console.error('Update error:', updateError);
             errors++;
           } else {
             updated++;
+            // Log record update at record level for audit trail
+            if (baseData?.workspace_id) {
+              await logAuditEvent({
+                actorId: null, // GHL sync is system-initiated
+                action: 'update',
+                entityType: 'record',
+                entityId: recordId,
+                scopeType: 'workspace',
+                scopeId: baseData.workspace_id,
+                metadata: {
+                  source: 'ghl',
+                  ghl_contact_id: contact.id,
+                  contact_name: fullContact.name || fullContact.contactName || `${fullContact.firstName || ''} ${fullContact.lastName || ''}`.trim(),
+                },
+              });
+            }
           }
         } else {
           // Create new record
-          const { error: createError } = await supabaseAdmin
+          const { data: newRecord, error: createError } = await supabaseAdmin
             .from('records')
             .insert({
               table_id: masterTable.id,
               values: recordValues,
-            });
+            })
+            .select('id')
+            .single();
 
           if (createError) {
             console.error('Create error:', createError);
             errors++;
           } else {
             created++;
+            // Log record creation at record level for audit trail
+            if (baseData?.workspace_id && newRecord) {
+              await logAuditEvent({
+                actorId: null, // GHL sync is system-initiated
+                action: 'create',
+                entityType: 'record',
+                entityId: newRecord.id,
+                scopeType: 'workspace',
+                scopeId: baseData.workspace_id,
+                metadata: {
+                  source: 'ghl',
+                  ghl_contact_id: contact.id,
+                  contact_name: fullContact.name || fullContact.contactName || `${fullContact.firstName || ''} ${fullContact.lastName || ''}`.trim(),
+                },
+              });
+            }
           }
         }
       } catch (contactError) {
@@ -334,6 +432,36 @@ export async function POST(request: NextRequest) {
       }).catch(() => {});
     } catch (error) {
       // Ignore clear errors
+    }
+
+    // Try to get current user from auth header
+    let actorId: string | null = null;
+    const authHeader = request.headers.get('authorization');
+    if (authHeader?.startsWith('Bearer ')) {
+      const token = authHeader.substring(7);
+      const { data: userData } = await supabaseAdmin.auth.getUser(token);
+      actorId = userData.user?.id ?? null;
+    }
+
+    // Log GHL import to audit log
+    if (baseData?.workspace_id) {
+      await logAuditEvent({
+        actorId,
+        action: 'import',
+        entityType: 'base',
+        entityId: baseId,
+        scopeType: 'workspace',
+        scopeId: baseData.workspace_id,
+        metadata: {
+          source: 'ghl',
+          base_name: baseData.name,
+          contacts_synced: created + updated,
+          contacts_created: created,
+          contacts_updated: updated,
+          errors,
+          sync_type: syncType,
+        },
+      });
     }
 
     return NextResponse.json({

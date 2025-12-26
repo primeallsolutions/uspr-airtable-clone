@@ -23,7 +23,7 @@ export type WorkspaceRecord = {
 
 export type ActiveView = 'home' | 'workspace' | 'starred' | 'shared' | 'account';
 export type CollectionView = 'grid' | 'list';
-export type SortOption = 'lastOpened' | 'lastModified' | 'alphabetical' | 'oldestToNewest' | 'newestToOldest';
+export type SortOption = 'lastOpened' | 'alphabetical' | 'oldestToNewest' | 'newestToOldest';
 
 export type CreateBaseFormData = {
   name: string;

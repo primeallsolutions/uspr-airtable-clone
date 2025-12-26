@@ -2,11 +2,37 @@ import { Plus } from "lucide-react";
 import { BaseTile } from "../BaseTile";
 import { BaseRow } from "../BaseRow";
 import { EmptyState } from "../EmptyState";
+import { SortDropdown } from "../SortDropdown";
 import { ViewToggle } from "../ViewToggle";
 import { sortBases } from "@/lib/utils/sort-helpers";
 import type { BaseRecord, CollectionView, SortOption, WorkspaceRecord } from "@/lib/types/dashboard";
 import { useState } from "react";
 import { WorkspaceActivityModal } from "../modals/WorkspaceActivityModal";
+
+// Skeleton component for grid view tiles
+const SkeletonTile = () => (
+  <div className="animate-pulse rounded-lg border border-gray-200 bg-white p-4">
+    <div className="flex items-start justify-between">
+      <div className="h-10 w-10 rounded-lg bg-gray-200" />
+      <div className="h-5 w-5 rounded bg-gray-200" />
+    </div>
+    <div className="mt-3 h-5 w-3/4 rounded bg-gray-200" />
+    <div className="mt-2 h-4 w-1/2 rounded bg-gray-200" />
+  </div>
+);
+
+// Skeleton component for list view rows
+const SkeletonRow = () => (
+  <div className="animate-pulse grid grid-cols-2 gap-4 border-b border-gray-100 px-4 py-3">
+    <div className="flex items-center gap-3">
+      <div className="h-8 w-8 rounded bg-gray-200" />
+      <div className="h-4 w-32 rounded bg-gray-200" />
+    </div>
+    <div className="flex items-center justify-end">
+      <div className="h-4 w-24 rounded bg-gray-200" />
+    </div>
+  </div>
+);
 
 interface WorkspaceViewProps {
   workspaceBases: BaseRecord[];
@@ -14,7 +40,11 @@ interface WorkspaceViewProps {
   selectedWorkspaceId: string | null;
   collectionView: CollectionView;
   sortOption: SortOption;
+  isSortOpen: boolean;
+  loading?: boolean;
   onCollectionViewChange: (view: CollectionView) => void;
+  onSortOptionChange: (option: SortOption) => void;
+  onSortToggle: (open: boolean) => void;
   onCreateBase: () => void;
   onBaseStarToggle?: (base: BaseRecord) => void;
   onBaseContextMenu: (e: React.MouseEvent, base: BaseRecord) => void;
@@ -29,7 +59,11 @@ export const WorkspaceView = ({
   selectedWorkspaceId,
   collectionView,
   sortOption,
+  isSortOpen,
+  loading = false,
   onCollectionViewChange,
+  onSortOptionChange,
+  onSortToggle,
   onCreateBase,
   onBaseStarToggle,
   onBaseContextMenu,
@@ -42,8 +76,14 @@ export const WorkspaceView = ({
 
   return (
     <>
-      <div className="mb-4 flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">{currentWorkspace?.name || 'Workspace'}</h1>
+      <h1 className="mb-4 text-2xl font-bold text-gray-900">{currentWorkspace?.name || 'Workspace'}</h1>
+      <div className="mb-6 flex items-center justify-between">
+        <SortDropdown
+          sortOption={sortOption}
+          setSortOption={onSortOptionChange}
+          isOpen={isSortOpen}
+          setIsOpen={onSortToggle}
+        />
         <div className="flex items-center gap-3">
           {canManageMembers && onManageMembers && (
             <button
@@ -85,7 +125,14 @@ export const WorkspaceView = ({
         <>
           <div className="mb-2 text-sm text-gray-600">Last opened</div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {workspaceBases.length === 0 ? (
+            {loading ? (
+              <>
+                <SkeletonTile />
+                <SkeletonTile />
+                <SkeletonTile />
+                <SkeletonTile />
+              </>
+            ) : workspaceBases.length === 0 ? (
               <EmptyState type="workspace" onCreateBase={onCreateBase} />
             ) : (
               sortBases(workspaceBases, sortOption).map(base => (
@@ -108,7 +155,15 @@ export const WorkspaceView = ({
               <div>Name</div>
               <div className="text-right">Last opened</div>
             </div>
-            {workspaceBases.length === 0 ? (
+            {loading ? (
+              <>
+                <SkeletonRow />
+                <SkeletonRow />
+                <SkeletonRow />
+                <SkeletonRow />
+                <SkeletonRow />
+              </>
+            ) : workspaceBases.length === 0 ? (
               <div className="px-4 py-8 text-center">
                 <EmptyState type="workspace" onCreateBase={onCreateBase} />
               </div>

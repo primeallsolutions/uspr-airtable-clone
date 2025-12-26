@@ -32,6 +32,7 @@ import { useRole } from "@/lib/hooks/useRole";
 
 // Types
 import type { BaseRecord } from "@/lib/types/dashboard";
+import { SharedView } from "@/components/dashboard/views/SharedView";
 
 function DashboardContent() {
   const router = useRouter();
@@ -40,14 +41,17 @@ function DashboardContent() {
   const { contextMenu, showContextMenu, hideContextMenu } = useContextMenu();
 
   // Custom hooks
-  const { user, loading, signOut } = useAuth();
+  const { user, loading: authLoading, signOut } = useAuth();
   const {
     recentBases,
     workspaceBases,
     starredBases,
+    sharedBases,
+    loading: basesLoading,
     loadRecentBases,
     loadWorkspaceBases,
     loadStarredBases,
+    loadSharedBases,
     createBase,
     renameBase,
     updateBaseDetails,
@@ -92,6 +96,7 @@ function DashboardContent() {
     switchToWorkspaceView,
     switchToHomeView,
     switchToStarredView,
+    switchToSharedView,
     switchToAccountView,
     openCreateModal,
     closeCreateModal,
@@ -107,7 +112,10 @@ function DashboardContent() {
   } = useDashboardState();
 
   // Resolve delete permission for selected workspace/base context
-  const { role, can } = useRole({ workspaceId: selectedWorkspaceId ?? undefined });
+  const { role, can, loading: roleLoading } = useRole({ workspaceId: selectedWorkspaceId ?? undefined });
+  
+  // Only show manage members button if role is definitively owner/admin (not while loading)
+  const canManageMembers = !roleLoading && (role === 'owner' || role === 'admin');
   const [isManageWorkspaceMembersOpen, setIsManageWorkspaceMembersOpen] = useState(false);
   const [isImportBaseModalOpen, setIsImportBaseModalOpen] = useState(false);
 
@@ -201,6 +209,11 @@ function DashboardContent() {
     loadStarredBases();
   }, [switchToStarredView, loadStarredBases]);
 
+  const handleSharedViewSelect = useCallback(() => {
+    switchToSharedView();
+    loadSharedBases();
+  }, [switchToSharedView, loadSharedBases]);
+
   // Handle duplicate base
   const handleDuplicateBase = useCallback(async (base: BaseRecord) => {
     const toastId = toast.loading(`Duplicating "${base.name}"...`, {
@@ -256,7 +269,7 @@ function DashboardContent() {
     initializeDashboard(workspaceIdFromQuery);
   }, [initializeDashboard, workspaceIdFromQuery]);
 
-  if (loading) {
+  if (authLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
@@ -279,6 +292,7 @@ function DashboardContent() {
           onViewChange={(view) => {
             if (view === 'home') switchToHomeView();
             else if (view === 'starred') handleStarredViewSelect();
+            else if (view === 'shared') handleSharedViewSelect();
           }}
           onWorkspaceSelect={handleWorkspaceSelect}
           onWorkspacesToggle={() => setWorkspacesCollapsed(!workspacesCollapsed)}
@@ -292,7 +306,7 @@ function DashboardContent() {
         />
 
         {/* Main Content */}
-        <section className="flex min-w-0 flex-1 flex-col">
+        <section className="flex min-w-0 flex-1 flex-col md:ml-64"> {/* offset left-margin by 64 to account for fixed sidebar */}
           {/* Top Bar */}
           <TopBar user={user} onSignOut={signOut} onOpenAccount={switchToAccountView} />
 
@@ -307,6 +321,7 @@ function DashboardContent() {
                 collectionView={collectionView}
                 sortOption={sortOption}
                 isSortOpen={isSortOpen}
+                loading={basesLoading}
                 onCollectionViewChange={setCollectionView}
                 onSortOptionChange={setSortOption}
                 onSortToggle={setIsSortOpen}
@@ -322,12 +337,16 @@ function DashboardContent() {
                 selectedWorkspaceId={selectedWorkspaceId}
                 collectionView={collectionView}
                 sortOption={sortOption}
+                isSortOpen={isSortOpen}
+                loading={basesLoading}
                 onCollectionViewChange={setCollectionView}
+                onSortOptionChange={setSortOption}
+                onSortToggle={setIsSortOpen}
                 onCreateBase={openCreateModal}
                 onBaseStarToggle={toggleStar}
                 onBaseContextMenu={handleBaseContextMenu}
                 onManageMembers={() => setIsManageWorkspaceMembersOpen(true)}
-                canManageMembers={role === 'owner' || role === 'admin'}
+                canManageMembers={canManageMembers}
                 onDeleteBaseClick={handleDeleteBaseShortcut}
               />
             )}
@@ -336,7 +355,26 @@ function DashboardContent() {
               <StarredView
                 starredBases={starredBases}
                 collectionView={collectionView}
+                sortOption={sortOption}
+                isSortOpen={isSortOpen}
+                loading={basesLoading}
                 onCollectionViewChange={setCollectionView}
+                onSortOptionChange={setSortOption}
+                onSortToggle={setIsSortOpen}
+                onBaseStarToggle={toggleStar}
+                onBaseContextMenu={handleBaseContextMenu}
+              />
+            )}
+            
+            {activeView === 'shared' && (
+              <SharedView
+                sharedBases={sharedBases}
+                collectionView={collectionView}
+                sortOption={sortOption}
+                isSortOpen={isSortOpen}
+                onCollectionViewChange={setCollectionView}
+                onSortOptionChange={setSortOption}
+                onSortToggle={setIsSortOpen}
                 onBaseStarToggle={toggleStar}
                 onBaseContextMenu={handleBaseContextMenu}
               />
