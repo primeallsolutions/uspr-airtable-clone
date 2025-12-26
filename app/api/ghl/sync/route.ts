@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { transformGHLContactToRecord } from '@/lib/utils/ghl-transform';
 import type { FieldType } from '@/lib/types/base-detail';
+import { string } from 'zod';
 
 const GHL_API_BASE_URL = 'https://services.leadconnectorhq.com';
 
@@ -222,7 +223,7 @@ export async function POST(request: NextRequest) {
     // Get fields for field mapping
     const { data: fields } = await supabaseAdmin
       .from('fields')
-      .select('id, name, type')
+      .select('id, name, type, options')
       .eq('table_id', masterTable.id);
 
     // Build field mapping with actual field IDs
@@ -327,6 +328,40 @@ export async function POST(request: NextRequest) {
         await new Promise(resolve => setTimeout(resolve, 50));
 
         const recordValues = transformGHLContactToRecord(fullContact, fieldMapping, fieldTypesMap);
+        // Collect unique values for single_select and multi_select fields
+        for (const [fieldKey, fieldId] of Object.entries(fieldMapping)) {
+          const newValues = new Set<string>();
+          if (!fieldId || typeof fieldId !== 'string') continue;
+          const field = fields?.find(f => f.id === fieldId && (f.type === 'single_select' || f.type === 'multi_select'));
+          if (!field) continue;
+          let selectedValues = recordValues[fieldId];
+          if (typeof selectedValues === 'string') {
+            selectedValues = selectedValues.split(',').map((val: string) => val.trim());
+          }
+          if (Array.isArray(selectedValues)) { // if it was a string before, now it's an array
+            (selectedValues as string[]).forEach((val: string) => {
+              if (!(Object.values(field.options) as { name: string }[]).find(option => option.name === val)) {
+                newValues.add(val);
+              }
+            });
+          }
+          if (newValues.size > 0) {
+            const newOptions = { ...field.options };
+            newValues.forEach((val: string) => {
+              newOptions[`option_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`] = { name: val }; // Unique option ID
+            });
+            const { error: optUpdateError } = await supabaseAdmin
+              .from('fields')
+              .update({ options: newOptions })
+              .eq('id', field.id);
+            if (optUpdateError) {
+              console.warn(`Failed to add missing option to field ${field.name} (${field.id})`, optUpdateError);
+            } else {
+              // Update local cache so subsequent records benefit
+              field.options = newOptions;
+            }
+          }
+        }
         
         // Log first contact's transformed values for debugging
         if (i === 0) {
