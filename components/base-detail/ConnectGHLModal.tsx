@@ -129,8 +129,68 @@ export const ConnectGHLModal = ({
         setProgressPollInterval(null);
       }
       setSyncProgress(null);
+      // Don't reset syncing state - keep it for when modal reopens
     }
   }, [isOpen, progressPollInterval]);
+
+  // Check for active sync when modal opens (in case it was closed during sync)
+  useEffect(() => {
+    if (isOpen && baseId) {
+      const checkActiveSyncProgress = async () => {
+        try {
+          const progressResponse = await fetch(`/api/ghl/sync-progress?base_id=${baseId}`);
+          const progressData = await progressResponse.json();
+          
+          if (progressData.success && progressData.progress) {
+            // There's an active sync in progress - resume tracking
+            setSyncProgress(progressData.progress);
+            setSyncing(true);
+            setCancelling(progressData.progress.cancelled || false);
+            
+            // Determine sync type from progress (default to full if unknown)
+            if (!syncType) {
+              setSyncType('full');
+            }
+            
+            // Start polling for progress updates
+            if (!progressPollInterval) {
+              const pollInterval = setInterval(async () => {
+                try {
+                  const response = await fetch(`/api/ghl/sync-progress?base_id=${baseId}`);
+                  const data = await response.json();
+                  
+                  if (data.success && data.progress) {
+                    setSyncProgress(data.progress);
+                    if (data.progress.cancelled && !cancelling) {
+                      setCancelling(true);
+                    }
+                  } else if (data.success && !data.progress) {
+                    // Sync completed - clear everything
+                    clearInterval(pollInterval);
+                    setProgressPollInterval(null);
+                    setSyncProgress(null);
+                    setSyncing(false);
+                    setCancelling(false);
+                    setSyncType(null);
+                    // Reload integration to get updated last_sync_at
+                    loadIntegration();
+                  }
+                } catch (error) {
+                  console.error('Failed to fetch progress:', error);
+                }
+              }, 2000);
+              
+              setProgressPollInterval(pollInterval);
+            }
+          }
+        } catch (error) {
+          console.error('Failed to check active sync:', error);
+        }
+      };
+      
+      checkActiveSyncProgress();
+    }
+  }, [isOpen, baseId]); // Only run when modal opens
 
   // Convert flat fieldMapping to array format when integration loads
   useEffect(() => {
