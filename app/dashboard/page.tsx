@@ -40,11 +40,12 @@ function DashboardContent() {
   const { contextMenu, showContextMenu, hideContextMenu } = useContextMenu();
 
   // Custom hooks
-  const { user, loading, signOut } = useAuth();
+  const { user, loading: authLoading, signOut } = useAuth();
   const {
     recentBases,
     workspaceBases,
     starredBases,
+    loading: basesLoading,
     loadRecentBases,
     loadWorkspaceBases,
     loadStarredBases,
@@ -107,7 +108,10 @@ function DashboardContent() {
   } = useDashboardState();
 
   // Resolve delete permission for selected workspace/base context
-  const { role, can } = useRole({ workspaceId: selectedWorkspaceId ?? undefined });
+  const { role, can, loading: roleLoading } = useRole({ workspaceId: selectedWorkspaceId ?? undefined });
+  
+  // Only show manage members button if role is definitively owner/admin (not while loading)
+  const canManageMembers = !roleLoading && (role === 'owner' || role === 'admin');
   const [isManageWorkspaceMembersOpen, setIsManageWorkspaceMembersOpen] = useState(false);
   const [isImportBaseModalOpen, setIsImportBaseModalOpen] = useState(false);
 
@@ -256,7 +260,7 @@ function DashboardContent() {
     initializeDashboard(workspaceIdFromQuery);
   }, [initializeDashboard, workspaceIdFromQuery]);
 
-  if (loading) {
+  if (authLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
@@ -307,6 +311,7 @@ function DashboardContent() {
                 collectionView={collectionView}
                 sortOption={sortOption}
                 isSortOpen={isSortOpen}
+                loading={basesLoading}
                 onCollectionViewChange={setCollectionView}
                 onSortOptionChange={setSortOption}
                 onSortToggle={setIsSortOpen}
@@ -322,12 +327,13 @@ function DashboardContent() {
                 selectedWorkspaceId={selectedWorkspaceId}
                 collectionView={collectionView}
                 sortOption={sortOption}
+                loading={basesLoading}
                 onCollectionViewChange={setCollectionView}
                 onCreateBase={openCreateModal}
                 onBaseStarToggle={toggleStar}
                 onBaseContextMenu={handleBaseContextMenu}
                 onManageMembers={() => setIsManageWorkspaceMembersOpen(true)}
-                canManageMembers={role === 'owner' || role === 'admin'}
+                canManageMembers={canManageMembers}
                 onDeleteBaseClick={handleDeleteBaseShortcut}
               />
             )}
@@ -336,6 +342,7 @@ function DashboardContent() {
               <StarredView
                 starredBases={starredBases}
                 collectionView={collectionView}
+                loading={basesLoading}
                 onCollectionViewChange={setCollectionView}
                 onBaseStarToggle={toggleStar}
                 onBaseContextMenu={handleBaseContextMenu}

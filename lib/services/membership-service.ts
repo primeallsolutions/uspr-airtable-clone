@@ -1,4 +1,5 @@
 import { supabase } from '../supabaseClient';
+import { AuditLogService } from './audit-log-service';
 
 export type RoleType = 'member' | 'admin' | 'owner';
 
@@ -31,6 +32,78 @@ export type Invite = {
   expires_at: string;
   created_at: string;
 };
+
+// Helper to check if current user has admin/owner access to a workspace
+async function checkWorkspaceAdminAccess(workspaceId: string): Promise<{ hasAccess: boolean; userId: string | null; userRole: RoleType | null }> {
+  const { data: userData } = await supabase.auth.getUser();
+  const userId = userData.user?.id;
+  if (!userId) {
+    return { hasAccess: false, userId: null, userRole: null };
+  }
+
+  // Check if user is workspace owner
+  const { data: workspace } = await supabase
+    .from('workspaces')
+    .select('owner')
+    .eq('id', workspaceId)
+    .single();
+
+  if (workspace?.owner === userId) {
+    return { hasAccess: true, userId, userRole: 'owner' };
+  }
+
+  // Check workspace membership
+  const { data: membership } = await supabase
+    .from('workspace_memberships')
+    .select('role')
+    .eq('workspace_id', workspaceId)
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  const role = membership?.role as RoleType | null;
+  const hasAccess = role === 'owner' || role === 'admin';
+  return { hasAccess, userId, userRole: role };
+}
+
+// Helper to check if current user has admin/owner access to a base
+async function checkBaseAdminAccess(baseId: string): Promise<{ hasAccess: boolean; userId: string | null; userRole: RoleType | null }> {
+  const { data: userData } = await supabase.auth.getUser();
+  const userId = userData.user?.id;
+  if (!userId) {
+    return { hasAccess: false, userId: null, userRole: null };
+  }
+
+  // Check if user is base owner
+  const { data: base } = await supabase
+    .from('bases')
+    .select('owner, workspace_id')
+    .eq('id', baseId)
+    .single();
+
+  if (base?.owner === userId) {
+    return { hasAccess: true, userId, userRole: 'owner' };
+  }
+
+  // Check base membership
+  const { data: baseMembership } = await supabase
+    .from('base_memberships')
+    .select('role')
+    .eq('base_id', baseId)
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (baseMembership?.role === 'owner' || baseMembership?.role === 'admin') {
+    return { hasAccess: true, userId, userRole: baseMembership.role as RoleType };
+  }
+
+  // Inherit from workspace if base belongs to a workspace
+  if (base?.workspace_id) {
+    const wsAccess = await checkWorkspaceAdminAccess(base.workspace_id);
+    return wsAccess;
+  }
+
+  return { hasAccess: false, userId, userRole: baseMembership?.role as RoleType | null };
+}
 
 export class MembershipService {
   // Workspace membership
@@ -104,26 +177,109 @@ export class MembershipService {
   }
 
   static async addWorkspaceMember(workspaceId: string, userId: string, role: RoleType = 'member'): Promise<void> {
-    const { error } = await supabase
+    // Verify caller has admin/owner access
+    const { hasAccess } = await checkWorkspaceAdminAccess(workspaceId);
+    if (!hasAccess) {
+      throw new Error('You do not have permission to add members to this workspace. Only owners and admins can manage members.');
+    }
+
+    const { data, error } = await supabase
       .from('workspace_memberships')
-      .insert({ workspace_id: workspaceId, user_id: userId, role });
+      .insert({ workspace_id: workspaceId, user_id: userId, role })
+      .select('id')
+      .single();
     if (error) throw error;
+
+    // Log member addition
+    await AuditLogService.log({
+      action: 'create',
+      entity_type: 'member',
+      entity_id: data.id,
+      scope_type: 'workspace',
+      scope_id: workspaceId,
+      metadata: { user_id: userId, role },
+    });
   }
 
   static async updateWorkspaceMemberRole(membershipId: string, role: RoleType): Promise<void> {
+    // Get the membership to find the workspace
+    const { data: membership, error: fetchError } = await supabase
+      .from('workspace_memberships')
+      .select('workspace_id, user_id, role')
+      .eq('id', membershipId)
+      .single();
+    if (fetchError) throw fetchError;
+    if (!membership) throw new Error('Membership not found');
+
+    const oldRole = membership.role;
+
+    // Verify caller has admin/owner access
+    const { hasAccess, userId: currentUserId } = await checkWorkspaceAdminAccess(membership.workspace_id);
+    if (!hasAccess) {
+      throw new Error('You do not have permission to change member roles. Only owners and admins can manage members.');
+    }
+
+    // Prevent users from modifying their own role (to prevent privilege escalation)
+    if (membership.user_id === currentUserId) {
+      throw new Error('You cannot change your own role.');
+    }
+
     const { error } = await supabase
       .from('workspace_memberships')
       .update({ role })
       .eq('id', membershipId);
     if (error) throw error;
+
+    // Log role change
+    await AuditLogService.log({
+      action: 'update',
+      entity_type: 'member',
+      entity_id: membershipId,
+      scope_type: 'workspace',
+      scope_id: membership.workspace_id,
+      metadata: { user_id: membership.user_id, old_role: oldRole, new_role: role },
+    });
   }
 
   static async removeWorkspaceMember(membershipId: string): Promise<void> {
+    // Get the membership to find the workspace
+    const { data: membership, error: fetchError } = await supabase
+      .from('workspace_memberships')
+      .select('workspace_id, user_id')
+      .eq('id', membershipId)
+      .single();
+    if (fetchError) throw fetchError;
+    if (!membership) throw new Error('Membership not found');
+
+    // Verify caller has admin/owner access
+    const { hasAccess, userId: currentUserId } = await checkWorkspaceAdminAccess(membership.workspace_id);
+    if (!hasAccess) {
+      throw new Error('You do not have permission to remove members. Only owners and admins can manage members.');
+    }
+
+    // Prevent users from removing themselves (they should use "Leave workspace" instead)
+    if (membership.user_id === currentUserId) {
+      throw new Error('You cannot remove yourself from the workspace.');
+    }
+
+    const workspaceId = membership.workspace_id;
+    const userId = membership.user_id;
+
     const { error } = await supabase
       .from('workspace_memberships')
       .delete()
       .eq('id', membershipId);
     if (error) throw error;
+
+    // Log member removal
+    await AuditLogService.log({
+      action: 'delete',
+      entity_type: 'member',
+      entity_id: membershipId,
+      scope_type: 'workspace',
+      scope_id: workspaceId,
+      metadata: { user_id: userId },
+    });
   }
 
   // Base membership
@@ -143,6 +299,12 @@ export class MembershipService {
   }
 
   static async addBaseMember(baseId: string, userId: string, role: RoleType = 'member'): Promise<void> {
+    // Verify caller has admin/owner access
+    const { hasAccess } = await checkBaseAdminAccess(baseId);
+    if (!hasAccess) {
+      throw new Error('You do not have permission to add members to this base. Only owners and admins can manage members.');
+    }
+
     const { error } = await supabase
       .from('base_memberships')
       .insert({ base_id: baseId, user_id: userId, role });
@@ -150,6 +312,26 @@ export class MembershipService {
   }
 
   static async updateBaseMemberRole(membershipId: string, role: RoleType): Promise<void> {
+    // Get the membership to find the base
+    const { data: membership, error: fetchError } = await supabase
+      .from('base_memberships')
+      .select('base_id, user_id')
+      .eq('id', membershipId)
+      .single();
+    if (fetchError) throw fetchError;
+    if (!membership) throw new Error('Membership not found');
+
+    // Verify caller has admin/owner access
+    const { hasAccess, userId: currentUserId } = await checkBaseAdminAccess(membership.base_id);
+    if (!hasAccess) {
+      throw new Error('You do not have permission to change member roles. Only owners and admins can manage members.');
+    }
+
+    // Prevent users from modifying their own role (to prevent privilege escalation)
+    if (membership.user_id === currentUserId) {
+      throw new Error('You cannot change your own role.');
+    }
+
     const { error } = await supabase
       .from('base_memberships')
       .update({ role })
@@ -158,6 +340,26 @@ export class MembershipService {
   }
 
   static async removeBaseMember(membershipId: string): Promise<void> {
+    // Get the membership to find the base
+    const { data: membership, error: fetchError } = await supabase
+      .from('base_memberships')
+      .select('base_id, user_id')
+      .eq('id', membershipId)
+      .single();
+    if (fetchError) throw fetchError;
+    if (!membership) throw new Error('Membership not found');
+
+    // Verify caller has admin/owner access
+    const { hasAccess, userId: currentUserId } = await checkBaseAdminAccess(membership.base_id);
+    if (!hasAccess) {
+      throw new Error('You do not have permission to remove members. Only owners and admins can manage members.');
+    }
+
+    // Prevent users from removing themselves (they should use "Leave base" instead)
+    if (membership.user_id === currentUserId) {
+      throw new Error('You cannot remove yourself from the base.');
+    }
+
     const { error } = await supabase
       .from('base_memberships')
       .delete()
@@ -167,6 +369,21 @@ export class MembershipService {
 
   // Invites
   static async createInvite(params: { email: string; role: RoleType; workspaceId?: string; baseId?: string; token: string; redirectTo?: string; }): Promise<Invite> {
+    // Verify caller has admin/owner access to the workspace or base
+    if (params.workspaceId) {
+      const { hasAccess } = await checkWorkspaceAdminAccess(params.workspaceId);
+      if (!hasAccess) {
+        throw new Error('You do not have permission to invite members to this workspace. Only owners and admins can send invites.');
+      }
+    } else if (params.baseId) {
+      const { hasAccess } = await checkBaseAdminAccess(params.baseId);
+      if (!hasAccess) {
+        throw new Error('You do not have permission to invite members to this base. Only owners and admins can send invites.');
+      }
+    } else {
+      throw new Error('Invite must specify either a workspace or base.');
+    }
+
     const payload: {
       email: string;
       role: RoleType;
@@ -204,6 +421,19 @@ export class MembershipService {
       // Non-fatal: invite row exists; caller can still copy the link manually
       console.warn('Failed to trigger invite email via Resend:', e);
     }
+
+    // Log invite creation
+    const scopeType = params.workspaceId ? 'workspace' : 'base';
+    const scopeId = params.workspaceId ?? params.baseId!;
+    await AuditLogService.log({
+      action: 'create',
+      entity_type: 'member',
+      entity_id: data.id,
+      scope_type: scopeType,
+      scope_id: scopeId,
+      metadata: { email: params.email, role: params.role, type: 'invite' },
+    });
+
     return data as Invite;
   }
 

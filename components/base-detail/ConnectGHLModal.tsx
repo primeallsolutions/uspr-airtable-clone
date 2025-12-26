@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { X, CheckCircle, AlertCircle, Loader2, Link as LinkIcon, Key, MapPin, RefreshCw, Plus, Trash2, Wand2 } from "lucide-react";
+import { X, CheckCircle, AlertCircle, Loader2, Link as LinkIcon, Key, MapPin, RefreshCw, Plus, Trash2, Wand2, StopCircle } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { GHLService } from "@/lib/services/ghl-service";
 import type { GHLIntegration, GHLFieldMapping } from "@/lib/types/ghl-integration";
@@ -51,9 +51,10 @@ export const ConnectGHLModal = ({
   const [locationId, setLocationId] = useState("");
   
   // Sync progress state
-  const [syncProgress, setSyncProgress] = useState<{ current: number; total: number; phase: 'fetching' | 'syncing' } | null>(null);
+  const [syncProgress, setSyncProgress] = useState<{ current: number; total: number; phase: 'fetching' | 'syncing'; cancelled?: boolean } | null>(null);
   const [progressPollInterval, setProgressPollInterval] = useState<NodeJS.Timeout | null>(null);
   const [syncType, setSyncType] = useState<'incremental' | 'full' | null>(null); // Track current sync type
+  const [cancelling, setCancelling] = useState(false);
 
   // Field mapping state - shows paired GHL field + App field
   const [fieldMappings, setFieldMappings] = useState<FieldMappingItem[]>([]);
@@ -290,6 +291,10 @@ export const ConnectGHLModal = ({
           
           if (progressData.success && progressData.progress) {
             setSyncProgress(progressData.progress);
+            // Update cancelling state based on server response
+            if (progressData.progress.cancelled && !cancelling) {
+              setCancelling(true);
+            }
           } else if (progressData.success && !progressData.progress) {
             // Progress cleared - sync likely completed
             clearInterval(pollInterval);
@@ -310,7 +315,7 @@ export const ConnectGHLModal = ({
       clearInterval(pollInterval);
       setProgressPollInterval(null);
 
-      if (!response.ok) {
+      if (!response.ok && !data.cancelled) {
         throw new Error(data.error || 'Failed to sync');
       }
 
@@ -318,10 +323,15 @@ export const ConnectGHLModal = ({
       setSyncProgress(null);
       setSyncType(null);
       
-      const syncTypeMessage = data.syncType === 'incremental' 
-        ? ' (new/modified only)' 
-        : ' (full sync)';
-      toast.success(data.message || `Successfully synced ${data.total || 0} contacts!${syncTypeMessage}`);
+      // Handle cancelled sync
+      if (data.cancelled) {
+        toast.warning(data.message || `Sync cancelled. ${data.created || 0} created, ${data.updated || 0} updated.`);
+      } else {
+        const syncTypeMessage = data.syncType === 'incremental' 
+          ? ' (new/modified only)' 
+          : ' (full sync)';
+        toast.success(data.message || `Successfully synced ${data.total || 0} contacts!${syncTypeMessage}`);
+      }
       await loadIntegration(); // Refresh to get updated last_sync_at
     } catch (error) {
       console.error('Failed to sync:', error);
@@ -336,6 +346,28 @@ export const ConnectGHLModal = ({
       }
     } finally {
       setSyncing(false);
+      setCancelling(false);
+    }
+  };
+
+  const handleCancelSync = async () => {
+    if (!syncing || cancelling) return;
+    
+    setCancelling(true);
+    try {
+      const response = await fetch(`/api/ghl/sync-progress?base_id=${baseId}`, {
+        method: 'DELETE',
+      });
+      
+      if (response.ok) {
+        toast.info('Cancellation requested. The sync will stop after the current batch.');
+      } else {
+        throw new Error('Failed to cancel sync');
+      }
+    } catch (error) {
+      console.error('Failed to cancel sync:', error);
+      toast.error('Failed to cancel sync');
+      setCancelling(false);
     }
   };
 
@@ -640,36 +672,54 @@ export const ConnectGHLModal = ({
                 
                 {/* Sync Progress Display */}
                 {syncProgress && (
-                  <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-md">
+                  <div className={`mt-4 p-4 rounded-md ${cancelling ? 'bg-amber-50 border border-amber-200' : 'bg-blue-50 border border-blue-200'}`}>
                     <div className="flex items-center justify-between mb-2">
                       <div>
-                        <span className="text-sm font-medium text-blue-900">
-                          {syncProgress.phase === 'fetching' ? 'Fetching contacts...' : 'Syncing contacts...'}
+                        <span className={`text-sm font-medium ${cancelling ? 'text-amber-900' : 'text-blue-900'}`}>
+                          {cancelling 
+                            ? 'Cancelling sync...' 
+                            : syncProgress.phase === 'fetching' 
+                              ? 'Fetching contacts...' 
+                              : 'Syncing contacts...'}
                         </span>
-                        {syncType && (
+                        {syncType && !cancelling && (
                           <span className="ml-2 text-xs text-blue-600">
                             ({syncType === 'incremental' ? 'New/Modified only' : 'Full sync'})
                           </span>
                         )}
                       </div>
-                      <span className="text-sm text-blue-700">
-                        {syncProgress.current.toLocaleString()} / {syncProgress.total > 0 ? syncProgress.total.toLocaleString() : '...'}
-                      </span>
+                      <div className="flex items-center gap-3">
+                        <span className={`text-sm ${cancelling ? 'text-amber-700' : 'text-blue-700'}`}>
+                          {syncProgress.current.toLocaleString()} / {syncProgress.total > 0 ? syncProgress.total.toLocaleString() : '...'}
+                        </span>
+                        {!cancelling && (
+                          <button
+                            onClick={handleCancelSync}
+                            className="px-3 py-1 text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded hover:bg-red-100 flex items-center gap-1 transition-colors"
+                            title="Cancel the sync"
+                          >
+                            <StopCircle size={14} />
+                            Cancel
+                          </button>
+                        )}
+                      </div>
                     </div>
-                    <div className="w-full bg-blue-200 rounded-full h-2">
+                    <div className={`w-full rounded-full h-2 ${cancelling ? 'bg-amber-200' : 'bg-blue-200'}`}>
                       <div
-                        className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                        className={`h-2 rounded-full transition-all duration-300 ${cancelling ? 'bg-amber-500' : 'bg-blue-600'}`}
                         style={{
                           width: `${syncProgress.total > 0 ? (syncProgress.current / syncProgress.total) * 100 : 0}%`,
                         }}
                       />
                     </div>
-                    <p className="text-xs text-blue-600 mt-2">
-                      {syncProgress.phase === 'fetching' 
-                        ? syncType === 'incremental'
-                          ? 'Retrieving new or modified contacts from GoHighLevel...'
-                          : 'Retrieving all contacts from GoHighLevel...'
-                        : 'Saving contacts to your base...'}
+                    <p className={`text-xs mt-2 ${cancelling ? 'text-amber-600' : 'text-blue-600'}`}>
+                      {cancelling 
+                        ? 'Stopping after current batch completes...' 
+                        : syncProgress.phase === 'fetching' 
+                          ? syncType === 'incremental'
+                            ? 'Retrieving new or modified contacts from GoHighLevel...'
+                            : 'Retrieving all contacts from GoHighLevel...'
+                          : 'Saving contacts to your base...'}
                     </p>
                   </div>
                 )}

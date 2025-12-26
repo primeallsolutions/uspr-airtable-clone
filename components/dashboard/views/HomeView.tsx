@@ -7,11 +7,37 @@ import { sortBases } from "@/lib/utils/sort-helpers";
 import { isToday } from "@/lib/utils/date-helpers";
 import type { BaseRecord, CollectionView, SortOption } from "@/lib/types/dashboard";
 
+// Skeleton component for grid view tiles
+const SkeletonTile = () => (
+  <div className="animate-pulse rounded-lg border border-gray-200 bg-white p-4">
+    <div className="flex items-start justify-between">
+      <div className="h-10 w-10 rounded-lg bg-gray-200" />
+      <div className="h-5 w-5 rounded bg-gray-200" />
+    </div>
+    <div className="mt-3 h-5 w-3/4 rounded bg-gray-200" />
+    <div className="mt-2 h-4 w-1/2 rounded bg-gray-200" />
+  </div>
+);
+
+// Skeleton component for list view rows
+const SkeletonRow = () => (
+  <div className="animate-pulse grid grid-cols-2 gap-4 border-b border-gray-100 px-4 py-3">
+    <div className="flex items-center gap-3">
+      <div className="h-8 w-8 rounded bg-gray-200" />
+      <div className="h-4 w-32 rounded bg-gray-200" />
+    </div>
+    <div className="flex items-center justify-end">
+      <div className="h-4 w-24 rounded bg-gray-200" />
+    </div>
+  </div>
+);
+
 interface HomeViewProps {
   recentBases: BaseRecord[];
   collectionView: CollectionView;
   sortOption: SortOption;
   isSortOpen: boolean;
+  loading?: boolean;
   onCollectionViewChange: (view: CollectionView) => void;
   onSortOptionChange: (option: SortOption) => void;
   onSortToggle: (open: boolean) => void;
@@ -24,6 +50,7 @@ export const HomeView = ({
   collectionView,
   sortOption,
   isSortOpen,
+  loading = false,
   onCollectionViewChange,
   onSortOptionChange,
   onSortToggle,
@@ -62,7 +89,14 @@ export const HomeView = ({
           <div className="space-y-3">
             <div className="text-sm font-medium text-gray-600">Today</div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {today.length === 0 ? (
+              {loading ? (
+                <>
+                  <SkeletonTile />
+                  <SkeletonTile />
+                  <SkeletonTile />
+                  <SkeletonTile />
+                </>
+              ) : today.length === 0 ? (
                 <EmptyState type="today" />
               ) : (
                 today.map((base) => (
@@ -81,7 +115,14 @@ export const HomeView = ({
           <div className="mt-8 space-y-3">
             <div className="text-sm font-medium text-gray-600">Earlier</div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {earlier.length === 0 ? (
+              {loading ? (
+                <>
+                  <SkeletonTile />
+                  <SkeletonTile />
+                  <SkeletonTile />
+                  <SkeletonTile />
+                </>
+              ) : earlier.length === 0 ? (
                 <EmptyState type="earlier" />
               ) : (
                 earlier.map((base) => (
@@ -104,14 +145,24 @@ export const HomeView = ({
               <div>Name</div>
               <div className="text-right">Last opened</div>
             </div>
-            {sortBases(recentBases, sortOption).map((base) => (
-              <BaseRow
-                key={base.id}
-                base={base}
-                onStarToggle={onBaseStarToggle}
-                onContextMenu={onBaseContextMenu}
-              />
-            ))}
+            {loading ? (
+              <>
+                <SkeletonRow />
+                <SkeletonRow />
+                <SkeletonRow />
+                <SkeletonRow />
+                <SkeletonRow />
+              </>
+            ) : (
+              sortBases(recentBases, sortOption).map((base) => (
+                <BaseRow
+                  key={base.id}
+                  base={base}
+                  onStarToggle={onBaseStarToggle}
+                  onContextMenu={onBaseContextMenu}
+                />
+              ))
+            )}
           </div>
         </>
       )}

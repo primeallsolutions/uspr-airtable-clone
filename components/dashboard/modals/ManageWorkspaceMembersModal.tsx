@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { X } from "lucide-react";
+import { X, ShieldAlert } from "lucide-react";
 import { MembershipService, type RoleType } from "@/lib/services/membership-service";
 import { useTimezone } from "@/lib/hooks/useTimezone";
 import { formatInTimezone } from "@/lib/utils/date-helpers";
+import { useRole } from "@/lib/hooks/useRole";
 
 interface ManageWorkspaceMembersModalProps {
   isOpen: boolean;
@@ -21,6 +22,7 @@ type WorkspaceMemberRow = {
 
 export const ManageWorkspaceMembersModal = ({ isOpen, onClose, workspaceId }: ManageWorkspaceMembersModalProps) => {
   const { timezone } = useTimezone();
+  const { role: currentUserRole, loading: roleLoading } = useRole({ workspaceId });
   const [loading, setLoading] = useState(false);
   const [members, setMembers] = useState<WorkspaceMemberRow[]>([]);
   const [inviteEmail, setInviteEmail] = useState("");
@@ -30,8 +32,11 @@ export const ManageWorkspaceMembersModal = ({ isOpen, onClose, workspaceId }: Ma
   const [success, setSuccess] = useState<string | null>(null);
   const [ownerId, setOwnerId] = useState<string | null>(null);
 
+  // Check if current user has permission to manage members (only owner/admin)
+  const canManageMembers = currentUserRole === 'owner' || currentUserRole === 'admin';
+
   const loadMembers = useMemo(() => async () => {
-    if (!workspaceId) return;
+    if (!workspaceId || !canManageMembers) return;
     setLoading(true);
     setError(null);
     setOwnerId(null);
@@ -45,13 +50,13 @@ export const ManageWorkspaceMembersModal = ({ isOpen, onClose, workspaceId }: Ma
     } finally {
       setLoading(false);
     }
-  }, [workspaceId]);
+  }, [workspaceId, canManageMembers]);
 
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && canManageMembers) {
       void loadMembers();
     }
-  }, [isOpen, loadMembers]);
+  }, [isOpen, loadMembers, canManageMembers]);
 
   const handleRoleChange = async (membershipId: string, role: RoleType) => {
     setError(null);
@@ -101,6 +106,43 @@ export const ManageWorkspaceMembersModal = ({ isOpen, onClose, workspaceId }: Ma
   };
 
   if (!isOpen) return null;
+
+  // Show loading state while checking permissions
+  if (roleLoading) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+        <div className="w-full max-w-2xl rounded-lg bg-white shadow-xl p-8 text-center">
+          <p className="text-gray-600">Checking permissions...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Block access if user doesn't have permission
+  if (!canManageMembers) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+        <div className="w-full max-w-md rounded-lg bg-white shadow-xl">
+          <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
+            <h3 className="text-lg font-semibold text-gray-900">Access Denied</h3>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+          <div className="px-6 py-8 text-center">
+            <ShieldAlert className="w-12 h-12 text-red-500 mx-auto mb-4" />
+            <p className="text-gray-700 font-medium mb-2">You do not have permission to manage workspace members.</p>
+            <p className="text-gray-500 text-sm">Only workspace owners and admins can access this feature.</p>
+          </div>
+          <div className="flex items-center justify-end border-t border-gray-200 px-6 py-4">
+            <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50">
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
