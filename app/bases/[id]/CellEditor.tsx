@@ -1,6 +1,7 @@
 "use client";
 import { useMemo, useState, useEffect } from "react";
 import type { FieldRow } from "@/lib/types/base-detail";
+import { XIcon } from "lucide-react";
 
 const DEFAULT_CHOICE_COLORS = ['#1E40AF', '#C2410C', '#B91C1C']; // dark blue, dark orange, dark red
 const EMPTY_LABEL = 'No data';
@@ -240,7 +241,7 @@ export default function CellEditor({
                     className="ml-1 hover:bg-black/20 rounded-full p-0.5"
                     disabled={isSaving}
                   >
-                    A-
+                    <XIcon size={12} />
                   </button>
                 </span>
               );
