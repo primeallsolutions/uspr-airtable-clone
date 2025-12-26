@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { transformGHLContactToRecord } from '@/lib/utils/ghl-transform';
 import type { FieldType } from '@/lib/types/base-detail';
-import { string } from 'zod';
 
 const GHL_API_BASE_URL = 'https://services.leadconnectorhq.com';
 
