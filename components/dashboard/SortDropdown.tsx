@@ -9,7 +9,7 @@ interface SortDropdownProps {
   setIsOpen: (open: boolean) => void;
 }
 
-const sortOptions: SortOption[] = ['lastOpened', 'lastModified', 'alphabetical', 'oldestToNewest', 'newestToOldest'];
+const sortOptions: SortOption[] = ['lastOpened', 'alphabetical', 'oldestToNewest', 'newestToOldest'];
 
 export const SortDropdown = ({ sortOption, setSortOption, isOpen, setIsOpen }: SortDropdownProps) => {
   const handleOptionSelect = (option: SortOption) => {

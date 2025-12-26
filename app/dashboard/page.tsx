@@ -32,6 +32,7 @@ import { useRole } from "@/lib/hooks/useRole";
 
 // Types
 import type { BaseRecord } from "@/lib/types/dashboard";
+import { SharedView } from "@/components/dashboard/views/SharedView";
 
 function DashboardContent() {
   const router = useRouter();
@@ -45,9 +46,11 @@ function DashboardContent() {
     recentBases,
     workspaceBases,
     starredBases,
+    sharedBases,
     loadRecentBases,
     loadWorkspaceBases,
     loadStarredBases,
+    loadSharedBases,
     createBase,
     renameBase,
     updateBaseDetails,
@@ -92,6 +95,7 @@ function DashboardContent() {
     switchToWorkspaceView,
     switchToHomeView,
     switchToStarredView,
+    switchToSharedView,
     switchToAccountView,
     openCreateModal,
     closeCreateModal,
@@ -201,6 +205,11 @@ function DashboardContent() {
     loadStarredBases();
   }, [switchToStarredView, loadStarredBases]);
 
+  const handleSharedViewSelect = useCallback(() => {
+    switchToSharedView();
+    loadSharedBases();
+  }, [switchToSharedView, loadSharedBases]);
+
   // Handle duplicate base
   const handleDuplicateBase = useCallback(async (base: BaseRecord) => {
     const toastId = toast.loading(`Duplicating "${base.name}"...`, {
@@ -279,6 +288,7 @@ function DashboardContent() {
           onViewChange={(view) => {
             if (view === 'home') switchToHomeView();
             else if (view === 'starred') handleStarredViewSelect();
+            else if (view === 'shared') handleSharedViewSelect();
           }}
           onWorkspaceSelect={handleWorkspaceSelect}
           onWorkspacesToggle={() => setWorkspacesCollapsed(!workspacesCollapsed)}
@@ -292,7 +302,7 @@ function DashboardContent() {
         />
 
         {/* Main Content */}
-        <section className="flex min-w-0 flex-1 flex-col">
+        <section className="flex min-w-0 flex-1 flex-col md:ml-64"> {/* offset left-margin by 64 to account for fixed sidebar */}
           {/* Top Bar */}
           <TopBar user={user} onSignOut={signOut} onOpenAccount={switchToAccountView} />
 
@@ -322,7 +332,10 @@ function DashboardContent() {
                 selectedWorkspaceId={selectedWorkspaceId}
                 collectionView={collectionView}
                 sortOption={sortOption}
+                isSortOpen={isSortOpen}
                 onCollectionViewChange={setCollectionView}
+                onSortOptionChange={setSortOption}
+                onSortToggle={setIsSortOpen}
                 onCreateBase={openCreateModal}
                 onBaseStarToggle={toggleStar}
                 onBaseContextMenu={handleBaseContextMenu}
@@ -336,7 +349,25 @@ function DashboardContent() {
               <StarredView
                 starredBases={starredBases}
                 collectionView={collectionView}
+                sortOption={sortOption}
+                isSortOpen={isSortOpen}
                 onCollectionViewChange={setCollectionView}
+                onSortOptionChange={setSortOption}
+                onSortToggle={setIsSortOpen}
+                onBaseStarToggle={toggleStar}
+                onBaseContextMenu={handleBaseContextMenu}
+              />
+            )}
+            
+            {activeView === 'shared' && (
+              <SharedView
+                sharedBases={sharedBases}
+                collectionView={collectionView}
+                sortOption={sortOption}
+                isSortOpen={isSortOpen}
+                onCollectionViewChange={setCollectionView}
+                onSortOptionChange={setSortOption}
+                onSortToggle={setIsSortOpen}
                 onBaseStarToggle={toggleStar}
                 onBaseContextMenu={handleBaseContextMenu}
               />

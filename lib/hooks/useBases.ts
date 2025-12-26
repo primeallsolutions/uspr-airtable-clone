@@ -6,6 +6,7 @@ export const useBases = () => {
   const [recentBases, setRecentBases] = useState<BaseRecord[]>([]);
   const [workspaceBases, setWorkspaceBases] = useState<BaseRecord[]>([]);
   const [starredBases, setStarredBases] = useState<BaseRecord[]>([]);
+  const [sharedBases, setSharedBases] = useState<BaseRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -49,6 +50,21 @@ export const useBases = () => {
       const message = err instanceof Error ? err.message : 'Failed to load starred bases';
       setError(message);
       console.error('Error loading starred bases:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const loadSharedBases = useCallback(async (): Promise<void> => {
+    try {
+      setLoading(true);
+      setError(null);
+      const bases = await BaseService.getSharedBases();
+      setSharedBases(bases);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to load shared bases';
+      setError(message);
+      console.error('Error loading shared bases:', err);
     } finally {
       setLoading(false);
     }
@@ -163,11 +179,13 @@ export const useBases = () => {
     recentBases,
     workspaceBases,
     starredBases,
+    sharedBases,
     loading,
     error,
     loadRecentBases,
     loadWorkspaceBases,
     loadStarredBases,
+    loadSharedBases,
     createBase,
     renameBase,
     updateBaseDetails,

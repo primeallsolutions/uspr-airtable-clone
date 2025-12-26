@@ -1,7 +1,7 @@
-import { Plus, Rocket, Star } from "lucide-react";
+import { Plus, Rocket, Share2, Star } from "lucide-react";
 
 interface EmptyStateProps {
-  type: 'today' | 'earlier' | 'workspace' | 'starred';
+  type: 'today' | 'earlier' | 'workspace' | 'starred' | 'shared';
   onCreateBase?: () => void;
 }
 
@@ -34,6 +34,14 @@ export const EmptyState = ({ type, onCreateBase }: EmptyStateProps) => {
           icon: <Star className="mx-auto h-12 w-12 text-gray-400" />,
           title: "No starred bases yet",
           message: "Star your favorite bases to see them here.",
+          className: "col-span-full rounded-xl border border-dashed border-gray-300 bg-white p-10 text-center"
+        };
+        
+      case 'shared':
+        return {
+          icon: <Share2 className="mx-auto h-12 w-12 text-gray-400" />,
+          title: "No shared bases yet",
+          message: "If someone shares a workspace with you, its bases will appear here.",
           className: "col-span-full rounded-xl border border-dashed border-gray-300 bg-white p-10 text-center"
         };
       

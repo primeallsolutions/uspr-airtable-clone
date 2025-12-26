@@ -193,6 +193,7 @@ export default function BaseDetailPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const viewControlsRef = useRef<HTMLDivElement | null>(null);
   const viewPanelRef = useRef<HTMLDivElement | null>(null);
+  const gridScrollRef = useRef<HTMLDivElement | null>(null); // for table left/right control buttons
   const [panelPosition, setPanelPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   // Track visibility of the Created At system field
   const [showCreatedAt, setShowCreatedAt] = useState(false);
@@ -946,6 +947,14 @@ export default function BaseDetailPage() {
               onSearchChange={setSearchQuery}
               showCreatedAt={showCreatedAt}
               onToggleCreatedAt={() => setShowCreatedAt((prev) => !prev)}
+              onScrollLeft={() => {
+                const el = gridScrollRef.current;
+                if (el) el.scrollBy({ left: -50, behavior: 'auto' });
+              }}
+              onScrollRight={() => {
+                const el = gridScrollRef.current;
+                if (el) el.scrollBy({ left: 50, behavior: 'auto' });
+              }}
             />
             {activeViewPanel && (
               <div
@@ -1051,6 +1060,7 @@ export default function BaseDetailPage() {
                   colorFieldId={colorFieldId}
                   colorAssignments={colorAssignments}
                   showCreatedAt={showCreatedAt}
+                  scrollContainerRef={gridScrollRef}
                 />
               ) : (
                 <KanbanView

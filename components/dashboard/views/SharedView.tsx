@@ -7,8 +7,8 @@ import { ViewToggle } from "../ViewToggle";
 import { sortBases } from "@/lib/utils/sort-helpers";
 import type { BaseRecord, CollectionView, SortOption } from "@/lib/types/dashboard";
 
-interface StarredViewProps {
-  starredBases: BaseRecord[];
+interface SharedViewProps {
+  sharedBases: BaseRecord[];
   collectionView: CollectionView;
   sortOption: SortOption;
   isSortOpen: boolean;
@@ -19,8 +19,8 @@ interface StarredViewProps {
   onBaseContextMenu: (e: React.MouseEvent, base: BaseRecord) => void;
 }
 
-export const StarredView = ({
-  starredBases,
+export const SharedView = ({
+  sharedBases,
   collectionView,
   sortOption,
   isSortOpen,
@@ -29,10 +29,10 @@ export const StarredView = ({
   onSortToggle,
   onBaseStarToggle,
   onBaseContextMenu
-}: StarredViewProps) => {
+}: SharedViewProps) => {
   return (
     <>
-      <h1 className="mb-4 text-2xl font-bold text-gray-900">Starred</h1>
+      <h1 className="mb-4 text-2xl font-bold text-gray-900">Shared</h1>
       <div className="mb-6 flex items-center justify-between">
         <SortDropdown
           sortOption={sortOption}
@@ -48,10 +48,10 @@ export const StarredView = ({
       
       {collectionView === 'grid' ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {starredBases.length === 0 ? (
-            <EmptyState type="starred" />
+          {sharedBases.length === 0 ? (
+            <EmptyState type="shared" />
           ) : (
-            sortBases(starredBases, sortOption).map((base) => (
+            sortBases(sharedBases, sortOption).map((base) => (
               <BaseTile 
                 key={base.id} 
                 base={base}
@@ -67,13 +67,13 @@ export const StarredView = ({
             <div>Name</div>
             <div className="text-right">Last opened</div>
           </div>
-          {starredBases.length === 0 ? (
+          {sharedBases.length === 0 ? (
             <div className="px-4 py-8 text-center text-sm text-gray-500">
               <Star className="mx-auto mb-2 h-8 w-8 text-gray-400" />
-              No starred bases yet
+              No shared bases yet
             </div>
           ) : (
-            sortBases(starredBases, sortOption).map((base) => (
+            sortBases(sharedBases, sortOption).map((base) => (
               <BaseRow
                 key={base.id}
                 base={base}
