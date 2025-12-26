@@ -135,62 +135,74 @@ export const ConnectGHLModal = ({
 
   // Check for active sync when modal opens (in case it was closed during sync)
   useEffect(() => {
-    if (isOpen && baseId) {
-      const checkActiveSyncProgress = async () => {
-        try {
-          const progressResponse = await fetch(`/api/ghl/sync-progress?base_id=${baseId}`);
-          const progressData = await progressResponse.json();
+    if (!isOpen || !baseId) return;
+    
+    let pollInterval: NodeJS.Timeout | null = null;
+    let isMounted = true;
+    
+    const checkActiveSyncProgress = async () => {
+      try {
+        const progressResponse = await fetch(`/api/ghl/sync-progress?base_id=${baseId}`);
+        const progressData = await progressResponse.json();
+        
+        if (!isMounted) return;
+        
+        if (progressData.success && progressData.progress) {
+          // There's an active sync in progress - resume tracking
+          setSyncProgress(progressData.progress);
+          setSyncing(true);
+          setCancelling(progressData.progress.cancelled || false);
+          setSyncType(prev => prev || 'full'); // Keep existing or default to full
           
-          if (progressData.success && progressData.progress) {
-            // There's an active sync in progress - resume tracking
-            setSyncProgress(progressData.progress);
-            setSyncing(true);
-            setCancelling(progressData.progress.cancelled || false);
-            
-            // Determine sync type from progress (default to full if unknown)
-            if (!syncType) {
-              setSyncType('full');
-            }
-            
-            // Start polling for progress updates
-            if (!progressPollInterval) {
-              const pollInterval = setInterval(async () => {
-                try {
-                  const response = await fetch(`/api/ghl/sync-progress?base_id=${baseId}`);
-                  const data = await response.json();
-                  
-                  if (data.success && data.progress) {
-                    setSyncProgress(data.progress);
-                    if (data.progress.cancelled && !cancelling) {
-                      setCancelling(true);
-                    }
-                  } else if (data.success && !data.progress) {
-                    // Sync completed - clear everything
-                    clearInterval(pollInterval);
-                    setProgressPollInterval(null);
-                    setSyncProgress(null);
-                    setSyncing(false);
-                    setCancelling(false);
-                    setSyncType(null);
-                    // Reload integration to get updated last_sync_at
-                    loadIntegration();
-                  }
-                } catch (error) {
-                  console.error('Failed to fetch progress:', error);
-                }
-              }, 2000);
+          // Start polling for progress updates
+          pollInterval = setInterval(async () => {
+            try {
+              const response = await fetch(`/api/ghl/sync-progress?base_id=${baseId}`);
+              const data = await response.json();
               
-              setProgressPollInterval(pollInterval);
+              if (!isMounted) return;
+              
+              if (data.success && data.progress) {
+                setSyncProgress(data.progress);
+                if (data.progress.cancelled) {
+                  setCancelling(true);
+                }
+              } else if (data.success && !data.progress) {
+                // Sync completed - clear everything
+                if (pollInterval) {
+                  clearInterval(pollInterval);
+                  pollInterval = null;
+                }
+                setProgressPollInterval(null);
+                setSyncProgress(null);
+                setSyncing(false);
+                setCancelling(false);
+                setSyncType(null);
+                // Reload integration to get updated last_sync_at
+                loadIntegration();
+              }
+            } catch (error) {
+              console.error('Failed to fetch progress:', error);
             }
-          }
-        } catch (error) {
-          console.error('Failed to check active sync:', error);
+          }, 2000);
+          
+          setProgressPollInterval(pollInterval);
         }
-      };
-      
-      checkActiveSyncProgress();
-    }
-  }, [isOpen, baseId]); // Only run when modal opens
+      } catch (error) {
+        console.error('Failed to check active sync:', error);
+      }
+    };
+    
+    checkActiveSyncProgress();
+    
+    // Cleanup function
+    return () => {
+      isMounted = false;
+      if (pollInterval) {
+        clearInterval(pollInterval);
+      }
+    };
+  }, [isOpen, baseId, loadIntegration]);
 
   // Convert flat fieldMapping to array format when integration loads
   useEffect(() => {
