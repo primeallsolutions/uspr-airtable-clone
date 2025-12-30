@@ -1,0 +1,393 @@
+import type { ExportedBase } from '../services/base-export-service';
+
+/**
+ * Predefined template definitions with complete structure and sample data
+ * These will be seeded as global templates in the database
+ */
+
+export const REAL_ESTATE_CRM_TEMPLATE: ExportedBase = {
+  version: '1.0.0',
+  exportedAt: new Date().toISOString(),
+  base: {
+    name: 'Real Estate CRM',
+    description: 'Manage properties, clients, and deals all in one place. Perfect for real estate agents and agencies.'
+  },
+  tables: [
+    { name: 'Contacts', order_index: 0, is_master_list: true },
+    { name: 'Properties', order_index: 1, is_master_list: false },
+    { name: 'Deals', order_index: 2, is_master_list: false },
+    { name: 'Tasks', order_index: 3, is_master_list: false }
+  ],
+  fields: [
+    // Contacts table fields
+    { table_name: 'Contacts', name: 'Full Name', type: 'text', order_index: 0, options: {} },
+    { table_name: 'Contacts', name: 'Email', type: 'email', order_index: 1, options: {} },
+    { table_name: 'Contacts', name: 'Phone', type: 'phone', order_index: 2, options: {} },
+    { table_name: 'Contacts', name: 'Type', type: 'single_select', order_index: 3, options: { choices: ['Buyer', 'Seller', 'Both', 'Lead'] } },
+    { table_name: 'Contacts', name: 'Status', type: 'single_select', order_index: 4, options: { choices: ['Active', 'Inactive', 'Hot Lead', 'Cold Lead'] } },
+    { table_name: 'Contacts', name: 'Notes', type: 'text', order_index: 5, options: {} },
+    
+    // Properties table fields
+    { table_name: 'Properties', name: 'Address', type: 'text', order_index: 0, options: {} },
+    { table_name: 'Properties', name: 'Property Type', type: 'single_select', order_index: 1, options: { choices: ['House', 'Apartment', 'Condo', 'Land', 'Commercial'] } },
+    { table_name: 'Properties', name: 'Price', type: 'number', order_index: 2, options: { format: 'currency' } },
+    { table_name: 'Properties', name: 'Bedrooms', type: 'number', order_index: 3, options: {} },
+    { table_name: 'Properties', name: 'Bathrooms', type: 'number', order_index: 4, options: {} },
+    { table_name: 'Properties', name: 'Square Feet', type: 'number', order_index: 5, options: {} },
+    { table_name: 'Properties', name: 'Status', type: 'single_select', order_index: 6, options: { choices: ['Available', 'Under Contract', 'Sold', 'Off Market'] } },
+    { table_name: 'Properties', name: 'Listed Date', type: 'date', order_index: 7, options: {} },
+    
+    // Deals table fields
+    { table_name: 'Deals', name: 'Deal Name', type: 'text', order_index: 0, options: {} },
+    { table_name: 'Deals', name: 'Property', type: 'text', order_index: 1, options: {} },
+    { table_name: 'Deals', name: 'Client', type: 'text', order_index: 2, options: {} },
+    { table_name: 'Deals', name: 'Deal Value', type: 'number', order_index: 3, options: { format: 'currency' } },
+    { table_name: 'Deals', name: 'Stage', type: 'single_select', order_index: 4, options: { choices: ['Prospect', 'Showing', 'Offer', 'Negotiation', 'Under Contract', 'Closed'] } },
+    { table_name: 'Deals', name: 'Probability', type: 'single_select', order_index: 5, options: { choices: ['25%', '50%', '75%', '90%', '100%'] } },
+    { table_name: 'Deals', name: 'Expected Close Date', type: 'date', order_index: 6, options: {} },
+    
+    // Tasks table fields
+    { table_name: 'Tasks', name: 'Task Name', type: 'text', order_index: 0, options: {} },
+    { table_name: 'Tasks', name: 'Description', type: 'text', order_index: 1, options: {} },
+    { table_name: 'Tasks', name: 'Related To', type: 'text', order_index: 2, options: {} },
+    { table_name: 'Tasks', name: 'Assignee', type: 'text', order_index: 3, options: { inputType: 'email' } },
+    { table_name: 'Tasks', name: 'Due Date', type: 'date', order_index: 4, options: {} },
+    { table_name: 'Tasks', name: 'Priority', type: 'single_select', order_index: 5, options: { choices: ['Low', 'Medium', 'High', 'Urgent'] } },
+    { table_name: 'Tasks', name: 'Status', type: 'single_select', order_index: 6, options: { choices: ['To Do', 'In Progress', 'Done'] } }
+  ],
+  automations: [],
+  records: [
+    // Sample contacts
+    { table_name: 'Contacts', values: { 'Full Name': 'John Smith', 'Email': 'john@example.com', 'Phone': '+1234567890', 'Type': 'Buyer', 'Status': 'Hot Lead', 'Notes': 'Looking for 3BR home in downtown' } },
+    { table_name: 'Contacts', values: { 'Full Name': 'Sarah Johnson', 'Email': 'sarah@example.com', 'Phone': '+1234567891', 'Type': 'Seller', 'Status': 'Active', 'Notes': 'Selling family home' } },
+    { table_name: 'Contacts', values: { 'Full Name': 'Michael Brown', 'Email': 'michael@example.com', 'Phone': '+1234567892', 'Type': 'Both', 'Status': 'Active', 'Notes': 'Upgrading to larger property' } },
+    
+    // Sample properties
+    { table_name: 'Properties', values: { 'Address': '123 Main St', 'Property Type': 'House', 'Price': 450000, 'Bedrooms': 3, 'Bathrooms': 2, 'Square Feet': 1800, 'Status': 'Available', 'Listed Date': '2025-01-15' } },
+    { table_name: 'Properties', values: { 'Address': '456 Oak Ave', 'Property Type': 'Condo', 'Price': 325000, 'Bedrooms': 2, 'Bathrooms': 2, 'Square Feet': 1200, 'Status': 'Under Contract', 'Listed Date': '2025-01-10' } },
+    { table_name: 'Properties', values: { 'Address': '789 Pine Rd', 'Property Type': 'House', 'Price': 675000, 'Bedrooms': 4, 'Bathrooms': 3, 'Square Feet': 2500, 'Status': 'Available', 'Listed Date': '2025-01-20' } },
+    
+    // Sample deals
+    { table_name: 'Deals', values: { 'Deal Name': 'John Smith - 123 Main St', 'Property': '123 Main St', 'Client': 'John Smith', 'Deal Value': 450000, 'Stage': 'Showing', 'Probability': '50%', 'Expected Close Date': '2025-03-01' } },
+    { table_name: 'Deals', values: { 'Deal Name': 'Michael Brown - 456 Oak Ave', 'Property': '456 Oak Ave', 'Client': 'Michael Brown', 'Deal Value': 325000, 'Stage': 'Under Contract', 'Probability': '90%', 'Expected Close Date': '2025-02-15' } },
+    
+    // Sample tasks
+    { table_name: 'Tasks', values: { 'Task Name': 'Schedule showing for John Smith', 'Description': 'Show 123 Main St', 'Related To': 'John Smith', 'Assignee': 'agent@example.com', 'Due Date': '2025-02-05', 'Priority': 'High', 'Status': 'To Do' } },
+    { table_name: 'Tasks', values: { 'Task Name': 'Follow up with Sarah Johnson', 'Description': 'Discuss listing price', 'Related To': 'Sarah Johnson', 'Assignee': 'agent@example.com', 'Due Date': '2025-02-03', 'Priority': 'Medium', 'Status': 'To Do' } }
+  ]
+};
+
+export const PROJECT_MANAGEMENT_TEMPLATE: ExportedBase = {
+  version: '1.0.0',
+  exportedAt: new Date().toISOString(),
+  base: {
+    name: 'Project Management',
+    description: 'Track projects, tasks, and team progress. Perfect for agile teams and project managers.'
+  },
+  tables: [
+    { name: 'Projects', order_index: 0, is_master_list: true },
+    { name: 'Tasks', order_index: 1, is_master_list: false },
+    { name: 'Team Members', order_index: 2, is_master_list: false },
+    { name: 'Milestones', order_index: 3, is_master_list: false }
+  ],
+  fields: [
+    // Projects table fields
+    { table_name: 'Projects', name: 'Project Name', type: 'text', order_index: 0, options: {} },
+    { table_name: 'Projects', name: 'Description', type: 'text', order_index: 1, options: {} },
+    { table_name: 'Projects', name: 'Status', type: 'single_select', order_index: 2, options: { choices: ['Planning', 'Active', 'On Hold', 'Completed', 'Cancelled'] } },
+    { table_name: 'Projects', name: 'Priority', type: 'single_select', order_index: 3, options: { choices: ['Low', 'Medium', 'High', 'Critical'] } },
+    { table_name: 'Projects', name: 'Start Date', type: 'date', order_index: 4, options: {} },
+    { table_name: 'Projects', name: 'End Date', type: 'date', order_index: 5, options: {} },
+    { table_name: 'Projects', name: 'Budget', type: 'number', order_index: 6, options: { format: 'currency' } },
+    { table_name: 'Projects', name: 'Project Manager', type: 'text', order_index: 7, options: { inputType: 'email' } },
+    
+    // Tasks table fields
+    { table_name: 'Tasks', name: 'Task Name', type: 'text', order_index: 0, options: {} },
+    { table_name: 'Tasks', name: 'Project', type: 'text', order_index: 1, options: {} },
+    { table_name: 'Tasks', name: 'Description', type: 'text', order_index: 2, options: {} },
+    { table_name: 'Tasks', name: 'Status', type: 'single_select', order_index: 3, options: { choices: ['To Do', 'In Progress', 'In Review', 'Done', 'Blocked'] } },
+    { table_name: 'Tasks', name: 'Assignee', type: 'text', order_index: 4, options: { inputType: 'email' } },
+    { table_name: 'Tasks', name: 'Priority', type: 'single_select', order_index: 5, options: { choices: ['Low', 'Medium', 'High', 'Critical'] } },
+    { table_name: 'Tasks', name: 'Due Date', type: 'date', order_index: 6, options: {} },
+    { table_name: 'Tasks', name: 'Estimated Hours', type: 'number', order_index: 7, options: {} },
+    
+    // Team Members table fields
+    { table_name: 'Team Members', name: 'Name', type: 'text', order_index: 0, options: {} },
+    { table_name: 'Team Members', name: 'Email', type: 'email', order_index: 1, options: {} },
+    { table_name: 'Team Members', name: 'Role', type: 'single_select', order_index: 2, options: { choices: ['Developer', 'Designer', 'Project Manager', 'QA', 'DevOps'] } },
+    { table_name: 'Team Members', name: 'Department', type: 'text', order_index: 3, options: {} },
+    { table_name: 'Team Members', name: 'Status', type: 'single_select', order_index: 4, options: { choices: ['Active', 'On Leave', 'Inactive'] } },
+    
+    // Milestones table fields
+    { table_name: 'Milestones', name: 'Milestone Name', type: 'text', order_index: 0, options: {} },
+    { table_name: 'Milestones', name: 'Project', type: 'text', order_index: 1, options: {} },
+    { table_name: 'Milestones', name: 'Description', type: 'text', order_index: 2, options: {} },
+    { table_name: 'Milestones', name: 'Due Date', type: 'date', order_index: 3, options: {} },
+    { table_name: 'Milestones', name: 'Status', type: 'single_select', order_index: 4, options: { choices: ['Not Started', 'In Progress', 'Completed', 'Delayed'] } },
+    { table_name: 'Milestones', name: 'Completion %', type: 'number', order_index: 5, options: {} }
+  ],
+  automations: [],
+  records: [
+    // Sample projects
+    { table_name: 'Projects', values: { 'Project Name': 'Website Redesign', 'Description': 'Complete redesign of company website', 'Status': 'Active', 'Priority': 'High', 'Start Date': '2025-01-15', 'End Date': '2025-04-15', 'Budget': 50000, 'Project Manager': 'pm@example.com' } },
+    { table_name: 'Projects', values: { 'Project Name': 'Mobile App Development', 'Description': 'New mobile app for iOS and Android', 'Status': 'Planning', 'Priority': 'Critical', 'Start Date': '2025-02-01', 'End Date': '2025-08-01', 'Budget': 150000, 'Project Manager': 'pm@example.com' } },
+    
+    // Sample tasks
+    { table_name: 'Tasks', values: { 'Task Name': 'Design homepage mockup', 'Project': 'Website Redesign', 'Description': 'Create initial homepage design', 'Status': 'In Progress', 'Assignee': 'designer@example.com', 'Priority': 'High', 'Due Date': '2025-02-10', 'Estimated Hours': 16 } },
+    { table_name: 'Tasks', values: { 'Task Name': 'Set up development environment', 'Project': 'Mobile App Development', 'Description': 'Configure dev tools and CI/CD', 'Status': 'To Do', 'Assignee': 'dev@example.com', 'Priority': 'Critical', 'Due Date': '2025-02-05', 'Estimated Hours': 8 } },
+    { table_name: 'Tasks', values: { 'Task Name': 'Review design system', 'Project': 'Website Redesign', 'Description': 'Review and approve design system', 'Status': 'In Review', 'Assignee': 'pm@example.com', 'Priority': 'Medium', 'Due Date': '2025-02-08', 'Estimated Hours': 4 } },
+    
+    // Sample team members
+    { table_name: 'Team Members', values: { 'Name': 'Alice Johnson', 'Email': 'alice@example.com', 'Role': 'Developer', 'Department': 'Engineering', 'Status': 'Active' } },
+    { table_name: 'Team Members', values: { 'Name': 'Bob Smith', 'Email': 'bob@example.com', 'Role': 'Designer', 'Department': 'Design', 'Status': 'Active' } },
+    { table_name: 'Team Members', values: { 'Name': 'Carol Davis', 'Email': 'carol@example.com', 'Role': 'Project Manager', 'Department': 'Management', 'Status': 'Active' } },
+    
+    // Sample milestones
+    { table_name: 'Milestones', values: { 'Milestone Name': 'Design Complete', 'Project': 'Website Redesign', 'Description': 'All design work completed and approved', 'Due Date': '2025-02-28', 'Status': 'In Progress', 'Completion %': 60 } },
+    { table_name: 'Milestones', values: { 'Milestone Name': 'Beta Release', 'Project': 'Mobile App Development', 'Description': 'First beta version ready for testing', 'Due Date': '2025-06-01', 'Status': 'Not Started', 'Completion %': 0 } }
+  ]
+};
+
+export const INVENTORY_MANAGEMENT_TEMPLATE: ExportedBase = {
+  version: '1.0.0',
+  exportedAt: new Date().toISOString(),
+  base: {
+    name: 'Inventory Management',
+    description: 'Track products, suppliers, and stock levels. Perfect for small businesses and warehouses.'
+  },
+  tables: [
+    { name: 'Products', order_index: 0, is_master_list: true },
+    { name: 'Suppliers', order_index: 1, is_master_list: false },
+    { name: 'Orders', order_index: 2, is_master_list: false },
+    { name: 'Stock Movements', order_index: 3, is_master_list: false }
+  ],
+  fields: [
+    // Products table fields
+    { table_name: 'Products', name: 'Product Name', type: 'text', order_index: 0, options: {} },
+    { table_name: 'Products', name: 'SKU', type: 'text', order_index: 1, options: {} },
+    { table_name: 'Products', name: 'Category', type: 'single_select', order_index: 2, options: { choices: ['Electronics', 'Clothing', 'Food', 'Furniture', 'Other'] } },
+    { table_name: 'Products', name: 'Current Stock', type: 'number', order_index: 3, options: {} },
+    { table_name: 'Products', name: 'Reorder Level', type: 'number', order_index: 4, options: {} },
+    { table_name: 'Products', name: 'Unit Price', type: 'number', order_index: 5, options: { format: 'currency' } },
+    { table_name: 'Products', name: 'Supplier', type: 'text', order_index: 6, options: {} },
+    { table_name: 'Products', name: 'Status', type: 'single_select', order_index: 7, options: { choices: ['In Stock', 'Low Stock', 'Out of Stock', 'Discontinued'] } },
+    
+    // Suppliers table fields
+    { table_name: 'Suppliers', name: 'Supplier Name', type: 'text', order_index: 0, options: {} },
+    { table_name: 'Suppliers', name: 'Contact Person', type: 'text', order_index: 1, options: {} },
+    { table_name: 'Suppliers', name: 'Email', type: 'email', order_index: 2, options: {} },
+    { table_name: 'Suppliers', name: 'Phone', type: 'phone', order_index: 3, options: {} },
+    { table_name: 'Suppliers', name: 'Address', type: 'text', order_index: 4, options: {} },
+    { table_name: 'Suppliers', name: 'Status', type: 'single_select', order_index: 5, options: { choices: ['Active', 'Inactive', 'Preferred'] } },
+    
+    // Orders table fields
+    { table_name: 'Orders', name: 'Order Number', type: 'text', order_index: 0, options: {} },
+    { table_name: 'Orders', name: 'Supplier', type: 'text', order_index: 1, options: {} },
+    { table_name: 'Orders', name: 'Order Date', type: 'date', order_index: 2, options: {} },
+    { table_name: 'Orders', name: 'Expected Delivery', type: 'date', order_index: 3, options: {} },
+    { table_name: 'Orders', name: 'Status', type: 'single_select', order_index: 4, options: { choices: ['Pending', 'Confirmed', 'Shipped', 'Delivered', 'Cancelled'] } },
+    { table_name: 'Orders', name: 'Total Amount', type: 'number', order_index: 5, options: { format: 'currency' } },
+    { table_name: 'Orders', name: 'Notes', type: 'text', order_index: 6, options: {} },
+    
+    // Stock Movements table fields
+    { table_name: 'Stock Movements', name: 'Product', type: 'text', order_index: 0, options: {} },
+    { table_name: 'Stock Movements', name: 'Movement Type', type: 'single_select', order_index: 1, options: { choices: ['Purchase', 'Sale', 'Return', 'Adjustment', 'Transfer'] } },
+    { table_name: 'Stock Movements', name: 'Quantity', type: 'number', order_index: 2, options: {} },
+    { table_name: 'Stock Movements', name: 'Date', type: 'date', order_index: 3, options: {} },
+    { table_name: 'Stock Movements', name: 'Reference', type: 'text', order_index: 4, options: {} },
+    { table_name: 'Stock Movements', name: 'Notes', type: 'text', order_index: 5, options: {} }
+  ],
+  automations: [],
+  records: [
+    // Sample products
+    { table_name: 'Products', values: { 'Product Name': 'Laptop Computer', 'SKU': 'ELEC-001', 'Category': 'Electronics', 'Current Stock': 25, 'Reorder Level': 10, 'Unit Price': 899, 'Supplier': 'Tech Supplies Inc', 'Status': 'In Stock' } },
+    { table_name: 'Products', values: { 'Product Name': 'Office Chair', 'SKU': 'FURN-001', 'Category': 'Furniture', 'Current Stock': 5, 'Reorder Level': 8, 'Unit Price': 249, 'Supplier': 'Office Furniture Co', 'Status': 'Low Stock' } },
+    { table_name: 'Products', values: { 'Product Name': 'Wireless Mouse', 'SKU': 'ELEC-002', 'Category': 'Electronics', 'Current Stock': 0, 'Reorder Level': 20, 'Unit Price': 29, 'Supplier': 'Tech Supplies Inc', 'Status': 'Out of Stock' } },
+    
+    // Sample suppliers
+    { table_name: 'Suppliers', values: { 'Supplier Name': 'Tech Supplies Inc', 'Contact Person': 'John Doe', 'Email': 'john@techsupplies.com', 'Phone': '+1234567890', 'Address': '123 Tech Ave, Silicon Valley', 'Status': 'Preferred' } },
+    { table_name: 'Suppliers', values: { 'Supplier Name': 'Office Furniture Co', 'Contact Person': 'Jane Smith', 'Email': 'jane@officefurniture.com', 'Phone': '+1234567891', 'Address': '456 Business Rd, Corporate City', 'Status': 'Active' } },
+    
+    // Sample orders
+    { table_name: 'Orders', values: { 'Order Number': 'PO-2025-001', 'Supplier': 'Tech Supplies Inc', 'Order Date': '2025-01-25', 'Expected Delivery': '2025-02-05', 'Status': 'Confirmed', 'Total Amount': 2500, 'Notes': 'Rush order for wireless mice' } },
+    { table_name: 'Orders', values: { 'Order Number': 'PO-2025-002', 'Supplier': 'Office Furniture Co', 'Order Date': '2025-01-28', 'Expected Delivery': '2025-02-10', 'Status': 'Pending', 'Total Amount': 1995, 'Notes': 'Bulk order for office chairs' } },
+    
+    // Sample stock movements
+    { table_name: 'Stock Movements', values: { 'Product': 'Laptop Computer', 'Movement Type': 'Purchase', 'Quantity': 10, 'Date': '2025-01-20', 'Reference': 'PO-2025-001', 'Notes': 'Regular stock replenishment' } },
+    { table_name: 'Stock Movements', values: { 'Product': 'Wireless Mouse', 'Movement Type': 'Sale', 'Quantity': -15, 'Date': '2025-01-22', 'Reference': 'SO-2025-045', 'Notes': 'Sold to XYZ Corp' } }
+  ]
+};
+
+export const EVENT_PLANNING_TEMPLATE: ExportedBase = {
+  version: '1.0.0',
+  exportedAt: new Date().toISOString(),
+  base: {
+    name: 'Event Planning',
+    description: 'Organize events, manage attendees, and track vendors. Perfect for event coordinators and planners.'
+  },
+  tables: [
+    { name: 'Events', order_index: 0, is_master_list: true },
+    { name: 'Attendees', order_index: 1, is_master_list: false },
+    { name: 'Vendors', order_index: 2, is_master_list: false },
+    { name: 'Budget', order_index: 3, is_master_list: false }
+  ],
+  fields: [
+    // Events table fields
+    { table_name: 'Events', name: 'Event Name', type: 'text', order_index: 0, options: {} },
+    { table_name: 'Events', name: 'Event Type', type: 'single_select', order_index: 1, options: { choices: ['Conference', 'Wedding', 'Corporate', 'Social', 'Workshop', 'Other'] } },
+    { table_name: 'Events', name: 'Date', type: 'date', order_index: 2, options: {} },
+    { table_name: 'Events', name: 'Venue', type: 'text', order_index: 3, options: {} },
+    { table_name: 'Events', name: 'Expected Attendees', type: 'number', order_index: 4, options: {} },
+    { table_name: 'Events', name: 'Status', type: 'single_select', order_index: 5, options: { choices: ['Planning', 'Confirmed', 'In Progress', 'Completed', 'Cancelled'] } },
+    { table_name: 'Events', name: 'Total Budget', type: 'number', order_index: 6, options: { format: 'currency' } },
+    { table_name: 'Events', name: 'Notes', type: 'text', order_index: 7, options: {} },
+    
+    // Attendees table fields
+    { table_name: 'Attendees', name: 'Full Name', type: 'text', order_index: 0, options: {} },
+    { table_name: 'Attendees', name: 'Email', type: 'email', order_index: 1, options: {} },
+    { table_name: 'Attendees', name: 'Phone', type: 'phone', order_index: 2, options: {} },
+    { table_name: 'Attendees', name: 'Event', type: 'text', order_index: 3, options: {} },
+    { table_name: 'Attendees', name: 'RSVP Status', type: 'single_select', order_index: 4, options: { choices: ['Invited', 'Confirmed', 'Declined', 'Maybe', 'Attended'] } },
+    { table_name: 'Attendees', name: 'Dietary Restrictions', type: 'text', order_index: 5, options: {} },
+    { table_name: 'Attendees', name: 'Special Requests', type: 'text', order_index: 6, options: {} },
+    
+    // Vendors table fields
+    { table_name: 'Vendors', name: 'Vendor Name', type: 'text', order_index: 0, options: {} },
+    { table_name: 'Vendors', name: 'Service Type', type: 'single_select', order_index: 1, options: { choices: ['Catering', 'Photography', 'Venue', 'Entertainment', 'Decoration', 'Other'] } },
+    { table_name: 'Vendors', name: 'Contact Person', type: 'text', order_index: 2, options: {} },
+    { table_name: 'Vendors', name: 'Email', type: 'email', order_index: 3, options: {} },
+    { table_name: 'Vendors', name: 'Phone', type: 'phone', order_index: 4, options: {} },
+    { table_name: 'Vendors', name: 'Cost', type: 'number', order_index: 5, options: { format: 'currency' } },
+    { table_name: 'Vendors', name: 'Status', type: 'single_select', order_index: 6, options: { choices: ['Inquiry', 'Quoted', 'Booked', 'Confirmed', 'Completed'] } },
+    
+    // Budget table fields
+    { table_name: 'Budget', name: 'Item', type: 'text', order_index: 0, options: {} },
+    { table_name: 'Budget', name: 'Event', type: 'text', order_index: 1, options: {} },
+    { table_name: 'Budget', name: 'Category', type: 'single_select', order_index: 2, options: { choices: ['Venue', 'Catering', 'Entertainment', 'Decoration', 'Staff', 'Marketing', 'Other'] } },
+    { table_name: 'Budget', name: 'Estimated Cost', type: 'number', order_index: 3, options: { format: 'currency' } },
+    { table_name: 'Budget', name: 'Actual Cost', type: 'number', order_index: 4, options: { format: 'currency' } },
+    { table_name: 'Budget', name: 'Status', type: 'single_select', order_index: 5, options: { choices: ['Planned', 'Approved', 'Paid', 'Pending'] } },
+    { table_name: 'Budget', name: 'Notes', type: 'text', order_index: 6, options: {} }
+  ],
+  automations: [],
+  records: [
+    // Sample events
+    { table_name: 'Events', values: { 'Event Name': 'Annual Tech Conference 2025', 'Event Type': 'Conference', 'Date': '2025-06-15', 'Venue': 'Grand Convention Center', 'Expected Attendees': 500, 'Status': 'Planning', 'Total Budget': 75000, 'Notes': 'Three-day tech conference with keynote speakers' } },
+    { table_name: 'Events', values: { 'Event Name': 'Smith-Johnson Wedding', 'Event Type': 'Wedding', 'Date': '2025-08-20', 'Venue': 'Sunset Gardens', 'Expected Attendees': 150, 'Status': 'Confirmed', 'Total Budget': 45000, 'Notes': 'Outdoor ceremony, indoor reception' } },
+    
+    // Sample attendees
+    { table_name: 'Attendees', values: { 'Full Name': 'Alice Cooper', 'Email': 'alice@example.com', 'Phone': '+1234567890', 'Event': 'Annual Tech Conference 2025', 'RSVP Status': 'Confirmed', 'Dietary Restrictions': 'Vegetarian', 'Special Requests': 'Accessibility access needed' } },
+    { table_name: 'Attendees', values: { 'Full Name': 'Bob Williams', 'Email': 'bob@example.com', 'Phone': '+1234567891', 'Event': 'Smith-Johnson Wedding', 'RSVP Status': 'Confirmed', 'Dietary Restrictions': 'None', 'Special Requests': 'Plus one' } },
+    { table_name: 'Attendees', values: { 'Full Name': 'Carol Davis', 'Email': 'carol@example.com', 'Phone': '+1234567892', 'Event': 'Annual Tech Conference 2025', 'RSVP Status': 'Maybe', 'Dietary Restrictions': 'Gluten-free', 'Special Requests': '' } },
+    
+    // Sample vendors
+    { table_name: 'Vendors', values: { 'Vendor Name': 'Elite Catering Services', 'Service Type': 'Catering', 'Contact Person': 'Chef Marco', 'Email': 'marco@elitecatering.com', 'Phone': '+1234567893', 'Cost': 15000, 'Status': 'Booked' } },
+    { table_name: 'Vendors', values: { 'Vendor Name': 'Picture Perfect Photography', 'Service Type': 'Photography', 'Contact Person': 'Sarah Lens', 'Email': 'sarah@pictureperfect.com', 'Phone': '+1234567894', 'Cost': 3500, 'Status': 'Confirmed' } },
+    
+    // Sample budget items
+    { table_name: 'Budget', values: { 'Item': 'Venue Rental', 'Event': 'Annual Tech Conference 2025', 'Category': 'Venue', 'Estimated Cost': 25000, 'Actual Cost': 25000, 'Status': 'Paid', 'Notes': 'Three-day rental including setup' } },
+    { table_name: 'Budget', values: { 'Item': 'Catering - Dinner', 'Event': 'Smith-Johnson Wedding', 'Category': 'Catering', 'Estimated Cost': 12000, 'Actual Cost': null, 'Status': 'Approved', 'Notes': 'Buffet style for 150 guests' } }
+  ]
+};
+
+export const CONTENT_CALENDAR_TEMPLATE: ExportedBase = {
+  version: '1.0.0',
+  exportedAt: new Date().toISOString(),
+  base: {
+    name: 'Content Calendar',
+    description: 'Plan and track content creation and publication. Perfect for marketing teams and content creators.'
+  },
+  tables: [
+    { name: 'Content', order_index: 0, is_master_list: true },
+    { name: 'Authors', order_index: 1, is_master_list: false },
+    { name: 'Campaigns', order_index: 2, is_master_list: false },
+    { name: 'Analytics', order_index: 3, is_master_list: false }
+  ],
+  fields: [
+    // Content table fields
+    { table_name: 'Content', name: 'Title', type: 'text', order_index: 0, options: {} },
+    { table_name: 'Content', name: 'Content Type', type: 'single_select', order_index: 1, options: { choices: ['Blog Post', 'Social Media', 'Video', 'Podcast', 'Newsletter', 'Infographic'] } },
+    { table_name: 'Content', name: 'Status', type: 'single_select', order_index: 2, options: { choices: ['Idea', 'In Progress', 'Review', 'Scheduled', 'Published', 'Archived'] } },
+    { table_name: 'Content', name: 'Author', type: 'text', order_index: 3, options: {} },
+    { table_name: 'Content', name: 'Campaign', type: 'text', order_index: 4, options: {} },
+    { table_name: 'Content', name: 'Publish Date', type: 'date', order_index: 5, options: {} },
+    { table_name: 'Content', name: 'Platform', type: 'multi_select', order_index: 6, options: { choices: ['Website', 'Facebook', 'Twitter', 'LinkedIn', 'Instagram', 'YouTube'] } },
+    { table_name: 'Content', name: 'Keywords', type: 'text', order_index: 7, options: {} },
+    { table_name: 'Content', name: 'Notes', type: 'text', order_index: 8, options: {} },
+    
+    // Authors table fields
+    { table_name: 'Authors', name: 'Name', type: 'text', order_index: 0, options: {} },
+    { table_name: 'Authors', name: 'Email', type: 'email', order_index: 1, options: {} },
+    { table_name: 'Authors', name: 'Role', type: 'single_select', order_index: 2, options: { choices: ['Writer', 'Editor', 'Social Media Manager', 'Video Producer', 'Designer'] } },
+    { table_name: 'Authors', name: 'Specialization', type: 'text', order_index: 3, options: {} },
+    { table_name: 'Authors', name: 'Status', type: 'single_select', order_index: 4, options: { choices: ['Active', 'On Leave', 'Inactive'] } },
+    
+    // Campaigns table fields
+    { table_name: 'Campaigns', name: 'Campaign Name', type: 'text', order_index: 0, options: {} },
+    { table_name: 'Campaigns', name: 'Description', type: 'text', order_index: 1, options: {} },
+    { table_name: 'Campaigns', name: 'Start Date', type: 'date', order_index: 2, options: {} },
+    { table_name: 'Campaigns', name: 'End Date', type: 'date', order_index: 3, options: {} },
+    { table_name: 'Campaigns', name: 'Status', type: 'single_select', order_index: 4, options: { choices: ['Planning', 'Active', 'Completed', 'Paused'] } },
+    { table_name: 'Campaigns', name: 'Budget', type: 'number', order_index: 5, options: { format: 'currency' } },
+    { table_name: 'Campaigns', name: 'Goals', type: 'text', order_index: 6, options: {} },
+    
+    // Analytics table fields
+    { table_name: 'Analytics', name: 'Content Title', type: 'text', order_index: 0, options: {} },
+    { table_name: 'Analytics', name: 'Platform', type: 'single_select', order_index: 1, options: { choices: ['Website', 'Facebook', 'Twitter', 'LinkedIn', 'Instagram', 'YouTube'] } },
+    { table_name: 'Analytics', name: 'Views', type: 'number', order_index: 2, options: {} },
+    { table_name: 'Analytics', name: 'Engagement', type: 'number', order_index: 3, options: {} },
+    { table_name: 'Analytics', name: 'Shares', type: 'number', order_index: 4, options: {} },
+    { table_name: 'Analytics', name: 'Comments', type: 'number', order_index: 5, options: {} },
+    { table_name: 'Analytics', name: 'Date', type: 'date', order_index: 6, options: {} }
+  ],
+  automations: [],
+  records: [
+    // Sample content
+    { table_name: 'Content', values: { 'Title': '10 Tips for Remote Work Productivity', 'Content Type': 'Blog Post', 'Status': 'Published', 'Author': 'Jane Smith', 'Campaign': 'Remote Work Series', 'Publish Date': '2025-01-15', 'Platform': ['Website', 'LinkedIn'], 'Keywords': 'remote work, productivity, tips', 'Notes': 'Include infographic' } },
+    { table_name: 'Content', values: { 'Title': 'Company Culture Video', 'Content Type': 'Video', 'Status': 'In Progress', 'Author': 'Mike Johnson', 'Campaign': 'Recruitment Campaign', 'Publish Date': '2025-02-20', 'Platform': ['YouTube', 'Website'], 'Keywords': 'company culture, careers', 'Notes': 'Interview 5 employees' } },
+    { table_name: 'Content', values: { 'Title': 'Weekly Newsletter - Tech Updates', 'Content Type': 'Newsletter', 'Status': 'Review', 'Author': 'Sarah Lee', 'Campaign': 'Tech Updates 2025', 'Publish Date': '2025-02-05', 'Platform': ['Website'], 'Keywords': 'technology, updates, news', 'Notes': 'Ready for editor review' } },
+    
+    // Sample authors
+    { table_name: 'Authors', values: { 'Name': 'Jane Smith', 'Email': 'jane@example.com', 'Role': 'Writer', 'Specialization': 'Business and Productivity', 'Status': 'Active' } },
+    { table_name: 'Authors', values: { 'Name': 'Mike Johnson', 'Email': 'mike@example.com', 'Role': 'Video Producer', 'Specialization': 'Corporate Video', 'Status': 'Active' } },
+    { table_name: 'Authors', values: { 'Name': 'Sarah Lee', 'Email': 'sarah@example.com', 'Role': 'Writer', 'Specialization': 'Technology and Innovation', 'Status': 'Active' } },
+    
+    // Sample campaigns
+    { table_name: 'Campaigns', values: { 'Campaign Name': 'Remote Work Series', 'Description': 'Content series about remote work best practices', 'Start Date': '2025-01-01', 'End Date': '2025-03-31', 'Status': 'Active', 'Budget': 5000, 'Goals': 'Increase blog traffic by 30%' } },
+    { table_name: 'Campaigns', values: { 'Campaign Name': 'Recruitment Campaign', 'Description': 'Attract top talent through engaging content', 'Start Date': '2025-02-01', 'End Date': '2025-05-31', 'Status': 'Planning', 'Budget': 10000, 'Goals': 'Increase job applications by 50%' } },
+    
+    // Sample analytics
+    { table_name: 'Analytics', values: { 'Content Title': '10 Tips for Remote Work Productivity', 'Platform': 'Website', 'Views': 2500, 'Engagement': 185, 'Shares': 42, 'Comments': 18, 'Date': '2025-01-25' } },
+    { table_name: 'Analytics', values: { 'Content Title': '10 Tips for Remote Work Productivity', 'Platform': 'LinkedIn', 'Views': 5200, 'Engagement': 420, 'Shares': 89, 'Comments': 35, 'Date': '2025-01-25' } }
+  ]
+};
+
+// Export all templates as an array for easy seeding
+export const PREDEFINED_TEMPLATES = [
+  {
+    template: REAL_ESTATE_CRM_TEMPLATE,
+    category: 'crm' as const,
+    icon: 'Building2'
+  },
+  {
+    template: PROJECT_MANAGEMENT_TEMPLATE,
+    category: 'project_management' as const,
+    icon: 'Kanban'
+  },
+  {
+    template: INVENTORY_MANAGEMENT_TEMPLATE,
+    category: 'inventory' as const,
+    icon: 'Package'
+  },
+  {
+    template: EVENT_PLANNING_TEMPLATE,
+    category: 'event_planning' as const,
+    icon: 'Calendar'
+  },
+  {
+    template: CONTENT_CALENDAR_TEMPLATE,
+    category: 'content_calendar' as const,
+    icon: 'FileText'
+  }
+];
+

@@ -19,12 +19,17 @@ import { Banner } from "@/components/dashboard/Banner";
 import { HomeView } from "@/components/dashboard/views/HomeView";
 import { WorkspaceView } from "@/components/dashboard/views/WorkspaceView";
 import { StarredView } from "@/components/dashboard/views/StarredView";
+import { TemplatesView } from "@/components/dashboard/views/TemplatesView";
 import { CreateBaseModal } from "@/components/dashboard/modals/CreateBaseModal";
 import { CreateWorkspaceModal } from "@/components/dashboard/modals/CreateWorkspaceModal";
 import { DeleteWorkspaceModal } from "@/components/dashboard/modals/DeleteWorkspaceModal";
 import { DeleteBaseModal } from "@/components/dashboard/modals/DeleteBaseModal";
 import { ManageWorkspaceMembersModal } from "@/components/dashboard/modals/ManageWorkspaceMembersModal";
 import { ImportBaseModal } from "@/components/dashboard/modals/ImportBaseModal";
+import { TemplatePreviewModal } from "@/components/dashboard/modals/TemplatePreviewModal";
+import { CreateTemplateModal } from "@/components/dashboard/modals/CreateTemplateModal";
+import type { Template } from "@/lib/types/templates";
+import { TemplateService } from "@/lib/services/template-service";
 
 // Utils
 import { getBaseContextMenuOptions } from "@/lib/utils/context-menu-helpers";
@@ -98,6 +103,7 @@ function DashboardContent() {
     switchToStarredView,
     switchToSharedView,
     switchToAccountView,
+    switchToTemplatesView,
     openCreateModal,
     closeCreateModal,
     openRenameModal,
@@ -118,6 +124,12 @@ function DashboardContent() {
   const canManageMembers = !roleLoading && (role === 'owner' || role === 'admin');
   const [isManageWorkspaceMembersOpen, setIsManageWorkspaceMembersOpen] = useState(false);
   const [isImportBaseModalOpen, setIsImportBaseModalOpen] = useState(false);
+  
+  // Template modal states
+  const [isTemplatePreviewOpen, setIsTemplatePreviewOpen] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
+  const [isCreateTemplateModalOpen, setIsCreateTemplateModalOpen] = useState(false);
+  const [templateBaseId, setTemplateBaseId] = useState<string>('');
 
   // Initialize data on component mount
   const initializeDashboard = useCallback(async (preferredWorkspaceId?: string | null) => {
@@ -158,6 +170,36 @@ function DashboardContent() {
   const handleCreateBase = useCallback(async (formData: { name: string; description: string; workspaceId: string }) => {
     await createBase(formData);
   }, [createBase]);
+
+  const handleCreateFromTemplate = useCallback(async (templateId: string, workspaceId: string, baseName?: string) => {
+    const toastId = toast.loading('Creating base from template...', {
+      description: 'This may take a few moments'
+    });
+    
+    try {
+      const newBaseId = await TemplateService.createBaseFromTemplate(templateId, workspaceId, baseName);
+      
+      // Reload bases to show the new one
+      await loadRecentBases();
+      if (activeView === 'workspace' && selectedWorkspaceId) {
+        await loadWorkspaceBases(selectedWorkspaceId);
+      }
+      
+      toast.success('Base created successfully!', {
+        id: toastId,
+        description: 'Your new base is ready to use'
+      });
+      
+      // Navigate to the new base
+      router.push(`/bases/${newBaseId}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to create base from template';
+      toast.error('Failed to create base', {
+        id: toastId,
+        description: message
+      });
+    }
+  }, [activeView, selectedWorkspaceId, loadRecentBases, loadWorkspaceBases, router]);
 
   const handleCreateWorkspace = useCallback(async (formData: { name: string }) => {
     try {
@@ -214,6 +256,56 @@ function DashboardContent() {
     loadSharedBases();
   }, [switchToSharedView, loadSharedBases]);
 
+  const handleTemplatesViewSelect = useCallback(() => {
+    switchToTemplatesView();
+  }, [switchToTemplatesView]);
+
+  const handleUseTemplate = useCallback((template: Template) => {
+    setSelectedTemplate(template);
+    setIsTemplatePreviewOpen(true);
+  }, []);
+
+  const handlePreviewTemplate = useCallback((template: Template) => {
+    setSelectedTemplate(template);
+    setIsTemplatePreviewOpen(true);
+  }, []);
+
+  const handleCreateTemplate = useCallback(async (data: {
+    name: string;
+    description: string;
+    category: string;
+    icon: string;
+    includeRecords: boolean;
+  }) => {
+    const toastId = toast.loading('Creating template...', {
+      description: 'This may take a moment'
+    });
+    
+    try {
+      await TemplateService.createTemplateFromBase(templateBaseId, {
+        name: data.name,
+        description: data.description,
+        category: data.category as any,
+        icon: data.icon,
+        includeRecords: data.includeRecords
+      });
+      
+      toast.success('Template created successfully!', {
+        id: toastId,
+        description: 'Your template is now available for use'
+      });
+      
+      setIsCreateTemplateModalOpen(false);
+      hideContextMenu();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to create template';
+      toast.error('Failed to create template', {
+        id: toastId,
+        description: message
+      });
+    }
+  }, [templateBaseId, hideContextMenu]);
+
   // Handle duplicate base
   const handleDuplicateBase = useCallback(async (base: BaseRecord) => {
     const toastId = toast.loading(`Duplicating "${base.name}"...`, {
@@ -260,6 +352,11 @@ function DashboardContent() {
         onRename: openRenameModal,
         onToggleStar: toggleStar,
         onDuplicate: handleDuplicateBase,
+        onSaveAsTemplate: (base: BaseRecord) => {
+          setTemplateBaseId(base.id);
+          setSelectedBase(base);
+          setIsCreateTemplateModalOpen(true);
+        },
         onDelete: openDeleteBaseModal,
       }).filter((opt) => !(opt.id === "delete" && !can.delete))
     : [];
@@ -293,6 +390,7 @@ function DashboardContent() {
             if (view === 'home') switchToHomeView();
             else if (view === 'starred') handleStarredViewSelect();
             else if (view === 'shared') handleSharedViewSelect();
+            else if (view === 'templates') handleTemplatesViewSelect();
           }}
           onWorkspaceSelect={handleWorkspaceSelect}
           onWorkspacesToggle={() => setWorkspacesCollapsed(!workspacesCollapsed)}
@@ -380,6 +478,14 @@ function DashboardContent() {
               />
             )}
 
+            {activeView === 'templates' && (
+              <TemplatesView
+                onUseTemplate={handleUseTemplate}
+                onPreviewTemplate={handlePreviewTemplate}
+                userId={user?.id}
+              />
+            )}
+
             {activeView === 'account' && (
               <div className="max-w-5xl">
                 <AccountPage />
@@ -392,10 +498,12 @@ function DashboardContent() {
             isOpen={isCreateOpen}
             onClose={closeCreateModal}
             onCreate={handleCreateBase}
+            onCreateFromTemplate={handleCreateFromTemplate}
             activeView={activeView}
             selectedWorkspaceId={selectedWorkspaceId}
             workspaces={workspaces}
             onImport={() => setIsImportBaseModalOpen(true)}
+            userId={user?.id}
           />
 
           <CreateWorkspaceModal
@@ -468,6 +576,27 @@ function DashboardContent() {
               await deleteBase(selectedBase.id);
               closeDeleteBaseModal();
             }}
+          />
+
+          {/* Template Preview Modal */}
+          <TemplatePreviewModal
+            template={selectedTemplate}
+            isOpen={isTemplatePreviewOpen}
+            onClose={() => {
+              setIsTemplatePreviewOpen(false);
+              setSelectedTemplate(null);
+            }}
+            onUseTemplate={handleCreateFromTemplate}
+            workspaces={workspaces}
+          />
+
+          {/* Create Template Modal */}
+          <CreateTemplateModal
+            isOpen={isCreateTemplateModalOpen}
+            onClose={() => setIsCreateTemplateModalOpen(false)}
+            onCreate={handleCreateTemplate}
+            baseId={templateBaseId}
+            baseName={selectedBase?.name}
           />
 
           
