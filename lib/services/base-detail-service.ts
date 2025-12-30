@@ -1569,7 +1569,7 @@ export class BaseDetailService {
 
     // NEW STEP: Analyze existing single_select fields for new options
     console.log('🔍 Analyzing existing single_select fields for new options...');
-    const existingSingleSelectUpdates = new Map<string, { field: FieldRow, newOptions: Record<string, { name: string; color: string }> }>();
+    const existingSingleSelectUpdates = new Map<string, { field: FieldRow, newOptions: Record<string, { label: string; color: string }> }>();
 
     for (const [csvColumn, mapping] of Object.entries(fieldMappings)) {
       // Check if mapping is to an existing field ID
@@ -1603,8 +1603,8 @@ export class BaseDetailService {
             }
 
             // Check which values are missing from current options
-            const currentOptions = field.options as Record<string, { name: string; color: string }> || {};
-            const newOptionsToAdd: Record<string, { name: string; color: string }> = {};
+            const currentOptions = field.options as Record<string, { label?: string; name?: string; color: string }> || {};
+            const newOptionsToAdd: Record<string, { label: string; color: string }> = {};
             let nextOptionIndex = Object.keys(currentOptions).length + 1;
 
             for (const value of uniqueValues) {
