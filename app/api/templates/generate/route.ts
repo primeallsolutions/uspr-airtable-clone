@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
+import { formatFieldValue } from "@/lib/utils/field-formatters";
+import { TemplateField } from "@/lib/services/template-service";
 
 // Create admin client for server-side operations
 const supabaseAdmin = createClient(
@@ -60,7 +62,7 @@ const basePrefix = (baseId: string, tableId?: string | null) =>
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { templateId, baseId, tableId, fieldValues, outputFileName } = body;
+    const { templateId, baseId, tableId, fieldValues, fieldOverrides, addedElements, outputFileName, skipSignatureRequest } = body;
 
     if (!templateId || !baseId || !fieldValues) {
       return NextResponse.json(
@@ -126,9 +128,32 @@ export async function POST(request: NextRequest) {
     const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const helveticaBoldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-    // Fill fields
+    // Collect signature fields that require e-signature
+    const esignatureFields: typeof fullTemplate.fields = [];
+    
+    console.log("Template fields loaded:", {
+      totalFields: fullTemplate.fields?.length || 0,
+      signatureFields: fullTemplate.fields?.filter((f: TemplateField) => f.field_type === "signature").length || 0,
+      esignatureFieldsCount: fullTemplate.fields?.filter((f: TemplateField) => f.field_type === "signature" && f.requires_esignature).length || 0
+    });
+    
+    // Fill fields (skip signature fields that require e-signature - they'll be signed later)
     if (fullTemplate.fields && fullTemplate.fields.length > 0) {
       for (const field of fullTemplate.fields) {
+        // If this is a signature field that requires e-signature, skip filling it
+        if (field.field_type === "signature" && field.requires_esignature) {
+          console.log("Found e-signature field:", {
+            fieldName: field.field_name,
+            signerEmail: field.esignature_signer_email,
+            signerName: field.esignature_signer_name,
+            page: field.page_number,
+            x: field.x_position,
+            y: field.y_position
+          });
+          esignatureFields.push(field);
+          continue; // Leave signature field blank for now - will be filled after signing
+        }
+
         const value = fieldValues[field.field_key];
         if (value === undefined || value === null || value === "") {
           // Use default value if provided
@@ -142,33 +167,46 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        const fieldValue = String(fieldValues[field.field_key] || field.default_value || "");
+        let fieldValue = fieldValues[field.field_key] || field.default_value || "";
         if (!fieldValue) continue;
+
+        // Apply formatting if configured
+        if (field.formatting_options) {
+          fieldValue = formatFieldValue(fieldValue, field.formatting_options);
+        } else {
+          fieldValue = String(fieldValue);
+        }
 
         // Get the page (0-indexed)
         const pageIndex = Math.max(0, Math.min(field.page_number - 1, pages.length - 1));
         const page = pages[pageIndex];
 
-        // Get field properties
-        const x = field.x_position;
-        const y = field.y_position;
-        const width = field.width || 200;
-        const height = field.height || 20;
-        const fontSize = field.font_size || 12;
+        // Get field properties - use override if available, otherwise use original
+        const fieldKey = field.id || field.field_key;
+        const override = fieldOverrides?.[fieldKey];
+        const x = Number(override?.x_position ?? field.x_position) || 0;
+        const y = Number(override?.y_position ?? field.y_position) || 0;
+        const width = Number(override?.width ?? field.width) || 200;
+        const height = Number(override?.height ?? field.height) || 20;
+        const fontSize = Number(field.font_size) || 12;
         const fontName = field.font_name || "Helvetica";
 
         // Select font
         const font = fontName.includes("Bold") || fontName.includes("bold") ? helveticaBoldFont : helveticaFont;
+
+        // Note: PDF coordinates start from bottom-left
+        // y_position is stored as PDF coordinate from bottom (bottom of field)
+        // To draw text at the bottom of the field, we use y_position directly
+        // To draw text at the top of the field, we use y_position + height
+        const pageHeight = page.getHeight();
 
         // Handle different field types
         switch (field.field_type) {
           case "text":
           case "number":
           case "date":
-            // Draw text field
-            // Note: PDF coordinates start from bottom-left, so we need to adjust Y
-            const pageHeight = page.getHeight();
-            const adjustedY = pageHeight - y - height;
+            // Draw text field - y_position is bottom coordinate, so use y + fontSize for text baseline
+            const adjustedY = y + fontSize; // Position text slightly above bottom of field
 
             // Wrap text if needed
             const maxWidth = width - 4; // Leave padding
@@ -220,7 +258,7 @@ export async function POST(request: NextRequest) {
             if (fieldValue.toLowerCase() === "true" || fieldValue === "1" || fieldValue.toLowerCase() === "yes") {
               const checkboxSize = Math.min(width, height) * 0.6;
               const checkboxX = x + width / 2;
-              const checkboxY = pageHeight - y - height / 2;
+              const checkboxY = y + height / 2; // y is bottom coordinate, center is y + height/2
 
               // Draw X mark
               page.drawText("✓", {
@@ -234,23 +272,284 @@ export async function POST(request: NextRequest) {
             break;
 
           case "signature":
-            // For signatures, we'd typically embed an image
-            // For now, just draw text placeholder
-            const sigY = pageHeight - y - height;
-            page.drawText(fieldValue || "[Signature]", {
-              x: x + 2,
-              y: sigY,
-              size: fontSize,
-              font: helveticaFont,
-              color: rgb(0.5, 0.5, 0.5), // Gray color for placeholder
-            });
+            // Only fill signature if it doesn't require e-signature
+            // (E-signature fields are already skipped above)
+            if (fieldValue && fieldValue.startsWith("data:image")) {
+              try {
+                // Extract base64 data from data URL
+                const base64Data = fieldValue.split(",")[1];
+                const imageBytes = Buffer.from(base64Data, "base64");
+                
+                // Embed PNG image
+                const signatureImage = await pdfDoc.embedPng(imageBytes);
+                
+                // Calculate dimensions to fit within field bounds
+                const sigWidth = Math.min(width - 4, signatureImage.width);
+                const sigHeight = (signatureImage.height / signatureImage.width) * sigWidth;
+                const adjustedSigHeight = Math.min(sigHeight, height - 4);
+                const adjustedSigWidth = (signatureImage.width / signatureImage.height) * adjustedSigHeight;
+                
+                // Position signature - y is bottom coordinate, so center vertically
+                const sigY = y + (height - adjustedSigHeight) / 2;
+                
+                // Draw signature image
+                page.drawImage(signatureImage, {
+                  x: x + 2,
+                  y: sigY,
+                  width: adjustedSigWidth,
+                  height: adjustedSigHeight,
+                });
+              } catch (err) {
+                console.error("Failed to embed signature image:", err);
+                // Fallback to text placeholder
+                const sigY = y + fontSize; // y is bottom, position text slightly above
+                page.drawText("[Signature Error]", {
+                  x: x + 2,
+                  y: sigY,
+                  size: fontSize,
+                  font: helveticaFont,
+                  color: rgb(1, 0, 0), // Red color for error
+                });
+              }
+            } else {
+              // Leave blank for e-signature fields, or show placeholder for regular signature fields
+              const sigY = y + fontSize; // y is bottom, position text slightly above
+              page.drawText(fieldValue || "[Signature Required]", {
+                x: x + 2,
+                y: sigY,
+                size: fontSize,
+                font: helveticaFont,
+                color: rgb(0.5, 0.5, 0.5), // Gray color for placeholder
+              });
+            }
             break;
+        }
+      }
+    }
+
+    // Add custom elements (text/images) if provided
+    if (addedElements && Array.isArray(addedElements) && addedElements.length > 0) {
+      for (const element of addedElements) {
+        const pageIndex = Math.max(0, Math.min(element.page - 1, pages.length - 1));
+        const page = pages[pageIndex];
+        if (!page) continue;
+
+        const pageHeight = page.getHeight();
+
+        if (element.type === "text" && element.content) {
+          const font = helveticaFont;
+          page.drawText(element.content, {
+            x: element.x,
+            y: pageHeight - element.y, // PDF Y is from bottom
+            size: element.fontSize || 12,
+            font: font,
+            color: rgb(0, 0, 0),
+          });
+        } else if (element.type === "image" && element.imageData) {
+          try {
+            // Extract base64 data
+            const base64Data = element.imageData.includes(",") 
+              ? element.imageData.split(",")[1] 
+              : element.imageData;
+            const imageBytes = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
+            
+            // Try PNG first, then JPEG
+            let image;
+            try {
+              image = await pdfDoc.embedPng(imageBytes);
+            } catch {
+              image = await pdfDoc.embedJpg(imageBytes);
+            }
+            
+            page.drawImage(image, {
+              x: element.x,
+              y: pageHeight - element.y - (element.height || 200),
+              width: element.width || 200,
+              height: element.height || 200,
+            });
+          } catch (imgErr) {
+            console.error("Failed to embed image:", imgErr);
+          }
         }
       }
     }
 
     // Save PDF
     const pdfBytes = await pdfDoc.save();
+
+    // Upload generated document to storage first
+    const sanitizeFileName = (name: string) => {
+      const fallback = "file";
+      const base = (name || fallback)
+        .replace(/[\s\u2013\u2014]+/g, "-")
+        .replace(/[^\w.\-()+]/g, "")
+        .replace(/-+/g, "-")
+        .replace(/\.+/g, ".")
+        .trim();
+      return base.length > 0 ? base : fallback;
+    };
+
+    const finalFileName = outputFileName || `${sanitizeFileName(fullTemplate.name)}_filled.pdf`;
+    const folderPath = body.folderPath || ""; // Optional folder path from request
+    const storagePrefix = basePrefix(baseId, tableId || null);
+    const storagePath = folderPath 
+      ? `${storagePrefix}${folderPath}${folderPath.endsWith("/") ? "" : "/"}${finalFileName}`
+      : `${storagePrefix}${finalFileName}`;
+
+    // Upload to storage
+    const { error: uploadError } = await supabase.storage
+      .from(BUCKET)
+      .upload(storagePath, pdfBytes, {
+        contentType: "application/pdf",
+        upsert: false,
+      });
+
+    if (uploadError) {
+      console.error("Failed to upload generated document:", uploadError);
+      // Still return the PDF even if upload fails
+    }
+
+    // Validate and filter e-signature fields: only include those with valid email addresses
+    const validESignatureFields = esignatureFields.filter(
+      (f: TemplateField) => f.requires_esignature && f.esignature_signer_email && f.esignature_signer_email.trim() !== ""
+    );
+
+    // If there are valid e-signature fields, automatically create signature request (unless skipped)
+    let signatureRequestId: string | null = null;
+    console.log("Checking e-signature fields:", {
+      totalESignatureFields: esignatureFields.length,
+      validESignatureFieldsCount: validESignatureFields.length,
+      skipSignatureRequest,
+      fields: validESignatureFields.map((f: TemplateField) => ({
+        name: f.field_name,
+        email: f.esignature_signer_email,
+        requires: f.requires_esignature
+      }))
+    });
+    
+    if (validESignatureFields.length > 0 && !skipSignatureRequest) {
+      try {
+        const { ESignatureService } = await import("@/lib/services/esign-service");
+        
+        // Get current user for created_by
+        const { data: { user } } = await supabase.auth.getUser();
+        
+        // Check if user profile exists in profiles table
+        let createdBy: string | null = null;
+        if (user) {
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("id")
+            .eq("id", user.id)
+            .single();
+          createdBy = profile?.id || null;
+        }
+        
+        // Collect unique signers from signature fields
+        const signerMap = new Map<string, {
+          email: string;
+          name?: string;
+          role: "signer" | "viewer" | "approver";
+          sign_order: number;
+          fields: typeof fullTemplate.fields;
+        }>();
+
+        // Use only valid e-signature fields (already filtered above)
+        validESignatureFields.forEach((field: TemplateField) => {
+          if (!field.requires_esignature || !field.esignature_signer_email) return;
+          
+          const email = field.esignature_signer_email.trim();
+          if (!signerMap.has(email)) {
+            signerMap.set(email, {
+              email,
+              name: field.esignature_signer_name || undefined,
+              role: (field.esignature_signer_role as "signer" | "viewer" | "approver") || "signer",
+              sign_order: field.esignature_sign_order || 0,
+              fields: [],
+            });
+          }
+          signerMap.get(email)!.fields.push(field);
+        });
+
+        const signers = Array.from(signerMap.values()).map(({ fields, ...signer }) => ({
+          email: signer.email,
+          name: signer.name,
+          role: signer.role,
+          sign_order: signer.sign_order,
+        }));
+
+        if (signers.length > 0) {
+          // Create signature request (using existing authenticated supabase client)
+          const signatureRequest = await ESignatureService.createSignatureRequest({
+            base_id: baseId,
+            table_id: tableId || null,
+            title: `Signature Request: ${fullTemplate.name}`,
+            message: `Please sign the following document: ${fullTemplate.name}`,
+            document_path: storagePath,
+            created_by: createdBy || undefined,
+          }, supabase);
+
+          signatureRequestId = signatureRequest.id!;
+
+          // Add signers
+          const createdSigners = await ESignatureService.addSigners(signatureRequest.id!, signers, supabase);
+
+          // Create signature fields for each signer's fields
+          for (const signer of createdSigners) {
+            const signerFields = signerMap.get(signer.email)?.fields || [];
+            console.log(`Creating fields for signer ${signer.email}:`, {
+              signerId: signer.id,
+              fieldsCount: signerFields.length,
+              fields: signerFields.map((f: TemplateField) => ({
+                page: f.page_number,
+                x: f.x_position,
+                y: f.y_position,
+                width: f.width,
+                height: f.height,
+                name: f.field_name
+              }))
+            });
+            
+            if (signerFields.length > 0) {
+              const fieldsToAdd = signerFields.map((templateField: TemplateField) => ({
+                signer_id: signer.id!,
+                page_number: templateField.page_number,
+                x_position: Number(templateField.x_position),
+                y_position: Number(templateField.y_position),
+                width: templateField.width ? Number(templateField.width) : undefined,
+                height: templateField.height ? Number(templateField.height) : undefined,
+                field_type: "signature" as const,
+                label: templateField.field_name,
+                is_required: templateField.is_required !== false,
+              }));
+              
+              const createdFields = await ESignatureService.addSignatureFields(signatureRequest.id!, fieldsToAdd, supabase);
+              console.log(`Created ${createdFields.length} signature fields for signer ${signer.email}`);
+            }
+          }
+
+          // Send emails to all signers
+          const signatureRequestWithSigners = await ESignatureService.getSignatureRequest(signatureRequest.id!, supabase);
+          if (signatureRequestWithSigners) {
+            for (const signer of createdSigners) {
+              try {
+                await ESignatureService.sendSignatureRequestEmail(
+                  { ...signer, signature_request_id: signatureRequest.id! },
+                  signatureRequestWithSigners
+                );
+                await ESignatureService.updateSignerStatus(signer.id!, "sent");
+              } catch (emailError) {
+                console.error(`Failed to send email to ${signer.email}:`, emailError);
+              }
+            }
+            await ESignatureService.updateRequestStatus(signatureRequest.id!, "sent");
+          }
+        }
+      } catch (sigError) {
+        console.error("Failed to create signature request:", sigError);
+        // Don't fail document generation if signature request creation fails
+      }
+    }
 
     // Return PDF as base64 or binary
     // For API route, we'll return base64 encoded
@@ -259,7 +558,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       pdf: base64,
-      fileName: outputFileName || `${fullTemplate.name}_filled.pdf`,
+      fileName: finalFileName,
+      documentPath: storagePath,
+      signatureRequestId: signatureRequestId,
+      requiresSignatures: validESignatureFields.length > 0,
     });
   } catch (error: any) {
     console.error("Failed to generate document:", error);

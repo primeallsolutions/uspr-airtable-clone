@@ -1,4 +1,4 @@
-import { FolderPlus, FileUp, Hash, Loader2, FileText, Sparkles } from "lucide-react";
+import { FolderPlus, FileUp, Hash, Loader2, FileText, Sparkles, PenTool, CheckCircle2 } from "lucide-react";
 
 type DocumentsHeaderProps = {
   prefixLabel: string;
@@ -8,6 +8,8 @@ type DocumentsHeaderProps = {
   onUpload: (files: FileList | null) => void;
   onManageTemplates?: () => void;
   onGenerateDocument?: () => void;
+  onRequestSignature?: () => void;
+  onViewSignatures?: () => void;
 };
 
 export const DocumentsHeader = ({
@@ -18,6 +20,8 @@ export const DocumentsHeader = ({
   onUpload,
   onManageTemplates,
   onGenerateDocument,
+  onRequestSignature,
+  onViewSignatures,
 }: DocumentsHeaderProps) => {
   return (
     <div className="flex flex-wrap items-center gap-2 border-b border-gray-200 px-4 py-3 bg-gray-50">
@@ -44,6 +48,26 @@ export const DocumentsHeader = ({
           >
             <Sparkles className="w-4 h-4" />
             Generate
+          </button>
+        )}
+        {onRequestSignature && (
+          <button
+            onClick={onRequestSignature}
+            className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-white bg-green-600 border border-green-600 rounded-lg hover:bg-green-700 transition-colors"
+            title="Request e-signature"
+          >
+            <PenTool className="w-4 h-4" />
+            Request Signature
+          </button>
+        )}
+        {onViewSignatures && (
+          <button
+            onClick={onViewSignatures}
+            className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:border-green-400 hover:text-green-700 transition-colors"
+            title="View signature requests status"
+          >
+            <CheckCircle2 className="w-4 h-4" />
+            View Signatures
           </button>
         )}
         <button

@@ -1,17 +1,33 @@
 import { useMemo, useState, useEffect, useCallback } from "react";
+import { toast } from "sonner";
+import { supabase } from "@/lib/supabaseClient";
 import type { TableRow } from "@/lib/types/base-detail";
 import { DocumentsService, type StoredDocument } from "@/lib/services/documents-service";
 import { DocumentsHeader } from "./documents/DocumentsHeader";
 import { DocumentsSidebar } from "./documents/DocumentsSidebar";
 import { DocumentsList } from "./documents/DocumentsList";
 import { DocumentPreview } from "./documents/DocumentPreview";
-import { PlateEditor } from "./documents/PlateEditor";
 import { PdfEditor } from "./documents/PdfEditor";
 import { TemplateManagementModal } from "./documents/TemplateManagementModal";
+import { SignatureRequestModal } from "./documents/SignatureRequestModal";
+import { SignatureRequestStatus } from "./documents/SignatureRequestStatus";
+import { MergePackModal } from "./documents/MergePackModal";
 import { TemplateFieldEditor } from "./documents/TemplateFieldEditor";
 import { DocumentGeneratorForm } from "./documents/DocumentGeneratorForm";
+import { FolderNameModal } from "./documents/FolderNameModal";
+import { RenameDocumentModal } from "./documents/RenameDocumentModal";
+import { RenameFolderModal } from "./documents/RenameFolderModal";
+import { DeleteFolderModal } from "./documents/DeleteFolderModal";
 import { isFolder, isPdf } from "./documents/utils";
 import type { DocumentTemplate } from "@/lib/services/template-service";
+
+// Type for folder tree nodes
+type FolderNode = {
+  name: string;
+  path: string;
+  parent_path: string | null;
+  children: FolderNode[];
+};
 
 type DocumentsViewProps = {
   baseId: string;
@@ -47,6 +63,14 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable }: Docu
   const [showTemplateFieldEditor, setShowTemplateFieldEditor] = useState<boolean>(false);
   const [showDocumentGenerator, setShowDocumentGenerator] = useState<boolean>(false);
   const [selectedTemplate, setSelectedTemplate] = useState<DocumentTemplate | null>(null);
+  const [showFolderModal, setShowFolderModal] = useState<boolean>(false);
+  const [showRenameModal, setShowRenameModal] = useState<boolean>(false);
+  const [showRenameFolderModal, setShowRenameFolderModal] = useState<boolean>(false);
+  const [showDeleteFolderModal, setShowDeleteFolderModal] = useState<boolean>(false);
+  const [selectedFolder, setSelectedFolder] = useState<{ path: string; name: string } | null>(null);
+  const [showSignatureRequestModal, setShowSignatureRequestModal] = useState<boolean>(false);
+  const [showSignatureStatus, setShowSignatureStatus] = useState<boolean>(false);
+  const [showMergePackModal, setShowMergePackModal] = useState<boolean>(false);
 
   const currentPrefix = useMemo(
     () => (folderPath && !folderPath.endsWith("/") ? `${folderPath}/` : folderPath),
@@ -84,7 +108,11 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable }: Docu
       // Don't auto-select first document when folder changes or on initial load
     } catch (err) {
       console.error("Failed to load documents", err);
-      setError("Unable to load documents");
+      const errorMessage = err instanceof Error ? err.message : "Unable to load documents";
+      setError(errorMessage);
+      toast.error("Failed to load documents", {
+        description: errorMessage,
+      });
     } finally {
       setLoading(false);
       // Mark initial load as complete after first successful load
@@ -105,39 +133,132 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable }: Docu
     setIsInitialLoad(true); // Reset initial load state when base/table changes
   }, [baseId, selectedTable?.id]);
 
-  const handleAddFolder = async () => {
-    const name = window.prompt("Folder name?");
-    if (!name) return;
+  const handleAddFolder = () => {
+    setShowFolderModal(true);
+  };
+
+  const handleCreateFolder = async (name: string) => {
     try {
       await DocumentsService.createFolder(baseId, selectedTable?.id ?? null, currentPrefix, name);
       await refresh();
       setFolderPath(currentPrefix + name + "/");
+      toast.success("Folder created successfully", {
+        description: `Folder "${name}" has been created.`,
+      });
     } catch (err) {
       console.error("Failed to create folder", err);
-      alert("Unable to create folder");
+      const errorMessage = err instanceof Error ? err.message : "Unable to create folder";
+      toast.error("Failed to create folder", {
+        description: errorMessage,
+      });
+      throw err; // Re-throw to let modal handle it
     }
   };
 
-  const handleUpload = async (files: FileList | null) => {
-    if (!files || files.length === 0) return;
-    setUploading(true);
-    setUploadProgress({ current: 0, total: files.length });
-    try {
-      const arr = Array.from(files);
-      for (let i = 0; i < arr.length; i++) {
-        const file = arr[i];
+  // File validation constants
+  const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
+  const UPLOAD_CONCURRENCY = 3; // Upload 3 files at a time
+
+  const validateFile = (file: File): string | null => {
+    if (file.size === 0) {
+      return `"${file.name}" is empty`;
+    }
+    if (file.size > MAX_FILE_SIZE) {
+      const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+      return `"${file.name}" is too large (${sizeMB}MB). Maximum size is 100MB`;
+    }
+    return null;
+  };
+
+  const uploadBatch = async (files: File[], concurrency: number): Promise<{ success: number; failed: number; errors: Array<{ file: string; error: string }> }> => {
+    const results = { success: 0, failed: 0, errors: [] as Array<{ file: string; error: string }> };
+    
+    for (let i = 0; i < files.length; i += concurrency) {
+      const batch = files.slice(i, i + concurrency);
+      const batchPromises = batch.map(async (file) => {
+        try {
         await DocumentsService.uploadDocument({
           baseId,
           tableId: selectedTable?.id,
           folderPath: currentPrefix,
           file,
         });
-        setUploadProgress({ current: i + 1, total: arr.length });
+          results.success++;
+          return { success: true, file: file.name };
+        } catch (err) {
+          results.failed++;
+          const errorMessage = err instanceof Error ? err.message : "Upload failed";
+          results.errors.push({ file: file.name, error: errorMessage });
+          return { success: false, file: file.name, error: errorMessage };
+        }
+      });
+      
+      await Promise.all(batchPromises);
+      setUploadProgress({ current: Math.min(i + concurrency, files.length), total: files.length });
+    }
+    
+    return results;
+  };
+
+  const handleUpload = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    
+    const fileArray = Array.from(files);
+    
+    // Validate all files first
+    const validationErrors: string[] = [];
+    const validFiles: File[] = [];
+    
+    fileArray.forEach((file) => {
+      const error = validateFile(file);
+      if (error) {
+        validationErrors.push(error);
+      } else {
+        validFiles.push(file);
       }
+    });
+    
+    // Show validation errors if any
+    if (validationErrors.length > 0) {
+      toast.error("Some files were skipped", {
+        description: validationErrors.slice(0, 3).join(", ") + (validationErrors.length > 3 ? ` and ${validationErrors.length - 3} more` : ""),
+        duration: 6000,
+      });
+    }
+    
+    if (validFiles.length === 0) {
+      return;
+    }
+    
+    setUploading(true);
+    setUploadProgress({ current: 0, total: validFiles.length });
+    
+    const toastId = toast.loading(`Uploading ${validFiles.length} file${validFiles.length > 1 ? "s" : ""}...`);
+    
+    try {
+      const results = await uploadBatch(validFiles, UPLOAD_CONCURRENCY);
+      
       await refresh();
+      
+      if (results.failed === 0) {
+        toast.success(`Successfully uploaded ${results.success} file${results.success > 1 ? "s" : ""}`, {
+          id: toastId,
+        });
+      } else {
+        const errorMessages = results.errors.slice(0, 3).map(e => `${e.file}: ${e.error}`).join("; ");
+        toast.warning(`Uploaded ${results.success} file${results.success > 1 ? "s" : ""}, ${results.failed} failed`, {
+          id: toastId,
+          description: errorMessages + (results.errors.length > 3 ? ` and ${results.errors.length - 3} more errors` : ""),
+          duration: 8000,
+        });
+      }
     } catch (err) {
       console.error("Upload failed", err);
-      alert("Upload failed. Please try again.");
+      const errorMessage = err instanceof Error ? err.message : "Upload failed. Please try again.";
+      toast.error("Upload failed", {
+        id: toastId,
+        description: errorMessage,
+      });
     } finally {
       setUploading(false);
     }
@@ -179,7 +300,7 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable }: Docu
   }, [allDocs, currentPrefix]);
 
   // Build folder tree structure
-  const folderTree = useMemo(() => {
+  const folderTree = useMemo((): FolderNode[] => {
     if (dbFolders.length === 0) return [];
     
     // Normalize paths to ensure consistent matching (ensure trailing slash)
@@ -188,8 +309,8 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable }: Docu
       return path.endsWith("/") ? path : `${path}/`;
     };
     
-    // Build a map of folders by path
-    const folderMap = new Map<string, { name: string; path: string; parent_path: string | null; children: any[] }>();
+    // Build a map of folders by path with proper typing
+    const folderMap = new Map<string, FolderNode>();
     
     // First pass: create all folder nodes with normalized paths
     dbFolders.forEach((folder) => {
@@ -204,7 +325,7 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable }: Docu
     });
     
     // Second pass: build tree structure
-    const rootFolders: any[] = [];
+    const rootFolders: FolderNode[] = [];
     folderMap.forEach((folder) => {
       if (!folder.parent_path) {
         rootFolders.push(folder);
@@ -221,7 +342,7 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable }: Docu
     });
     
     // Sort folders recursively
-    const sortFolders = (folders: any[]) => {
+    const sortFolders = (folders: FolderNode[]) => {
       folders.sort((a, b) => a.name.localeCompare(b.name));
       folders.forEach((folder) => {
         if (folder.children.length > 0) {
@@ -234,8 +355,8 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable }: Docu
     return rootFolders;
   }, [dbFolders]);
 
+  // Simplified root folders - only use database folders (removed fallback logic)
   const rootFolders = useMemo(() => {
-    // For backward compatibility, also return flat list of root folder names
     if (dbFolders.length > 0) {
       return dbFolders
         .filter((folder) => {
@@ -246,61 +367,8 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable }: Docu
         .map((folder) => folder.name)
         .sort();
     }
-
-    // Fallback: extract folders from storage listings
-    const set = new Set<string>();
-
-    // Extract folders from .keep files (folder markers)
-    rawDocs.forEach((doc) => {
-      // Check if this is a folder marker file
-      if (!isFolder(doc)) return;
-
-      // Handle folder path formats:
-      // - "Documents/.keep" -> "Documents"
-      // - "folderName/.keep" -> "folderName"
-      let folderPath = doc.path;
-
-      // Remove .keep suffix if present
-      if (folderPath.endsWith("/.keep")) {
-        folderPath = folderPath.slice(0, -5); // Remove "/.keep"
-      } else if (folderPath.endsWith(".keep")) {
-        folderPath = folderPath.slice(0, -5); // Remove ".keep"
-      }
-
-      // Remove trailing slash if present
-      if (folderPath.endsWith("/")) {
-        folderPath = folderPath.slice(0, -1);
-      }
-
-      // Extract the root folder name (first segment only, for root folders)
-      const parts = folderPath.split("/").filter(Boolean);
-      if (parts.length > 0) {
-        const rootFolderName = parts[0];
-        // Only add if it's a root-level folder (single segment) and not ".keep"
-        if (rootFolderName && rootFolderName !== ".keep" && parts.length === 1) {
-          set.add(rootFolderName);
-        }
-      }
-    });
-
-    // Also detect folders from file paths (if a file is in a subdirectory, that subdirectory is a folder)
-    rawDocs.forEach((doc) => {
-      // Skip folder markers (already processed above)
-      if (isFolder(doc)) return;
-
-      // Extract root folder from file paths like "Documents/file.pdf" -> "Documents"
-      const parts = doc.path.split("/").filter(Boolean);
-      if (parts.length > 1) {
-        // File is in a subdirectory, so the first part is a folder
-        const rootFolderName = parts[0];
-        if (rootFolderName) {
-          set.add(rootFolderName);
-        }
-      }
-    });
-
-    return Array.from(set).sort();
-  }, [dbFolders, rawDocs]);
+    return [];
+  }, [dbFolders]);
 
   // Default folders to create if none exist
   const defaultFolders = useMemo(
@@ -414,27 +482,48 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable }: Docu
 
   const handleDeleteSelected = async () => {
     if (!selectedDoc || isFolder(selectedDoc)) return;
+    
+    const fileName = selectedDoc.path.split("/").pop() || selectedDoc.path;
+    // Use browser confirm for now, but could be replaced with a confirmation modal
     const confirmDelete = window.confirm(
-      `Delete "${selectedDoc.path.split("/").pop()}"? This cannot be undone.`
+      `Delete "${fileName}"? This cannot be undone.`
     );
     if (!confirmDelete) return;
+    
+    const toastId = toast.loading(`Deleting "${fileName}"...`);
+    
     try {
       await DocumentsService.deleteDocument(baseId, selectedTable?.id ?? null, selectedDoc.path);
       setSelectedDocPath(null);
       await refresh();
+      toast.success("Document deleted", {
+        id: toastId,
+        description: `"${fileName}" has been deleted.`,
+      });
     } catch (err) {
       console.error("Failed to delete document", err);
-      alert("Unable to delete document");
+      const errorMessage = err instanceof Error ? err.message : "Unable to delete document";
+      toast.error("Failed to delete document", {
+        id: toastId,
+        description: errorMessage,
+      });
     }
   };
 
-  const handleRenameSelected = async () => {
+  const handleRenameSelected = () => {
     if (!selectedDoc || isFolder(selectedDoc)) return;
+    setShowRenameModal(true);
+  };
+
+  const handleRenameDocument = async (newName: string) => {
+    if (!selectedDoc || isFolder(selectedDoc)) return;
+    
     const currentName = selectedDoc.path.split("/").pop() || selectedDoc.path;
-    const newName = window.prompt("New file name", currentName);
-    if (!newName || newName === currentName) return;
+    if (newName === currentName) return;
+    
     const basePath = selectedDoc.path.slice(0, selectedDoc.path.lastIndexOf("/") + 1);
     const newRelative = `${basePath}${newName}`;
+    
     try {
       await DocumentsService.renameDocument(
         baseId,
@@ -444,9 +533,16 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable }: Docu
       );
       setSelectedDocPath(newRelative);
       await refresh();
+      toast.success("Document renamed", {
+        description: `"${currentName}" has been renamed to "${newName}".`,
+      });
     } catch (err) {
       console.error("Failed to rename document", err);
-      alert("Unable to rename document");
+      const errorMessage = err instanceof Error ? err.message : "Unable to rename document";
+      toast.error("Failed to rename document", {
+        description: errorMessage,
+      });
+      throw err; // Re-throw to let modal handle it
     }
   };
 
@@ -455,7 +551,95 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable }: Docu
     setSelectedDocPath(null);
   };
 
+  const handleFolderRename = (folderPath: string, folderName: string) => {
+    setSelectedFolder({ path: folderPath, name: folderName });
+    setShowRenameFolderModal(true);
+  };
+
+  const handleRenameFolder = async (newName: string) => {
+    if (!selectedFolder) return;
+    
+    const toastId = toast.loading(`Renaming folder "${selectedFolder.name}"...`);
+    
+    try {
+      await DocumentsService.renameFolder(
+        baseId,
+        selectedTable?.id ?? null,
+        selectedFolder.path,
+        newName
+      );
+      
+      // Update current folder path if it's the renamed folder
+      if (folderPath === selectedFolder.path) {
+        const parentPath = selectedFolder.path.split("/").slice(0, -1).join("/");
+        const newPath = parentPath ? `${parentPath}/${newName}/` : `${newName}/`;
+        setFolderPath(newPath);
+      }
+      
+      await refresh();
+      toast.success("Folder renamed", {
+        id: toastId,
+        description: `"${selectedFolder.name}" has been renamed to "${newName}".`,
+      });
+    } catch (err) {
+      console.error("Failed to rename folder", err);
+      const errorMessage = err instanceof Error ? err.message : "Unable to rename folder";
+      toast.error("Failed to rename folder", {
+        id: toastId,
+        description: errorMessage,
+      });
+      throw err;
+    }
+  };
+
+  const handleFolderDelete = (folderPath: string, folderName: string) => {
+    setSelectedFolder({ path: folderPath, name: folderName });
+    setShowDeleteFolderModal(true);
+  };
+
+  const handleDeleteFolder = async () => {
+    if (!selectedFolder) return;
+    
+    const toastId = toast.loading(`Deleting folder "${selectedFolder.name}"...`);
+    
+    try {
+      await DocumentsService.deleteFolder(
+        baseId,
+        selectedTable?.id ?? null,
+        selectedFolder.path
+      );
+      
+      // Clear folder path if it's the deleted folder or a subfolder
+      if (folderPath === selectedFolder.path || folderPath.startsWith(selectedFolder.path)) {
+        setFolderPath("");
+        setSelectedDocPath(null);
+      }
+      
+      await refresh();
+      toast.success("Folder deleted", {
+        id: toastId,
+        description: `"${selectedFolder.name}" and all its contents have been deleted.`,
+      });
+    } catch (err) {
+      console.error("Failed to delete folder", err);
+      const errorMessage = err instanceof Error ? err.message : "Unable to delete folder";
+      toast.error("Failed to delete folder", {
+        id: toastId,
+        description: errorMessage,
+      });
+      throw err;
+    }
+  };
+
   const handleDocumentEdit = async (doc: StoredDocument & { relative: string }) => {
+    // Only allow editing PDFs
+    if (!isPdf(doc.mimeType)) {
+      toast.error("Editing not available", {
+        description: "Only PDF documents can be edited.",
+      });
+      return;
+    }
+    
     try {
       // Get signed URL for the document to edit
       const url = await DocumentsService.getSignedUrl(
@@ -467,7 +651,10 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable }: Docu
       setEditorSignedUrl(url);
     } catch (err) {
       console.error("Failed to open document for editing", err);
-      alert("Unable to open document for editing. Please try again.");
+      const errorMessage = err instanceof Error ? err.message : "Unable to open document for editing. Please try again.";
+      toast.error("Failed to open editor", {
+        description: errorMessage,
+      });
     }
   };
 
@@ -508,7 +695,7 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable }: Docu
       }
     } catch (err) {
       console.error("Failed to save edited document", err);
-      throw err; // Re-throw to let DocumentEditor handle the error
+      throw err; // Re-throw to let PdfEditor handle the error
     }
   };
 
@@ -528,18 +715,33 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable }: Docu
         onAddFolder={handleAddFolder}
         onUpload={handleUpload}
         onManageTemplates={() => setShowTemplateManagement(true)}
+        onRequestSignature={() => setShowSignatureRequestModal(true)}
+        onViewSignatures={() => setShowSignatureStatus(true)}
         onGenerateDocument={async () => {
           // Load templates and show selection
           try {
+            // Get auth token from Supabase session
+            const { data: { session } } = await supabase.auth.getSession();
+            const headers: HeadersInit = {};
+            if (session?.access_token) {
+              headers.Authorization = `Bearer ${session.access_token}`;
+            }
+
             const response = await fetch(
-              `/api/templates?baseId=${baseId}${selectedTable?.id ? `&tableId=${selectedTable.id}` : ""}`
+              `/api/templates?baseId=${baseId}${selectedTable?.id ? `&tableId=${selectedTable.id}` : ""}`,
+              { headers }
             );
-            if (!response.ok) throw new Error("Failed to load templates");
+            if (!response.ok) {
+              const errorData = await response.json().catch(() => ({}));
+              throw new Error(errorData.error || "Failed to load templates");
+            }
             const data = await response.json();
             const templates = data.templates || [];
             
             if (templates.length === 0) {
-              alert("No templates found. Please create a template first.");
+              toast.info("No templates found", {
+                description: "Please create a template first.",
+              });
               setShowTemplateManagement(true);
               return;
             }
@@ -564,6 +766,8 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable }: Docu
           folderTree={folderTree}
           currentPrefix={currentPrefix}
           onFolderSelect={handleFolderSelect}
+          onFolderRename={handleFolderRename}
+          onFolderDelete={handleFolderDelete}
           loading={loading && isInitialLoad}
         />
 
@@ -600,17 +804,6 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable }: Docu
       {/* PDF Editor - Adobe Acrobat-like viewer with annotations */}
       {editorDoc && isPdf(editorDoc.mimeType) && (
         <PdfEditor
-          document={editorDoc}
-          signedUrl={editorSignedUrl}
-          isOpen={Boolean(editorDoc)}
-          onClose={handleEditorClose}
-          onSave={handleEditorSave}
-        />
-      )}
-      
-      {/* Plate Editor - For text-based documents */}
-      {editorDoc && !isPdf(editorDoc.mimeType) && (
-        <PlateEditor
           document={editorDoc}
           signedUrl={editorSignedUrl}
           isOpen={Boolean(editorDoc)}
@@ -664,6 +857,88 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable }: Docu
           tableId={selectedTable?.id ?? null}
           onDocumentGenerated={refresh}
         />
+      )}
+
+      {/* Folder Name Modal */}
+      <FolderNameModal
+        isOpen={showFolderModal}
+        onClose={() => setShowFolderModal(false)}
+        onCreate={handleCreateFolder}
+        currentPath={currentPrefix}
+      />
+
+      {/* Rename Document Modal */}
+      {selectedDoc && !isFolder(selectedDoc) && (
+        <RenameDocumentModal
+          isOpen={showRenameModal}
+          onClose={() => setShowRenameModal(false)}
+          onRename={handleRenameDocument}
+          currentName={selectedDoc.path.split("/").pop() || selectedDoc.path}
+        />
+      )}
+
+      {/* Rename Folder Modal */}
+      {selectedFolder && (
+        <RenameFolderModal
+          isOpen={showRenameFolderModal}
+          onClose={() => {
+            setShowRenameFolderModal(false);
+            setSelectedFolder(null);
+          }}
+          onRename={handleRenameFolder}
+          currentName={selectedFolder.name}
+          currentPath={selectedFolder.path.split("/").slice(0, -1).join("/") || "Root"}
+        />
+      )}
+
+      {/* Delete Folder Modal */}
+      {selectedFolder && (
+        <DeleteFolderModal
+          isOpen={showDeleteFolderModal}
+          onClose={() => {
+            setShowDeleteFolderModal(false);
+            setSelectedFolder(null);
+          }}
+          onDelete={handleDeleteFolder}
+          folderName={selectedFolder.name}
+          folderPath={selectedFolder.path}
+        />
+      )}
+
+      {/* Signature Request Modal */}
+      <SignatureRequestModal
+        isOpen={showSignatureRequestModal}
+        onClose={() => setShowSignatureRequestModal(false)}
+        baseId={baseId}
+        tableId={selectedTable?.id ?? null}
+        selectedDocument={selectedDoc && !isFolder(selectedDoc) ? {
+          path: selectedDoc.path,
+          size: selectedDoc.size,
+          mimeType: selectedDoc.mimeType,
+          createdAt: selectedDoc.createdAt
+        } : null}
+        onRequestCreated={() => {
+          setShowSignatureRequestModal(false);
+          setShowSignatureStatus(true);
+        }}
+      />
+
+      {/* Signature Request Status */}
+      {showSignatureStatus && (
+        <div className="absolute inset-0 bg-white z-50 overflow-auto">
+          <div className="p-6">
+            <button
+              onClick={() => setShowSignatureStatus(false)}
+              className="mb-4 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+            >
+              ← Back to Documents
+            </button>
+            <SignatureRequestStatus
+              baseId={baseId}
+              tableId={selectedTable?.id ?? null}
+        />
+          </div>
+        </div>
       )}
     </div>
   );

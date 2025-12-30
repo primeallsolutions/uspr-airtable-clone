@@ -99,7 +99,7 @@ export async function POST(
     // Get authenticated Supabase client
     const supabase = await getSupabaseClient(request);
     
-    const fieldData = {
+    const fieldData: any = {
       template_id: id,
       field_name: field.field_name,
       field_key: field.field_key,
@@ -117,6 +117,53 @@ export async function POST(
       updated_at: new Date().toISOString(),
     };
 
+    // Always include validation_rules and formatting_options with defaults
+    // This ensures compatibility even if migration hasn't been run (columns have defaults)
+    fieldData.validation_rules = Array.isArray(field.validation_rules) ? field.validation_rules : (field.validation_rules || []);
+    fieldData.formatting_options = (field.formatting_options && typeof field.formatting_options === 'object') ? field.formatting_options : (field.formatting_options || {});
+
+    // E-signature configuration (only for signature fields)
+    if (field.field_type === "signature") {
+      fieldData.requires_esignature = field.requires_esignature || false;
+      
+      // Validate: if e-signature is required, signer email must be provided
+      if (field.requires_esignature) {
+        if (!field.esignature_signer_email || field.esignature_signer_email.trim() === "") {
+          return NextResponse.json(
+            { error: "Signer email is required when e-signature is enabled" },
+            { status: 400 }
+          );
+        }
+        
+        // Basic email validation
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(field.esignature_signer_email.trim())) {
+          return NextResponse.json(
+            { error: "Please provide a valid email address" },
+            { status: 400 }
+          );
+        }
+        
+        fieldData.esignature_signer_email = field.esignature_signer_email.trim();
+        fieldData.esignature_signer_name = field.esignature_signer_name || null;
+        fieldData.esignature_signer_role = field.esignature_signer_role || "signer";
+        fieldData.esignature_sign_order = field.esignature_sign_order || 0;
+      } else {
+        // Clear e-signature fields if e-signature is disabled
+        fieldData.esignature_signer_email = null;
+        fieldData.esignature_signer_name = null;
+        fieldData.esignature_signer_role = null;
+        fieldData.esignature_sign_order = null;
+      }
+    } else {
+      // Clear e-signature fields if not a signature field
+      fieldData.requires_esignature = false;
+      fieldData.esignature_signer_email = null;
+      fieldData.esignature_signer_name = null;
+      fieldData.esignature_signer_role = null;
+      fieldData.esignature_sign_order = null;
+    }
+
     let savedField;
     if (field.id) {
       // Update existing field
@@ -127,7 +174,13 @@ export async function POST(
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error("Supabase update error:", error);
+        throw new Error(error.message || "Failed to update field");
+      }
+      if (!data) {
+        throw new Error("Field not found or update failed");
+      }
       savedField = data;
     } else {
       // Create new field
@@ -137,7 +190,24 @@ export async function POST(
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error("Supabase insert error:", error);
+        console.error("Error details:", JSON.stringify(error, null, 2));
+        console.error("Field data being inserted:", JSON.stringify(fieldData, null, 2));
+        
+        // Check for unique constraint violation
+        if (error.code === "23505") {
+          throw new Error(`Field with key "${field.field_key}" already exists for this template`);
+        }
+        // Check for column doesn't exist error (migration not run)
+        if (error.code === "42703" || error.message?.includes("column") || error.message?.includes("does not exist")) {
+          throw new Error("Database schema is outdated. Please run the migration to add validation_rules and formatting_options columns.");
+        }
+        throw new Error(error.message || "Failed to create field");
+      }
+      if (!data) {
+        throw new Error("Field creation failed - no data returned");
+      }
       savedField = data;
     }
 

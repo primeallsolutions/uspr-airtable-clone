@@ -32,6 +32,25 @@ export type TemplateField = {
   is_required?: boolean;
   default_value?: string;
   order_index?: number;
+  validation_rules?: Array<{
+    type: "minLength" | "maxLength" | "pattern" | "min" | "max" | "required";
+    value?: string | number;
+    message?: string;
+  }>;
+  formatting_options?: {
+    textCase?: "uppercase" | "lowercase" | "title";
+    numberFormat?: "currency" | "percentage" | "decimal" | "integer";
+    currencySymbol?: string;
+    decimalPlaces?: number;
+    dateFormat?: string;
+    inputMask?: string;
+  };
+  // E-signature configuration
+  requires_esignature?: boolean;
+  esignature_signer_email?: string;
+  esignature_signer_name?: string;
+  esignature_signer_role?: "signer" | "viewer" | "approver";
+  esignature_sign_order?: number;
 };
 
 export type DocumentTemplate = {
@@ -287,7 +306,42 @@ export const TemplateService = {
     if (error) throw error;
     return data || [];
   },
+
+  /**
+   * Check if a template has active signature fields (requires_esignature = true with valid email)
+   */
+  async hasActiveSignatureFields(templateId: string): Promise<boolean> {
+    const { data: fields, error } = await supabase
+      .from("template_fields")
+      .select("id, requires_esignature, esignature_signer_email")
+      .eq("template_id", templateId)
+      .eq("field_type", "signature")
+      .eq("requires_esignature", true)
+      .not("esignature_signer_email", "is", null);
+
+    if (error) throw error;
+    return (fields?.length || 0) > 0;
+  },
+
+  /**
+   * Get active signature fields for a template (requires_esignature = true with valid email)
+   */
+  async getActiveSignatureFields(templateId: string): Promise<TemplateField[]> {
+    const { data: fields, error } = await supabase
+      .from("template_fields")
+      .select("*")
+      .eq("template_id", templateId)
+      .eq("field_type", "signature")
+      .eq("requires_esignature", true)
+      .not("esignature_signer_email", "is", null)
+      .order("order_index", { ascending: true });
+
+    if (error) throw error;
+    return fields || [];
+  },
 };
+
+
 
 
 

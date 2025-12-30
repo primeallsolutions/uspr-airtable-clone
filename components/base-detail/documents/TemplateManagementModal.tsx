@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { X, FileText, Upload, Trash2, Edit2, Plus, Loader2, Settings } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import type { DocumentTemplate } from "@/lib/services/template-service";
@@ -31,13 +31,7 @@ export const TemplateManagementModal = ({
   const [templateDescription, setTemplateDescription] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
-  useEffect(() => {
-    if (isOpen) {
-      loadTemplates();
-    }
-  }, [isOpen, baseId, tableId]);
-
-  const loadTemplates = async () => {
+  const loadTemplates = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -65,7 +59,7 @@ export const TemplateManagementModal = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, [baseId, tableId]);
 
   const handleUpload = async () => {
     if (!templateName.trim() || !selectedFile) {
@@ -132,12 +126,66 @@ export const TemplateManagementModal = ({
     }
 
     try {
+      // Get auth token from Supabase session
+      const { data: { session } } = await supabase.auth.getSession();
+      const headers: HeadersInit = {};
+      if (session?.access_token) {
+        headers.Authorization = `Bearer ${session.access_token}`;
+      }
+
       const response = await fetch(
         `/api/templates?templateId=${templateId}&baseId=${baseId}${tableId ? `&tableId=${tableId}` : ""}`,
-        { method: "DELETE" }
+        { 
+          method: "DELETE",
+          headers
+        }
       );
 
-      if (!response.ok) throw new Error("Failed to delete template");
+      // Handle error responses
+      if (!response.ok) {
+        // Check if response has JSON content
+        const contentType = response.headers.get("content-type");
+        let errorMessage = `Failed to delete template: ${response.status} ${response.statusText}`;
+        
+        if (contentType && contentType.includes("application/json")) {
+          try {
+            const errorData = await response.json();
+            errorMessage = errorData.error || errorMessage;
+            if (errorData.details) {
+              console.error("Delete template error details:", errorData.details);
+            }
+            if (errorData.code) {
+              console.error("Delete template error code:", errorData.code);
+            }
+          } catch (jsonError) {
+            // If JSON parsing fails, try to get text
+            try {
+              const text = await response.text();
+              if (text) {
+                errorMessage = text;
+              }
+            } catch (textError) {
+              // Use default error message
+              console.error("Failed to parse error response:", textError);
+            }
+          }
+        } else {
+          // Try to get text response
+          try {
+            const text = await response.text();
+            if (text) {
+              errorMessage = text;
+            }
+          } catch (textError) {
+            // Use default error message
+            console.error("Failed to read error response:", textError);
+          }
+        }
+        
+        throw new Error(errorMessage);
+      }
+      
+      // Success - no need to parse response body
       await loadTemplates();
     } catch (err: any) {
       console.error("Failed to delete template", err);

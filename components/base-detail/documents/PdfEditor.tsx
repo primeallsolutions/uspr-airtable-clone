@@ -313,7 +313,7 @@ export const PdfEditor = ({
 
   // Render annotations overlay
   const renderAnnotations = useCallback((pageNum: number, viewport: any) => {
-    if (!annotationCanvasRef.current) return;
+    if (!annotationCanvasRef.current || !pdfDoc) return;
     
     const canvas = annotationCanvasRef.current;
     const ctx = canvas.getContext("2d");
@@ -357,22 +357,23 @@ export const PdfEditor = ({
         currentHighlight.height * zoom
       );
     }
-  }, [annotations, zoom, currentHighlight, activeTool]);
+  }, [annotations, zoom, currentHighlight, activeTool, pdfDoc]);
 
-  // Re-render when page changes
+  // Re-render when page/zoom/rotation changes
   useEffect(() => {
     if (pdfDoc && currentPage) {
       renderPage(currentPage);
     }
-  }, [pdfDoc, currentPage, renderPage]);
+  }, [pdfDoc, currentPage, zoom, rotation, renderPage]);
 
-  // Re-render annotations when they change
+  // Re-render annotations when they change (only if PDF is already rendered)
   useEffect(() => {
-    if (pdfDoc && canvasRef.current) {
+    if (pdfDoc && canvasRef.current && annotationCanvasRef.current) {
       const canvas = canvasRef.current;
-      renderAnnotations(currentPage, { width: canvas.width, height: canvas.height });
+      const viewport = { width: canvas.width, height: canvas.height };
+      renderAnnotations(currentPage, viewport);
     }
-  }, [annotations, currentPage, renderAnnotations, pdfDoc]);
+  }, [annotations, currentPage, renderAnnotations, pdfDoc, zoom, rotation]);
 
   // Render thumbnails
   const renderThumbnail = useCallback(async (pageNum: number, canvas: HTMLCanvasElement) => {

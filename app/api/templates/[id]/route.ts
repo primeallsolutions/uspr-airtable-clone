@@ -92,10 +92,16 @@ export async function GET(
       // Don't fail the request if fields can't be loaded, just return empty array
     }
 
+    // Check if template has active signature fields
+    const hasActiveSignatureFields = (fields || []).some(
+      (f) => f.field_type === "signature" && f.requires_esignature && f.esignature_signer_email
+    );
+
     return NextResponse.json({
       template: {
         ...template,
         fields: fields || [],
+        hasActiveSignatureFields,
       },
     });
   } catch (error: any) {
