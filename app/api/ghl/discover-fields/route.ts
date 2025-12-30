@@ -154,7 +154,6 @@ export async function POST(request: NextRequest) {
                   const optLabel = typeof opt === 'string' ? opt : (opt.label || opt.name || opt.value || optKey);
                   fieldOptions[optKey] = {
                     label: optLabel,
-                    name: optLabel,
                     color: colorPalette[idx % colorPalette.length]
                   };
                 });

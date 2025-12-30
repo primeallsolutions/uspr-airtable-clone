@@ -339,15 +339,25 @@ export async function POST(request: NextRequest) {
           }
           if (Array.isArray(selectedValues)) { // if it was a string before, now it's an array
             (selectedValues as string[]).forEach((val: string) => {
-              if (!(Object.values(field.options) as { name: string }[]).find(option => option.name === val)) {
+              const existingOptions = field.options ? Object.values(field.options) as Array<{ label?: string; name?: string; color?: string }> : [];
+              // Check both 'label' and 'name' properties for backward compatibility
+              if (!existingOptions.find(option => option.label === val || option.name === val)) {
                 newValues.add(val);
               }
             });
           }
           if (newValues.size > 0) {
-            const newOptions = { ...field.options };
+            const newOptions = { ...(field.options || {}) };
+            const colorPalette = ['#1E40AF', '#065F46', '#C2410C', '#B91C1C', '#5B21B6', '#BE185D', '#3730A3', '#374151'];
+            let colorIndex = Object.keys(newOptions).length; // Continue from existing options count
             newValues.forEach((val: string) => {
-              newOptions[`option_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`] = { name: val }; // Unique option ID
+              const color = colorPalette[colorIndex % colorPalette.length];
+              // Create option with 'label' and 'color' (standardized format)
+              newOptions[`option_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`] = { 
+                label: val,
+                color: color
+              };
+              colorIndex++;
             });
             const { error: optUpdateError } = await supabaseAdmin
               .from('fields')
@@ -356,8 +366,11 @@ export async function POST(request: NextRequest) {
             if (optUpdateError) {
               console.warn(`Failed to add missing option to field ${field.name} (${field.id})`, optUpdateError);
             } else {
-              // Update local cache so subsequent records benefit
-              field.options = newOptions;
+              // Update the field object in the array to reflect the new options
+              const fieldIndex = fields?.findIndex(f => f.id === field.id);
+              if (fieldIndex !== undefined && fieldIndex !== -1 && fields) {
+                fields[fieldIndex] = { ...field, options: newOptions };
+              }
             }
           }
         }
