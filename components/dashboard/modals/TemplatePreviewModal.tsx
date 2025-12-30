@@ -1,5 +1,5 @@
 "use client";
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { X, Building2, Kanban, Package, Calendar, FileText, Sparkles } from 'lucide-react';
 import type { Template } from '@/lib/types/templates';
 import type { WorkspaceRecord } from '@/lib/types/dashboard';
@@ -42,6 +42,13 @@ export const TemplatePreviewModal = ({
   const [baseName, setBaseName] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // Set default workspace when modal opens or workspaces change
+  useEffect(() => {
+    if (isOpen && workspaces.length > 0 && !selectedWorkspaceId) {
+      setSelectedWorkspaceId(workspaces[0].id);
+    }
+  }, [isOpen, workspaces, selectedWorkspaceId]);
+
   if (!isOpen || !template) return null;
 
   const stats = TemplateService.getTemplateStats(template);
@@ -49,6 +56,11 @@ export const TemplatePreviewModal = ({
   const templateData = template.template_data;
 
   const handleUseTemplate = async () => {
+    if (workspaces.length === 0) {
+      alert('No workspaces available. Please create a workspace first.');
+      return;
+    }
+
     if (!selectedWorkspaceId && workspaces.length > 0) {
       alert('Please select a workspace');
       return;
@@ -65,11 +77,6 @@ export const TemplatePreviewModal = ({
       setLoading(false);
     }
   };
-
-  // Set default workspace if not selected
-  if (!selectedWorkspaceId && workspaces.length > 0) {
-    setSelectedWorkspaceId(workspaces[0].id);
-  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">

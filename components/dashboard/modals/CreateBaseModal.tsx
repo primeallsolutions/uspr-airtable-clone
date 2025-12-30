@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import type { ActiveView, WorkspaceRecord, CreateBaseFormData } from "@/lib/types/dashboard";
 import type { Template } from "@/lib/types/templates";
 import { TemplateService } from "@/lib/services/template-service";
@@ -50,6 +50,9 @@ export const CreateBaseModal = ({
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
+  
+  // Form ref for submit
+  const formRef = useRef<HTMLFormElement>(null);
 
   const loadTemplates = useCallback(async () => {
     try {
@@ -182,7 +185,7 @@ export const CreateBaseModal = ({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
+        <form ref={formRef} onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
           {activeTab === 'blank' && (
             <>
               {activeView === 'home' && (
@@ -361,12 +364,8 @@ export const CreateBaseModal = ({
               Cancel
             </button>
             <button
-              type="submit"
-              onClick={(e) => {
-                e.preventDefault();
-                const form = e.currentTarget.closest('div')?.previousElementSibling as HTMLFormElement;
-                form?.requestSubmit();
-              }}
+              type="button"
+              onClick={() => formRef.current?.requestSubmit()}
               className="rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-60"
               disabled={creating || (activeTab === 'template' && !selectedTemplate)}
             >

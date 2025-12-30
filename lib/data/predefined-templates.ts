@@ -5,6 +5,21 @@ import type { ExportedBase } from '../services/base-export-service';
  * These will be seeded as global templates in the database
  */
 
+// Helper function to convert choices array to proper options format
+const createSelectOptions = (choices: string[]): Record<string, { label: string; color: string }> => {
+  const colorPalette = ['#1E40AF', '#065F46', '#C2410C', '#B91C1C', '#5B21B6', '#BE185D', '#3730A3', '#374151'];
+  const options: Record<string, { label: string; color: string }> = {};
+  
+  choices.forEach((choice, index) => {
+    options[`option_${index + 1}`] = {
+      label: choice,
+      color: colorPalette[index % colorPalette.length]
+    };
+  });
+  
+  return options;
+};
+
 export const REAL_ESTATE_CRM_TEMPLATE: ExportedBase = {
   version: '1.0.0',
   exportedAt: new Date().toISOString(),
@@ -23,18 +38,18 @@ export const REAL_ESTATE_CRM_TEMPLATE: ExportedBase = {
     { table_name: 'Contacts', name: 'Full Name', type: 'text', order_index: 0, options: {} },
     { table_name: 'Contacts', name: 'Email', type: 'email', order_index: 1, options: {} },
     { table_name: 'Contacts', name: 'Phone', type: 'phone', order_index: 2, options: {} },
-    { table_name: 'Contacts', name: 'Type', type: 'single_select', order_index: 3, options: { choices: ['Buyer', 'Seller', 'Both', 'Lead'] } },
-    { table_name: 'Contacts', name: 'Status', type: 'single_select', order_index: 4, options: { choices: ['Active', 'Inactive', 'Hot Lead', 'Cold Lead'] } },
+    { table_name: 'Contacts', name: 'Type', type: 'single_select', order_index: 3, options: createSelectOptions(['Buyer', 'Seller', 'Both', 'Lead']) },
+    { table_name: 'Contacts', name: 'Status', type: 'single_select', order_index: 4, options: createSelectOptions(['Active', 'Inactive', 'Hot Lead', 'Cold Lead']) },
     { table_name: 'Contacts', name: 'Notes', type: 'text', order_index: 5, options: {} },
     
     // Properties table fields
     { table_name: 'Properties', name: 'Address', type: 'text', order_index: 0, options: {} },
-    { table_name: 'Properties', name: 'Property Type', type: 'single_select', order_index: 1, options: { choices: ['House', 'Apartment', 'Condo', 'Land', 'Commercial'] } },
+    { table_name: 'Properties', name: 'Property Type', type: 'single_select', order_index: 1, options: createSelectOptions(['House', 'Apartment', 'Condo', 'Land', 'Commercial']) },
     { table_name: 'Properties', name: 'Price', type: 'number', order_index: 2, options: { format: 'currency' } },
     { table_name: 'Properties', name: 'Bedrooms', type: 'number', order_index: 3, options: {} },
     { table_name: 'Properties', name: 'Bathrooms', type: 'number', order_index: 4, options: {} },
     { table_name: 'Properties', name: 'Square Feet', type: 'number', order_index: 5, options: {} },
-    { table_name: 'Properties', name: 'Status', type: 'single_select', order_index: 6, options: { choices: ['Available', 'Under Contract', 'Sold', 'Off Market'] } },
+    { table_name: 'Properties', name: 'Status', type: 'single_select', order_index: 6, options: createSelectOptions(['Available', 'Under Contract', 'Sold', 'Off Market']) },
     { table_name: 'Properties', name: 'Listed Date', type: 'date', order_index: 7, options: {} },
     
     // Deals table fields
@@ -42,8 +57,8 @@ export const REAL_ESTATE_CRM_TEMPLATE: ExportedBase = {
     { table_name: 'Deals', name: 'Property', type: 'text', order_index: 1, options: {} },
     { table_name: 'Deals', name: 'Client', type: 'text', order_index: 2, options: {} },
     { table_name: 'Deals', name: 'Deal Value', type: 'number', order_index: 3, options: { format: 'currency' } },
-    { table_name: 'Deals', name: 'Stage', type: 'single_select', order_index: 4, options: { choices: ['Prospect', 'Showing', 'Offer', 'Negotiation', 'Under Contract', 'Closed'] } },
-    { table_name: 'Deals', name: 'Probability', type: 'single_select', order_index: 5, options: { choices: ['25%', '50%', '75%', '90%', '100%'] } },
+    { table_name: 'Deals', name: 'Stage', type: 'single_select', order_index: 4, options: createSelectOptions(['Prospect', 'Showing', 'Offer', 'Negotiation', 'Under Contract', 'Closed']) },
+    { table_name: 'Deals', name: 'Probability', type: 'single_select', order_index: 5, options: createSelectOptions(['25%', '50%', '75%', '90%', '100%']) },
     { table_name: 'Deals', name: 'Expected Close Date', type: 'date', order_index: 6, options: {} },
     
     // Tasks table fields
@@ -52,8 +67,8 @@ export const REAL_ESTATE_CRM_TEMPLATE: ExportedBase = {
     { table_name: 'Tasks', name: 'Related To', type: 'text', order_index: 2, options: {} },
     { table_name: 'Tasks', name: 'Assignee', type: 'text', order_index: 3, options: { inputType: 'email' } },
     { table_name: 'Tasks', name: 'Due Date', type: 'date', order_index: 4, options: {} },
-    { table_name: 'Tasks', name: 'Priority', type: 'single_select', order_index: 5, options: { choices: ['Low', 'Medium', 'High', 'Urgent'] } },
-    { table_name: 'Tasks', name: 'Status', type: 'single_select', order_index: 6, options: { choices: ['To Do', 'In Progress', 'Done'] } }
+    { table_name: 'Tasks', name: 'Priority', type: 'single_select', order_index: 5, options: createSelectOptions(['Low', 'Medium', 'High', 'Urgent']) },
+    { table_name: 'Tasks', name: 'Status', type: 'single_select', order_index: 6, options: createSelectOptions(['To Do', 'In Progress', 'Done']) }
   ],
   automations: [],
   records: [
@@ -94,8 +109,8 @@ export const PROJECT_MANAGEMENT_TEMPLATE: ExportedBase = {
     // Projects table fields
     { table_name: 'Projects', name: 'Project Name', type: 'text', order_index: 0, options: {} },
     { table_name: 'Projects', name: 'Description', type: 'text', order_index: 1, options: {} },
-    { table_name: 'Projects', name: 'Status', type: 'single_select', order_index: 2, options: { choices: ['Planning', 'Active', 'On Hold', 'Completed', 'Cancelled'] } },
-    { table_name: 'Projects', name: 'Priority', type: 'single_select', order_index: 3, options: { choices: ['Low', 'Medium', 'High', 'Critical'] } },
+    { table_name: 'Projects', name: 'Status', type: 'single_select', order_index: 2, options: createSelectOptions(['Planning', 'Active', 'On Hold', 'Completed', 'Cancelled']) },
+    { table_name: 'Projects', name: 'Priority', type: 'single_select', order_index: 3, options: createSelectOptions(['Low', 'Medium', 'High', 'Critical']) },
     { table_name: 'Projects', name: 'Start Date', type: 'date', order_index: 4, options: {} },
     { table_name: 'Projects', name: 'End Date', type: 'date', order_index: 5, options: {} },
     { table_name: 'Projects', name: 'Budget', type: 'number', order_index: 6, options: { format: 'currency' } },
@@ -105,25 +120,25 @@ export const PROJECT_MANAGEMENT_TEMPLATE: ExportedBase = {
     { table_name: 'Tasks', name: 'Task Name', type: 'text', order_index: 0, options: {} },
     { table_name: 'Tasks', name: 'Project', type: 'text', order_index: 1, options: {} },
     { table_name: 'Tasks', name: 'Description', type: 'text', order_index: 2, options: {} },
-    { table_name: 'Tasks', name: 'Status', type: 'single_select', order_index: 3, options: { choices: ['To Do', 'In Progress', 'In Review', 'Done', 'Blocked'] } },
+    { table_name: 'Tasks', name: 'Status', type: 'single_select', order_index: 3, options: createSelectOptions(['To Do', 'In Progress', 'In Review', 'Done', 'Blocked']) },
     { table_name: 'Tasks', name: 'Assignee', type: 'text', order_index: 4, options: { inputType: 'email' } },
-    { table_name: 'Tasks', name: 'Priority', type: 'single_select', order_index: 5, options: { choices: ['Low', 'Medium', 'High', 'Critical'] } },
+    { table_name: 'Tasks', name: 'Priority', type: 'single_select', order_index: 5, options: createSelectOptions(['Low', 'Medium', 'High', 'Critical']) },
     { table_name: 'Tasks', name: 'Due Date', type: 'date', order_index: 6, options: {} },
     { table_name: 'Tasks', name: 'Estimated Hours', type: 'number', order_index: 7, options: {} },
     
     // Team Members table fields
     { table_name: 'Team Members', name: 'Name', type: 'text', order_index: 0, options: {} },
     { table_name: 'Team Members', name: 'Email', type: 'email', order_index: 1, options: {} },
-    { table_name: 'Team Members', name: 'Role', type: 'single_select', order_index: 2, options: { choices: ['Developer', 'Designer', 'Project Manager', 'QA', 'DevOps'] } },
+    { table_name: 'Team Members', name: 'Role', type: 'single_select', order_index: 2, options: createSelectOptions(['Developer', 'Designer', 'Project Manager', 'QA', 'DevOps']) },
     { table_name: 'Team Members', name: 'Department', type: 'text', order_index: 3, options: {} },
-    { table_name: 'Team Members', name: 'Status', type: 'single_select', order_index: 4, options: { choices: ['Active', 'On Leave', 'Inactive'] } },
+    { table_name: 'Team Members', name: 'Status', type: 'single_select', order_index: 4, options: createSelectOptions(['Active', 'On Leave', 'Inactive']) },
     
     // Milestones table fields
     { table_name: 'Milestones', name: 'Milestone Name', type: 'text', order_index: 0, options: {} },
     { table_name: 'Milestones', name: 'Project', type: 'text', order_index: 1, options: {} },
     { table_name: 'Milestones', name: 'Description', type: 'text', order_index: 2, options: {} },
     { table_name: 'Milestones', name: 'Due Date', type: 'date', order_index: 3, options: {} },
-    { table_name: 'Milestones', name: 'Status', type: 'single_select', order_index: 4, options: { choices: ['Not Started', 'In Progress', 'Completed', 'Delayed'] } },
+    { table_name: 'Milestones', name: 'Status', type: 'single_select', order_index: 4, options: createSelectOptions(['Not Started', 'In Progress', 'Completed', 'Delayed']) },
     { table_name: 'Milestones', name: 'Completion %', type: 'number', order_index: 5, options: {} }
   ],
   automations: [],
@@ -165,12 +180,12 @@ export const INVENTORY_MANAGEMENT_TEMPLATE: ExportedBase = {
     // Products table fields
     { table_name: 'Products', name: 'Product Name', type: 'text', order_index: 0, options: {} },
     { table_name: 'Products', name: 'SKU', type: 'text', order_index: 1, options: {} },
-    { table_name: 'Products', name: 'Category', type: 'single_select', order_index: 2, options: { choices: ['Electronics', 'Clothing', 'Food', 'Furniture', 'Other'] } },
+    { table_name: 'Products', name: 'Category', type: 'single_select', order_index: 2, options: createSelectOptions(['Electronics', 'Clothing', 'Food', 'Furniture', 'Other']) },
     { table_name: 'Products', name: 'Current Stock', type: 'number', order_index: 3, options: {} },
     { table_name: 'Products', name: 'Reorder Level', type: 'number', order_index: 4, options: {} },
     { table_name: 'Products', name: 'Unit Price', type: 'number', order_index: 5, options: { format: 'currency' } },
     { table_name: 'Products', name: 'Supplier', type: 'text', order_index: 6, options: {} },
-    { table_name: 'Products', name: 'Status', type: 'single_select', order_index: 7, options: { choices: ['In Stock', 'Low Stock', 'Out of Stock', 'Discontinued'] } },
+    { table_name: 'Products', name: 'Status', type: 'single_select', order_index: 7, options: createSelectOptions(['In Stock', 'Low Stock', 'Out of Stock', 'Discontinued']) },
     
     // Suppliers table fields
     { table_name: 'Suppliers', name: 'Supplier Name', type: 'text', order_index: 0, options: {} },
@@ -178,20 +193,20 @@ export const INVENTORY_MANAGEMENT_TEMPLATE: ExportedBase = {
     { table_name: 'Suppliers', name: 'Email', type: 'email', order_index: 2, options: {} },
     { table_name: 'Suppliers', name: 'Phone', type: 'phone', order_index: 3, options: {} },
     { table_name: 'Suppliers', name: 'Address', type: 'text', order_index: 4, options: {} },
-    { table_name: 'Suppliers', name: 'Status', type: 'single_select', order_index: 5, options: { choices: ['Active', 'Inactive', 'Preferred'] } },
+    { table_name: 'Suppliers', name: 'Status', type: 'single_select', order_index: 5, options: createSelectOptions(['Active', 'Inactive', 'Preferred']) },
     
     // Orders table fields
     { table_name: 'Orders', name: 'Order Number', type: 'text', order_index: 0, options: {} },
     { table_name: 'Orders', name: 'Supplier', type: 'text', order_index: 1, options: {} },
     { table_name: 'Orders', name: 'Order Date', type: 'date', order_index: 2, options: {} },
     { table_name: 'Orders', name: 'Expected Delivery', type: 'date', order_index: 3, options: {} },
-    { table_name: 'Orders', name: 'Status', type: 'single_select', order_index: 4, options: { choices: ['Pending', 'Confirmed', 'Shipped', 'Delivered', 'Cancelled'] } },
+    { table_name: 'Orders', name: 'Status', type: 'single_select', order_index: 4, options: createSelectOptions(['Pending', 'Confirmed', 'Shipped', 'Delivered', 'Cancelled']) },
     { table_name: 'Orders', name: 'Total Amount', type: 'number', order_index: 5, options: { format: 'currency' } },
     { table_name: 'Orders', name: 'Notes', type: 'text', order_index: 6, options: {} },
     
     // Stock Movements table fields
     { table_name: 'Stock Movements', name: 'Product', type: 'text', order_index: 0, options: {} },
-    { table_name: 'Stock Movements', name: 'Movement Type', type: 'single_select', order_index: 1, options: { choices: ['Purchase', 'Sale', 'Return', 'Adjustment', 'Transfer'] } },
+    { table_name: 'Stock Movements', name: 'Movement Type', type: 'single_select', order_index: 1, options: createSelectOptions(['Purchase', 'Sale', 'Return', 'Adjustment', 'Transfer']) },
     { table_name: 'Stock Movements', name: 'Quantity', type: 'number', order_index: 2, options: {} },
     { table_name: 'Stock Movements', name: 'Date', type: 'date', order_index: 3, options: {} },
     { table_name: 'Stock Movements', name: 'Reference', type: 'text', order_index: 4, options: {} },
@@ -234,11 +249,11 @@ export const EVENT_PLANNING_TEMPLATE: ExportedBase = {
   fields: [
     // Events table fields
     { table_name: 'Events', name: 'Event Name', type: 'text', order_index: 0, options: {} },
-    { table_name: 'Events', name: 'Event Type', type: 'single_select', order_index: 1, options: { choices: ['Conference', 'Wedding', 'Corporate', 'Social', 'Workshop', 'Other'] } },
+    { table_name: 'Events', name: 'Event Type', type: 'single_select', order_index: 1, options: createSelectOptions(['Conference', 'Wedding', 'Corporate', 'Social', 'Workshop', 'Other']) },
     { table_name: 'Events', name: 'Date', type: 'date', order_index: 2, options: {} },
     { table_name: 'Events', name: 'Venue', type: 'text', order_index: 3, options: {} },
     { table_name: 'Events', name: 'Expected Attendees', type: 'number', order_index: 4, options: {} },
-    { table_name: 'Events', name: 'Status', type: 'single_select', order_index: 5, options: { choices: ['Planning', 'Confirmed', 'In Progress', 'Completed', 'Cancelled'] } },
+    { table_name: 'Events', name: 'Status', type: 'single_select', order_index: 5, options: createSelectOptions(['Planning', 'Confirmed', 'In Progress', 'Completed', 'Cancelled']) },
     { table_name: 'Events', name: 'Total Budget', type: 'number', order_index: 6, options: { format: 'currency' } },
     { table_name: 'Events', name: 'Notes', type: 'text', order_index: 7, options: {} },
     
@@ -247,26 +262,26 @@ export const EVENT_PLANNING_TEMPLATE: ExportedBase = {
     { table_name: 'Attendees', name: 'Email', type: 'email', order_index: 1, options: {} },
     { table_name: 'Attendees', name: 'Phone', type: 'phone', order_index: 2, options: {} },
     { table_name: 'Attendees', name: 'Event', type: 'text', order_index: 3, options: {} },
-    { table_name: 'Attendees', name: 'RSVP Status', type: 'single_select', order_index: 4, options: { choices: ['Invited', 'Confirmed', 'Declined', 'Maybe', 'Attended'] } },
+    { table_name: 'Attendees', name: 'RSVP Status', type: 'single_select', order_index: 4, options: createSelectOptions(['Invited', 'Confirmed', 'Declined', 'Maybe', 'Attended']) },
     { table_name: 'Attendees', name: 'Dietary Restrictions', type: 'text', order_index: 5, options: {} },
     { table_name: 'Attendees', name: 'Special Requests', type: 'text', order_index: 6, options: {} },
     
     // Vendors table fields
     { table_name: 'Vendors', name: 'Vendor Name', type: 'text', order_index: 0, options: {} },
-    { table_name: 'Vendors', name: 'Service Type', type: 'single_select', order_index: 1, options: { choices: ['Catering', 'Photography', 'Venue', 'Entertainment', 'Decoration', 'Other'] } },
+    { table_name: 'Vendors', name: 'Service Type', type: 'single_select', order_index: 1, options: createSelectOptions(['Catering', 'Photography', 'Venue', 'Entertainment', 'Decoration', 'Other']) },
     { table_name: 'Vendors', name: 'Contact Person', type: 'text', order_index: 2, options: {} },
     { table_name: 'Vendors', name: 'Email', type: 'email', order_index: 3, options: {} },
     { table_name: 'Vendors', name: 'Phone', type: 'phone', order_index: 4, options: {} },
     { table_name: 'Vendors', name: 'Cost', type: 'number', order_index: 5, options: { format: 'currency' } },
-    { table_name: 'Vendors', name: 'Status', type: 'single_select', order_index: 6, options: { choices: ['Inquiry', 'Quoted', 'Booked', 'Confirmed', 'Completed'] } },
+    { table_name: 'Vendors', name: 'Status', type: 'single_select', order_index: 6, options: createSelectOptions(['Inquiry', 'Quoted', 'Booked', 'Confirmed', 'Completed']) },
     
     // Budget table fields
     { table_name: 'Budget', name: 'Item', type: 'text', order_index: 0, options: {} },
     { table_name: 'Budget', name: 'Event', type: 'text', order_index: 1, options: {} },
-    { table_name: 'Budget', name: 'Category', type: 'single_select', order_index: 2, options: { choices: ['Venue', 'Catering', 'Entertainment', 'Decoration', 'Staff', 'Marketing', 'Other'] } },
+    { table_name: 'Budget', name: 'Category', type: 'single_select', order_index: 2, options: createSelectOptions(['Venue', 'Catering', 'Entertainment', 'Decoration', 'Staff', 'Marketing', 'Other']) },
     { table_name: 'Budget', name: 'Estimated Cost', type: 'number', order_index: 3, options: { format: 'currency' } },
     { table_name: 'Budget', name: 'Actual Cost', type: 'number', order_index: 4, options: { format: 'currency' } },
-    { table_name: 'Budget', name: 'Status', type: 'single_select', order_index: 5, options: { choices: ['Planned', 'Approved', 'Paid', 'Pending'] } },
+    { table_name: 'Budget', name: 'Status', type: 'single_select', order_index: 5, options: createSelectOptions(['Planned', 'Approved', 'Paid', 'Pending']) },
     { table_name: 'Budget', name: 'Notes', type: 'text', order_index: 6, options: {} }
   ],
   automations: [],
@@ -306,34 +321,34 @@ export const CONTENT_CALENDAR_TEMPLATE: ExportedBase = {
   fields: [
     // Content table fields
     { table_name: 'Content', name: 'Title', type: 'text', order_index: 0, options: {} },
-    { table_name: 'Content', name: 'Content Type', type: 'single_select', order_index: 1, options: { choices: ['Blog Post', 'Social Media', 'Video', 'Podcast', 'Newsletter', 'Infographic'] } },
-    { table_name: 'Content', name: 'Status', type: 'single_select', order_index: 2, options: { choices: ['Idea', 'In Progress', 'Review', 'Scheduled', 'Published', 'Archived'] } },
+    { table_name: 'Content', name: 'Content Type', type: 'single_select', order_index: 1, options: createSelectOptions(['Blog Post', 'Social Media', 'Video', 'Podcast', 'Newsletter', 'Infographic']) },
+    { table_name: 'Content', name: 'Status', type: 'single_select', order_index: 2, options: createSelectOptions(['Idea', 'In Progress', 'Review', 'Scheduled', 'Published', 'Archived']) },
     { table_name: 'Content', name: 'Author', type: 'text', order_index: 3, options: {} },
     { table_name: 'Content', name: 'Campaign', type: 'text', order_index: 4, options: {} },
     { table_name: 'Content', name: 'Publish Date', type: 'date', order_index: 5, options: {} },
-    { table_name: 'Content', name: 'Platform', type: 'multi_select', order_index: 6, options: { choices: ['Website', 'Facebook', 'Twitter', 'LinkedIn', 'Instagram', 'YouTube'] } },
+    { table_name: 'Content', name: 'Platform', type: 'multi_select', order_index: 6, options: createSelectOptions(['Website', 'Facebook', 'Twitter', 'LinkedIn', 'Instagram', 'YouTube']) },
     { table_name: 'Content', name: 'Keywords', type: 'text', order_index: 7, options: {} },
     { table_name: 'Content', name: 'Notes', type: 'text', order_index: 8, options: {} },
     
     // Authors table fields
     { table_name: 'Authors', name: 'Name', type: 'text', order_index: 0, options: {} },
     { table_name: 'Authors', name: 'Email', type: 'email', order_index: 1, options: {} },
-    { table_name: 'Authors', name: 'Role', type: 'single_select', order_index: 2, options: { choices: ['Writer', 'Editor', 'Social Media Manager', 'Video Producer', 'Designer'] } },
+    { table_name: 'Authors', name: 'Role', type: 'single_select', order_index: 2, options: createSelectOptions(['Writer', 'Editor', 'Social Media Manager', 'Video Producer', 'Designer']) },
     { table_name: 'Authors', name: 'Specialization', type: 'text', order_index: 3, options: {} },
-    { table_name: 'Authors', name: 'Status', type: 'single_select', order_index: 4, options: { choices: ['Active', 'On Leave', 'Inactive'] } },
+    { table_name: 'Authors', name: 'Status', type: 'single_select', order_index: 4, options: createSelectOptions(['Active', 'On Leave', 'Inactive']) },
     
     // Campaigns table fields
     { table_name: 'Campaigns', name: 'Campaign Name', type: 'text', order_index: 0, options: {} },
     { table_name: 'Campaigns', name: 'Description', type: 'text', order_index: 1, options: {} },
     { table_name: 'Campaigns', name: 'Start Date', type: 'date', order_index: 2, options: {} },
     { table_name: 'Campaigns', name: 'End Date', type: 'date', order_index: 3, options: {} },
-    { table_name: 'Campaigns', name: 'Status', type: 'single_select', order_index: 4, options: { choices: ['Planning', 'Active', 'Completed', 'Paused'] } },
+    { table_name: 'Campaigns', name: 'Status', type: 'single_select', order_index: 4, options: createSelectOptions(['Planning', 'Active', 'Completed', 'Paused']) },
     { table_name: 'Campaigns', name: 'Budget', type: 'number', order_index: 5, options: { format: 'currency' } },
     { table_name: 'Campaigns', name: 'Goals', type: 'text', order_index: 6, options: {} },
     
     // Analytics table fields
     { table_name: 'Analytics', name: 'Content Title', type: 'text', order_index: 0, options: {} },
-    { table_name: 'Analytics', name: 'Platform', type: 'single_select', order_index: 1, options: { choices: ['Website', 'Facebook', 'Twitter', 'LinkedIn', 'Instagram', 'YouTube'] } },
+    { table_name: 'Analytics', name: 'Platform', type: 'single_select', order_index: 1, options: createSelectOptions(['Website', 'Facebook', 'Twitter', 'LinkedIn', 'Instagram', 'YouTube']) },
     { table_name: 'Analytics', name: 'Views', type: 'number', order_index: 2, options: {} },
     { table_name: 'Analytics', name: 'Engagement', type: 'number', order_index: 3, options: {} },
     { table_name: 'Analytics', name: 'Shares', type: 'number', order_index: 4, options: {} },
@@ -390,4 +405,3 @@ export const PREDEFINED_TEMPLATES = [
     icon: 'FileText'
   }
 ];
-
