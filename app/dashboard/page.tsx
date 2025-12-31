@@ -470,6 +470,7 @@ function DashboardContent() {
                 collectionView={collectionView}
                 sortOption={sortOption}
                 isSortOpen={isSortOpen}
+                loading={basesLoading}
                 onCollectionViewChange={setCollectionView}
                 onSortOptionChange={setSortOption}
                 onSortToggle={setIsSortOpen}
@@ -483,6 +484,8 @@ function DashboardContent() {
                 onUseTemplate={handleUseTemplate}
                 onPreviewTemplate={handlePreviewTemplate}
                 userId={user?.id}
+                collectionView={collectionView}
+                onCollectionViewChange={setCollectionView}
               />
             )}
 

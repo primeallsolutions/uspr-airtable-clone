@@ -1,17 +1,15 @@
-import { Star } from "lucide-react";
-import { BaseTile } from "../BaseTile";
-import { BaseRow } from "../BaseRow";
-import { EmptyState } from "../EmptyState";
 import { SortDropdown } from "../SortDropdown";
 import { ViewToggle } from "../ViewToggle";
 import { sortBases } from "@/lib/utils/sort-helpers";
 import type { BaseRecord, CollectionView, SortOption } from "@/lib/types/dashboard";
+import { BaseCard } from "../BaseCard";
 
 interface SharedViewProps {
   sharedBases: BaseRecord[];
   collectionView: CollectionView;
   sortOption: SortOption;
   isSortOpen: boolean;
+  loading?: boolean;
   onCollectionViewChange: (view: CollectionView) => void;
   onSortOptionChange: (option: SortOption) => void;
   onSortToggle: (open: boolean) => void;
@@ -24,12 +22,21 @@ export const SharedView = ({
   collectionView,
   sortOption,
   isSortOpen,
+  loading = false,
   onCollectionViewChange,
   onSortOptionChange,
   onSortToggle,
   onBaseStarToggle,
   onBaseContextMenu
 }: SharedViewProps) => {
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
   return (
     <>
       <h1 className="mb-4 text-2xl font-bold text-gray-900">Shared</h1>
@@ -46,44 +53,27 @@ export const SharedView = ({
         />
       </div>
       
-      {collectionView === 'grid' ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {sharedBases.length === 0 ? (
-            <EmptyState type="shared" />
-          ) : (
-            sortBases(sharedBases, sortOption).map((base) => (
-              <BaseTile 
-                key={base.id} 
-                base={base}
-                onStarToggle={onBaseStarToggle}
-                onContextMenu={onBaseContextMenu}
-              />
-            ))
-          )}
-        </div>
-      ) : (
-        <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
-          <div className="grid grid-cols-2 gap-4 border-b border-gray-100 px-4 py-2 text-xs font-medium uppercase tracking-wide text-gray-500">
-            <div>Name</div>
-            <div className="text-right">Last opened</div>
+      <div className="space-y-8">
+        <div>
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">Shared Bases</h2>
+          <div className={collectionView === 'grid'
+            ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4'
+            : 'space-y-3'
+          }>
+            {sortBases(sharedBases, sortOption).map(
+              (base) => (
+                <BaseCard
+                  key={base.id}
+                  base={base}
+                  view={collectionView}
+                  onStarToggle={onBaseStarToggle}
+                  onContextMenu={onBaseContextMenu}
+                />
+              )
+            )}
           </div>
-          {sharedBases.length === 0 ? (
-            <div className="px-4 py-8 text-center text-sm text-gray-500">
-              <Star className="mx-auto mb-2 h-8 w-8 text-gray-400" />
-              No shared bases yet
-            </div>
-          ) : (
-            sortBases(sharedBases, sortOption).map((base) => (
-              <BaseRow
-                key={base.id}
-                base={base}
-                onStarToggle={onBaseStarToggle}
-                onContextMenu={onBaseContextMenu}
-              />
-            ))
-          )}
         </div>
-      )}
+      </div>
     </>
   );
 };
