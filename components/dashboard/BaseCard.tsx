@@ -71,7 +71,7 @@ export const BaseCard = ({ base, view, onStarToggle, onContextMenu }: BaseCardPr
         </div>
         
         <div className="flex items-center gap-3 text-sm text-gray-500">
-          <span>Opened {formatRelative(lastOpened)}</span>
+          <span>Opened {formatRelative(lastOpened)} · {formatInTimezone(lastOpened, timezone)}</span>
         </div>
         
         <button
