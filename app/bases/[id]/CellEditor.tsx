@@ -267,9 +267,6 @@ export default function CellEditor({
           disabled={isSaving}
           placeholder={isEmptyValue ? EMPTY_LABEL : undefined}
         />
-        {isEmptyValue && !local && (
-          <span className="ml-2 text-xs text-gray-400 italic">{EMPTY_LABEL}</span>
-        )}
       </div>
     );
   }
@@ -287,9 +284,6 @@ export default function CellEditor({
           disabled={isSaving}
           placeholder={isEmptyValue ? EMPTY_LABEL : undefined}
         />
-        {isEmptyValue && !local && (
-          <span className="ml-2 text-xs text-gray-400 italic">{EMPTY_LABEL}</span>
-        )}
       </div>
     );
   }
