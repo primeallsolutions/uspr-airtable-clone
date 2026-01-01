@@ -20,6 +20,7 @@ export default function CellEditor({
   const [local, setLocal] = useState<string>(() => (value == null ? "" : String(value)));
   const [emailError, setEmailError] = useState<string | null>(null);
   const [phoneError, setPhoneError] = useState<string | null>(null);
+  const [linkError, setLinkError] = useState<string | null>(null);
   const isEmptyValue =
     value === null ||
     value === undefined ||
@@ -244,6 +245,21 @@ export default function CellEditor({
       const formatted = formatPhone(phoneValue);
       setLocal(formatted);
       onUpdate(formatted);
+      return;
+    }
+    if (field.type === 'link') {
+      const urlValue = local.trim();
+      if (urlValue === '') {
+        setLinkError(null);
+        onUpdate(null);
+        return;
+      }
+      if (!/^https?:\/\/[^\s$.?#].[^\s]*$/i.test(urlValue)) {
+        setLinkError('Please enter a valid URL (must start with http:// or https://)');
+        return;
+      }
+      setLinkError(null);
+      onUpdate(urlValue);
       return;
     }
     onUpdate(local);
@@ -531,6 +547,30 @@ export default function CellEditor({
         )}
       </div>
     );
+  }
+
+  // Link type - this is here for data validation
+  if (field.type === 'link') {
+    return (
+      <div className="w-full">
+        <input
+          type="url"
+          className={`${centeredInputClass} ${linkError ? 'focus:ring-red-500 text-red-600' : ''}`}
+          value={local}
+          onChange={(e) => {
+            setLocal(e.target.value);
+            if (linkError) setLinkError(null); // Clear error on typing
+          }}
+          onBlur={handleCommit}
+          onKeyDown={(e) => { if (e.key === 'Enter') handleCommit(); }}
+          disabled={isSaving}
+          placeholder={isEmptyValue ? EMPTY_LABEL : 'Enter URL...'}
+        />
+        {linkError && (
+          <div className="text-xs text-red-600 mt-1 px-3">{linkError}</div>
+        )}
+      </div>
+    )
   }
 
   // Long text - always renders as textarea
