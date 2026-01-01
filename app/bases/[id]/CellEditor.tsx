@@ -31,6 +31,98 @@ export default function CellEditor({
     setLocal(value == null ? "" : String(value));
   }, [value]);
 
+  const SelectDropdown = ({ 
+    value,
+    onUpdate,
+    selectChoices,
+    selectedColor,
+    isEmptyValue,
+    EMPTY_LABEL,
+    isSaving
+  }: {
+    value?: unknown;
+    onUpdate: (val: unknown) => void;
+    selectChoices: { key: string; label: string; color: string }[];
+    selectedColor?: string;
+    isEmptyValue: boolean;
+    EMPTY_LABEL: string;
+    isSaving?: boolean;
+  }) => {
+    const [isOpen, setIsOpen] = useState(false);
+
+    // Find the label of the currently selected item
+    const selectedChoice = selectChoices.find(c => String(c.key) === String(value));
+    const displayLabel = selectedChoice ? selectedChoice.label : (isEmptyValue ? EMPTY_LABEL : 'Select...');
+
+    const handleSelect = (key: string) => {
+      onUpdate(key || null);
+      setIsOpen(false);
+    };
+
+    return (
+      <div className="relative inline-block w-full">
+        {/* Dropdown select box */}
+        <button
+          type="button"
+          disabled={isSaving}
+          onClick={() => setIsOpen(!isOpen)}
+          className={`w-full px-3 py-1 text-left border rounded-sm transition-colors cursor-pointer flex justify-between items-center ${isSaving ? 'opacity-50' : ''}`}
+          style={selectedColor ? {
+            backgroundColor: selectedColor,
+            borderColor: selectedColor,
+            color: 'white'
+          } : {
+            backgroundColor: 'white',
+            borderColor: '#e2e8f0',
+            color: '#1a202c'
+          }}
+        >
+          <span>{displayLabel}</span>
+          <span className="ml-2 text-xs">▼</span>
+        </button>
+
+        {/* Dropdown menu */}
+        {isOpen && (
+          <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg overflow-hidden">
+            <div
+              onClick={() => handleSelect('')}
+              className="px-3 py-1 cursor-pointer hover:brightness-95 text-gray-700 bg-white"
+              style={{
+                backgroundColor: 'white',
+                borderLeft: `4px solid ${hexToRgba('', 0.3)}`
+              }}
+            >
+              {isEmptyValue ? EMPTY_LABEL : 'Select...'}
+            </div>
+
+            {selectChoices.map((choice) => (
+              <div
+                key={choice.key}
+                onClick={() => handleSelect(choice.key)}
+                className="px-3 py-1 cursor-pointer hover:brightness-150 transition-all text-black"
+                style={{
+                  // Separate background to avoid parent element color being inherited
+                  backgroundColor: choice.color ? hexToRgba(choice.color, 0.3) : 'white',
+                  borderLeft: choice.color ? `4px solid ${hexToRgba(choice.color, 0.3)}` : 'none'
+                }}
+              >
+                {choice.label}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Close dropdown when user clicks outside */}
+        {isOpen && (
+          <div 
+            className="fixed inset-0 z-0" 
+            onClick={() => setIsOpen(false)}
+          />
+        )}
+      </div>
+    );
+  };
+
   type SelectOptions = { choices?: string[] } | Record<string, { label: string; color: string }>;
 
   const selectChoices = useMemo(() => {
@@ -163,30 +255,15 @@ export default function CellEditor({
   if (field.type === 'single_select') {
     const selectedColor = value == null ? undefined : choiceColors[String(value)];
 
-    return (
-      <select
-        className={`${centeredInputClass} cursor-pointer rounded-sm`}
-        value={value == null ? '' : String(value)}
-        onChange={(e) => onUpdate(e.target.value || null)}
-        disabled={isSaving}
-        style={selectedColor ? {
-          backgroundColor: selectedColor,
-          borderColor: selectedColor,
-          color: 'white'
-        } : undefined}
-      >
-        <option value="">{isEmptyValue ? EMPTY_LABEL : 'Select...'}</option>
-        {selectChoices.map((choice) => (
-          <option
-            key={choice.key}
-            value={choice.key}
-            style={{ backgroundColor: hexToRgba(choice.color, 0.18) }}
-          >
-            {choice.label}
-          </option>
-        ))}
-      </select>
-    );
+    return <SelectDropdown
+      value={value}
+      onUpdate={onUpdate}
+      selectChoices={selectChoices}
+      selectedColor={selectedColor}
+      isEmptyValue={isEmptyValue}
+      EMPTY_LABEL={EMPTY_LABEL}
+      isSaving={isSaving}
+    />;
   }
 
   if (field.type === 'multi_select') {
@@ -194,11 +271,8 @@ export default function CellEditor({
 
     return (
       <div className="w-full min-h-[32px] px-2 py-1 text-center">
-        <select
-          className={`${centeredInputClass} cursor-pointer rounded-sm`}
-          value=""
-          onChange={(e) => {
-            const newValue = e.target.value;
+        <SelectDropdown
+          onUpdate={(newValue) => {
             if (newValue) {
               const currentValues = Array.isArray(value) ? value : (value ? [value] : []);
               if (!currentValues.includes(newValue)) {
@@ -206,19 +280,11 @@ export default function CellEditor({
               }
             }
           }}
-          disabled={isSaving}
-        >
-          <option value="">{isEmptyValue ? EMPTY_LABEL : 'Add option...'}</option>
-          {selectChoices.map((choice) => (
-            <option
-              key={choice.key}
-              value={choice.key}
-              style={{ backgroundColor: hexToRgba(choice.color, 0.18) }}
-            >
-              {choice.label}
-            </option>
-          ))}
-        </select>
+          selectChoices={selectChoices}
+          isEmptyValue={isEmptyValue}
+          EMPTY_LABEL={EMPTY_LABEL}
+          isSaving={isSaving}
+        />
 
         {selectedValues.length > 0 ? (
           <div className="flex flex-wrap gap-1 mt-1 justify-center">
