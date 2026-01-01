@@ -105,7 +105,6 @@ export const WorkspaceView = ({
       )}
       <div className="space-y-8">
         <div>
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Shared Bases</h2>
           <div className={collectionView === 'grid'
             ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4'
             : 'space-y-3'
