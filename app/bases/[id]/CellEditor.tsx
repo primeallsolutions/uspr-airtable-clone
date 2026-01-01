@@ -322,12 +322,15 @@ export default function CellEditor({
 
   if (field.type === 'date') {
     return (
-      <div className="flex items-center">
+      <div className="flex items-center hover:overflow-hidden hover:w-full">
         <input
           type="date"
-          className={centeredInputClass}
+          className={`${centeredInputClass} max-w-full [&::-webkit-calendar-picker-indicator]:opacity-0 hover:[&::-webkit-calendar-picker-indicator]:opacity-100 [&::-webkit-calendar-picker-indicator]:cursor-pointer`}
           value={local}
-          onChange={(e) => setLocal(e.target.value)}
+          onChange={(e) => {
+            setLocal(e.target.value);
+            handleCommit();
+          }}
           onBlur={handleCommit}
           onKeyDown={(e) => { if (e.key === 'Enter') handleCommit(); }}
           disabled={isSaving}
@@ -339,12 +342,15 @@ export default function CellEditor({
 
   if (field.type === 'datetime') {
     return (
-      <div className="flex items-center">
+      <div className="flex items-center hover:overflow-hidden hover:w-full">
         <input
           type="datetime-local"
-          className={centeredInputClass}
+          className={`${centeredInputClass} max-w-full [&::-webkit-calendar-picker-indicator]:opacity-0 hover:[&::-webkit-calendar-picker-indicator]:opacity-100 [&::-webkit-calendar-picker-indicator]:cursor-pointer`}
           value={local}
-          onChange={(e) => setLocal(e.target.value)}
+          onChange={(e) => {
+            setLocal(e.target.value);
+            handleCommit();
+          }}
           onBlur={handleCommit}
           onKeyDown={(e) => { if (e.key === 'Enter') handleCommit(); }}
           disabled={isSaving}
