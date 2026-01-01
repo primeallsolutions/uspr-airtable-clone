@@ -11,6 +11,7 @@ interface HomeViewProps {
   sortOption: SortOption;
   isSortOpen: boolean;
   loading?: boolean;
+  initialLoad?: boolean;
   onCollectionViewChange: (view: CollectionView) => void;
   onSortOptionChange: (option: SortOption) => void;
   onSortToggle: (open: boolean) => void;
@@ -24,6 +25,7 @@ export const HomeView = ({
   sortOption,
   isSortOpen,
   loading = false,
+  initialLoad = false,
   onCollectionViewChange,
   onSortOptionChange,
   onSortToggle,
@@ -40,7 +42,7 @@ export const HomeView = ({
     return !isToday(ref);
   });
 
-  if (loading) {
+  if (loading && !initialLoad) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>

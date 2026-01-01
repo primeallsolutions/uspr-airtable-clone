@@ -15,6 +15,7 @@ interface WorkspaceViewProps {
   sortOption: SortOption;
   isSortOpen: boolean;
   loading?: boolean;
+  initialLoad?: boolean;
   onCollectionViewChange: (view: CollectionView) => void;
   onSortOptionChange: (option: SortOption) => void;
   onSortToggle: (open: boolean) => void;
@@ -34,6 +35,7 @@ export const WorkspaceView = ({
   sortOption,
   isSortOpen,
   loading = false,
+  initialLoad = false,
   onCollectionViewChange,
   onSortOptionChange,
   onSortToggle,
@@ -46,7 +48,7 @@ export const WorkspaceView = ({
   const currentWorkspace = workspaces.find(w => w.id === selectedWorkspaceId);
   const [isActivityOpen, setIsActivityOpen] = useState(false);
 
-  if (loading) {
+  if (loading && !initialLoad) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>

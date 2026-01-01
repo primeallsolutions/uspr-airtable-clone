@@ -53,6 +53,7 @@ function DashboardContent() {
     starredBases,
     sharedBases,
     loading: basesLoading,
+    initialLoad: initialBasesLoad,
     loadRecentBases,
     loadWorkspaceBases,
     loadStarredBases,
@@ -420,6 +421,7 @@ function DashboardContent() {
                 sortOption={sortOption}
                 isSortOpen={isSortOpen}
                 loading={basesLoading}
+                initialLoad={initialBasesLoad}
                 onCollectionViewChange={setCollectionView}
                 onSortOptionChange={setSortOption}
                 onSortToggle={setIsSortOpen}
@@ -437,6 +439,7 @@ function DashboardContent() {
                 sortOption={sortOption}
                 isSortOpen={isSortOpen}
                 loading={basesLoading}
+                initialLoad={initialBasesLoad}
                 onCollectionViewChange={setCollectionView}
                 onSortOptionChange={setSortOption}
                 onSortToggle={setIsSortOpen}
@@ -456,6 +459,7 @@ function DashboardContent() {
                 sortOption={sortOption}
                 isSortOpen={isSortOpen}
                 loading={basesLoading}
+                initialLoad={initialBasesLoad}
                 onCollectionViewChange={setCollectionView}
                 onSortOptionChange={setSortOption}
                 onSortToggle={setIsSortOpen}
@@ -471,6 +475,7 @@ function DashboardContent() {
                 sortOption={sortOption}
                 isSortOpen={isSortOpen}
                 loading={basesLoading}
+                initialLoad={initialBasesLoad}
                 onCollectionViewChange={setCollectionView}
                 onSortOptionChange={setSortOption}
                 onSortToggle={setIsSortOpen}
