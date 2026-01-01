@@ -345,7 +345,16 @@ export default function CellEditor({
           value={local}
           onChange={(e) => {
             setLocal(e.target.value);
-            handleCommit();
+            // Only commit if the day actually changed from the original saved value; the month can be changed while the popup is still open so we don't want to save yet
+            // This won't autosave when, for example, the date is changed from 2025-01-01 to 2025-02-01, but this is better than the alternative of it never autosaving
+            // The date will still always save when the user clicks elsewhere on the page and defocuses the input box.
+            const originalValue = value == null ? "" : String(value);
+            const originalDay = originalValue.split('-')[2]; // Extract day from YYYY-MM-DD
+            const currentDay = e.target.value.split('-')[2];
+            console.log({ originalValue, originalDay, currentDay });
+            if (currentDay !== originalDay) {
+              handleCommit();
+            }
           }}
           onBlur={handleCommit}
           onKeyDown={(e) => { if (e.key === 'Enter') handleCommit(); }}
@@ -363,10 +372,7 @@ export default function CellEditor({
           type="datetime-local"
           className={`${centeredInputClass} max-w-full [&::-webkit-calendar-picker-indicator]:opacity-0 hover:[&::-webkit-calendar-picker-indicator]:opacity-100 [&::-webkit-calendar-picker-indicator]:cursor-pointer`}
           value={local}
-          onChange={(e) => {
-            setLocal(e.target.value);
-            handleCommit();
-          }}
+          onChange={(e) => setLocal(e.target.value)}
           onBlur={handleCommit}
           onKeyDown={(e) => { if (e.key === 'Enter') handleCommit(); }}
           disabled={isSaving}
