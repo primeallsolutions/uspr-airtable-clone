@@ -23,18 +23,18 @@ export const REAL_ESTATE_CRM_TEMPLATE: ExportedBase = {
     { table_name: 'Contacts', name: 'Full Name', type: 'text', order_index: 0, options: {} },
     { table_name: 'Contacts', name: 'Email', type: 'email', order_index: 1, options: {} },
     { table_name: 'Contacts', name: 'Phone', type: 'phone', order_index: 2, options: {} },
-    { table_name: 'Contacts', name: 'Type', type: 'single_select', order_index: 3, options: { choices: ['Buyer', 'Seller', 'Both', 'Lead'] } },
-    { table_name: 'Contacts', name: 'Status', type: 'single_select', order_index: 4, options: { choices: ['Active', 'Inactive', 'Hot Lead', 'Cold Lead'] } },
+    { table_name: 'Contacts', name: 'Type', type: 'single_select', order_index: 3, options: { buyer: { name: 'Buyer', color: '#1E40AF' }, seller: { name: 'Seller', color: '#C2410C' }, both: { name: 'Both', color: '#15803D' }, lead: { name: 'Lead', color: '#B91C1C' } } },
+    { table_name: 'Contacts', name: 'Status', type: 'single_select', order_index: 4, options: { active: { name: 'Active', color: '#15803D' }, inactive: { name: 'Inactive', color: '#6B7280' }, hot_lead: { name: 'Hot Lead', color: '#DC2626' }, cold_lead: { name: 'Cold Lead', color: '#3B82F6' } } },
     { table_name: 'Contacts', name: 'Notes', type: 'text', order_index: 5, options: {} },
     
     // Properties table fields
     { table_name: 'Properties', name: 'Address', type: 'text', order_index: 0, options: {} },
-    { table_name: 'Properties', name: 'Property Type', type: 'single_select', order_index: 1, options: { choices: ['House', 'Apartment', 'Condo', 'Land', 'Commercial'] } },
+    { table_name: 'Properties', name: 'Property Type', type: 'single_select', order_index: 1, options: { house: { name: 'House', color: '#1E40AF' }, apartment: { name: 'Apartment', color: '#C2410C' }, condo: { name: 'Condo', color: '#15803D' }, land: { name: 'Land', color: '#B91C1C' }, commercial: { name: 'Commercial', color: '#7C3AED' } } },
     { table_name: 'Properties', name: 'Price', type: 'number', order_index: 2, options: { format: 'currency' } },
     { table_name: 'Properties', name: 'Bedrooms', type: 'number', order_index: 3, options: {} },
     { table_name: 'Properties', name: 'Bathrooms', type: 'number', order_index: 4, options: {} },
     { table_name: 'Properties', name: 'Square Feet', type: 'number', order_index: 5, options: {} },
-    { table_name: 'Properties', name: 'Status', type: 'single_select', order_index: 6, options: { choices: ['Available', 'Under Contract', 'Sold', 'Off Market'] } },
+    { table_name: 'Properties', name: 'Status', type: 'single_select', order_index: 6, options: { available: { name: 'Available', color: '#15803D' }, under_contract: { name: 'Under Contract', color: '#F59E0B' }, sold: { name: 'Sold', color: '#DC2626' }, off_market: { name: 'Off Market', color: '#6B7280' } } },
     { table_name: 'Properties', name: 'Listed Date', type: 'date', order_index: 7, options: {} },
     
     // Deals table fields
@@ -42,8 +42,8 @@ export const REAL_ESTATE_CRM_TEMPLATE: ExportedBase = {
     { table_name: 'Deals', name: 'Property', type: 'text', order_index: 1, options: {} },
     { table_name: 'Deals', name: 'Client', type: 'text', order_index: 2, options: {} },
     { table_name: 'Deals', name: 'Deal Value', type: 'number', order_index: 3, options: { format: 'currency' } },
-    { table_name: 'Deals', name: 'Stage', type: 'single_select', order_index: 4, options: { choices: ['Prospect', 'Showing', 'Offer', 'Negotiation', 'Under Contract', 'Closed'] } },
-    { table_name: 'Deals', name: 'Probability', type: 'single_select', order_index: 5, options: { choices: ['25%', '50%', '75%', '90%', '100%'] } },
+    { table_name: 'Deals', name: 'Stage', type: 'single_select', order_index: 4, options: { prospect: { name: 'Prospect', color: '#6B7280' }, showing: { name: 'Showing', color: '#3B82F6' }, offer: { name: 'Offer', color: '#F59E0B' }, negotiation: { name: 'Negotiation', color: '#EF4444' }, under_contract: { name: 'Under Contract', color: '#10B981' }, closed: { name: 'Closed', color: '#15803D' } } },
+    { table_name: 'Deals', name: 'Probability', type: 'single_select', order_index: 5, options: { p25: { name: '25%', color: '#DC2626' }, p50: { name: '50%', color: '#F59E0B' }, p75: { name: '75%', color: '#3B82F6' }, p90: { name: '90%', color: '#10B981' }, p100: { name: '100%', color: '#15803D' } } },
     { table_name: 'Deals', name: 'Expected Close Date', type: 'date', order_index: 6, options: {} },
     
     // Tasks table fields
@@ -52,8 +52,8 @@ export const REAL_ESTATE_CRM_TEMPLATE: ExportedBase = {
     { table_name: 'Tasks', name: 'Related To', type: 'text', order_index: 2, options: {} },
     { table_name: 'Tasks', name: 'Assignee', type: 'text', order_index: 3, options: { inputType: 'email' } },
     { table_name: 'Tasks', name: 'Due Date', type: 'date', order_index: 4, options: {} },
-    { table_name: 'Tasks', name: 'Priority', type: 'single_select', order_index: 5, options: { choices: ['Low', 'Medium', 'High', 'Urgent'] } },
-    { table_name: 'Tasks', name: 'Status', type: 'single_select', order_index: 6, options: { choices: ['To Do', 'In Progress', 'Done'] } }
+    { table_name: 'Tasks', name: 'Priority', type: 'single_select', order_index: 5, options: { low: { name: 'Low', color: '#6B7280' }, medium: { name: 'Medium', color: '#3B82F6' }, high: { name: 'High', color: '#F59E0B' }, urgent: { name: 'Urgent', color: '#DC2626' } } },
+    { table_name: 'Tasks', name: 'Status', type: 'single_select', order_index: 6, options: { to_do: { name: 'To Do', color: '#6B7280' }, in_progress: { name: 'In Progress', color: '#3B82F6' }, done: { name: 'Done', color: '#15803D' } } }
   ],
   automations: [],
   records: [
@@ -94,8 +94,8 @@ export const PROJECT_MANAGEMENT_TEMPLATE: ExportedBase = {
     // Projects table fields
     { table_name: 'Projects', name: 'Project Name', type: 'text', order_index: 0, options: {} },
     { table_name: 'Projects', name: 'Description', type: 'text', order_index: 1, options: {} },
-    { table_name: 'Projects', name: 'Status', type: 'single_select', order_index: 2, options: { choices: ['Planning', 'Active', 'On Hold', 'Completed', 'Cancelled'] } },
-    { table_name: 'Projects', name: 'Priority', type: 'single_select', order_index: 3, options: { choices: ['Low', 'Medium', 'High', 'Critical'] } },
+    { table_name: 'Projects', name: 'Status', type: 'single_select', order_index: 2, options: { planning: { name: 'Planning', color: '#6B7280' }, active: { name: 'Active', color: '#3B82F6' }, on_hold: { name: 'On Hold', color: '#F59E0B' }, completed: { name: 'Completed', color: '#15803D' }, cancelled: { name: 'Cancelled', color: '#DC2626' } } },
+    { table_name: 'Projects', name: 'Priority', type: 'single_select', order_index: 3, options: { low: { name: 'Low', color: '#6B7280' }, medium: { name: 'Medium', color: '#3B82F6' }, high: { name: 'High', color: '#F59E0B' }, critical: { name: 'Critical', color: '#DC2626' } } },
     { table_name: 'Projects', name: 'Start Date', type: 'date', order_index: 4, options: {} },
     { table_name: 'Projects', name: 'End Date', type: 'date', order_index: 5, options: {} },
     { table_name: 'Projects', name: 'Budget', type: 'number', order_index: 6, options: { format: 'currency' } },
@@ -105,25 +105,25 @@ export const PROJECT_MANAGEMENT_TEMPLATE: ExportedBase = {
     { table_name: 'Tasks', name: 'Task Name', type: 'text', order_index: 0, options: {} },
     { table_name: 'Tasks', name: 'Project', type: 'text', order_index: 1, options: {} },
     { table_name: 'Tasks', name: 'Description', type: 'text', order_index: 2, options: {} },
-    { table_name: 'Tasks', name: 'Status', type: 'single_select', order_index: 3, options: { choices: ['To Do', 'In Progress', 'In Review', 'Done', 'Blocked'] } },
+    { table_name: 'Tasks', name: 'Status', type: 'single_select', order_index: 3, options: { to_do: { name: 'To Do', color: '#6B7280' }, in_progress: { name: 'In Progress', color: '#3B82F6' }, in_review: { name: 'In Review', color: '#F59E0B' }, done: { name: 'Done', color: '#15803D' }, blocked: { name: 'Blocked', color: '#DC2626' } } },
     { table_name: 'Tasks', name: 'Assignee', type: 'text', order_index: 4, options: { inputType: 'email' } },
-    { table_name: 'Tasks', name: 'Priority', type: 'single_select', order_index: 5, options: { choices: ['Low', 'Medium', 'High', 'Critical'] } },
+    { table_name: 'Tasks', name: 'Priority', type: 'single_select', order_index: 5, options: { low: { name: 'Low', color: '#6B7280' }, medium: { name: 'Medium', color: '#3B82F6' }, high: { name: 'High', color: '#F59E0B' }, critical: { name: 'Critical', color: '#DC2626' } } },
     { table_name: 'Tasks', name: 'Due Date', type: 'date', order_index: 6, options: {} },
     { table_name: 'Tasks', name: 'Estimated Hours', type: 'number', order_index: 7, options: {} },
     
     // Team Members table fields
     { table_name: 'Team Members', name: 'Name', type: 'text', order_index: 0, options: {} },
     { table_name: 'Team Members', name: 'Email', type: 'email', order_index: 1, options: {} },
-    { table_name: 'Team Members', name: 'Role', type: 'single_select', order_index: 2, options: { choices: ['Developer', 'Designer', 'Project Manager', 'QA', 'DevOps'] } },
+    { table_name: 'Team Members', name: 'Role', type: 'single_select', order_index: 2, options: { developer: { name: 'Developer', color: '#3B82F6' }, designer: { name: 'Designer', color: '#7C3AED' }, project_manager: { name: 'Project Manager', color: '#F59E0B' }, qa: { name: 'QA', color: '#15803D' }, devops: { name: 'DevOps', color: '#DC2626' } } },
     { table_name: 'Team Members', name: 'Department', type: 'text', order_index: 3, options: {} },
-    { table_name: 'Team Members', name: 'Status', type: 'single_select', order_index: 4, options: { choices: ['Active', 'On Leave', 'Inactive'] } },
+    { table_name: 'Team Members', name: 'Status', type: 'single_select', order_index: 4, options: { active: { name: 'Active', color: '#15803D' }, on_leave: { name: 'On Leave', color: '#F59E0B' }, inactive: { name: 'Inactive', color: '#6B7280' } } },
     
     // Milestones table fields
     { table_name: 'Milestones', name: 'Milestone Name', type: 'text', order_index: 0, options: {} },
     { table_name: 'Milestones', name: 'Project', type: 'text', order_index: 1, options: {} },
     { table_name: 'Milestones', name: 'Description', type: 'text', order_index: 2, options: {} },
     { table_name: 'Milestones', name: 'Due Date', type: 'date', order_index: 3, options: {} },
-    { table_name: 'Milestones', name: 'Status', type: 'single_select', order_index: 4, options: { choices: ['Not Started', 'In Progress', 'Completed', 'Delayed'] } },
+    { table_name: 'Milestones', name: 'Status', type: 'single_select', order_index: 4, options: { not_started: { name: 'Not Started', color: '#6B7280' }, in_progress: { name: 'In Progress', color: '#3B82F6' }, completed: { name: 'Completed', color: '#15803D' }, delayed: { name: 'Delayed', color: '#DC2626' } } },
     { table_name: 'Milestones', name: 'Completion %', type: 'number', order_index: 5, options: {} }
   ],
   automations: [],
@@ -165,12 +165,12 @@ export const INVENTORY_MANAGEMENT_TEMPLATE: ExportedBase = {
     // Products table fields
     { table_name: 'Products', name: 'Product Name', type: 'text', order_index: 0, options: {} },
     { table_name: 'Products', name: 'SKU', type: 'text', order_index: 1, options: {} },
-    { table_name: 'Products', name: 'Category', type: 'single_select', order_index: 2, options: { choices: ['Electronics', 'Clothing', 'Food', 'Furniture', 'Other'] } },
+    { table_name: 'Products', name: 'Category', type: 'single_select', order_index: 2, options: { electronics: { name: 'Electronics', color: '#3B82F6' }, clothing: { name: 'Clothing', color: '#7C3AED' }, food: { name: 'Food', color: '#15803D' }, furniture: { name: 'Furniture', color: '#F59E0B' }, other: { name: 'Other', color: '#6B7280' } } },
     { table_name: 'Products', name: 'Current Stock', type: 'number', order_index: 3, options: {} },
     { table_name: 'Products', name: 'Reorder Level', type: 'number', order_index: 4, options: {} },
     { table_name: 'Products', name: 'Unit Price', type: 'number', order_index: 5, options: { format: 'currency' } },
     { table_name: 'Products', name: 'Supplier', type: 'text', order_index: 6, options: {} },
-    { table_name: 'Products', name: 'Status', type: 'single_select', order_index: 7, options: { choices: ['In Stock', 'Low Stock', 'Out of Stock', 'Discontinued'] } },
+    { table_name: 'Products', name: 'Status', type: 'single_select', order_index: 7, options: { in_stock: { name: 'In Stock', color: '#15803D' }, low_stock: { name: 'Low Stock', color: '#F59E0B' }, out_of_stock: { name: 'Out of Stock', color: '#DC2626' }, discontinued: { name: 'Discontinued', color: '#6B7280' } } },
     
     // Suppliers table fields
     { table_name: 'Suppliers', name: 'Supplier Name', type: 'text', order_index: 0, options: {} },
@@ -178,20 +178,20 @@ export const INVENTORY_MANAGEMENT_TEMPLATE: ExportedBase = {
     { table_name: 'Suppliers', name: 'Email', type: 'email', order_index: 2, options: {} },
     { table_name: 'Suppliers', name: 'Phone', type: 'phone', order_index: 3, options: {} },
     { table_name: 'Suppliers', name: 'Address', type: 'text', order_index: 4, options: {} },
-    { table_name: 'Suppliers', name: 'Status', type: 'single_select', order_index: 5, options: { choices: ['Active', 'Inactive', 'Preferred'] } },
+    { table_name: 'Suppliers', name: 'Status', type: 'single_select', order_index: 5, options: { active: { name: 'Active', color: '#15803D' }, inactive: { name: 'Inactive', color: '#6B7280' }, preferred: { name: 'Preferred', color: '#3B82F6' } } },
     
     // Orders table fields
     { table_name: 'Orders', name: 'Order Number', type: 'text', order_index: 0, options: {} },
     { table_name: 'Orders', name: 'Supplier', type: 'text', order_index: 1, options: {} },
     { table_name: 'Orders', name: 'Order Date', type: 'date', order_index: 2, options: {} },
     { table_name: 'Orders', name: 'Expected Delivery', type: 'date', order_index: 3, options: {} },
-    { table_name: 'Orders', name: 'Status', type: 'single_select', order_index: 4, options: { choices: ['Pending', 'Confirmed', 'Shipped', 'Delivered', 'Cancelled'] } },
+    { table_name: 'Orders', name: 'Status', type: 'single_select', order_index: 4, options: { pending: { name: 'Pending', color: '#6B7280' }, confirmed: { name: 'Confirmed', color: '#3B82F6' }, shipped: { name: 'Shipped', color: '#F59E0B' }, delivered: { name: 'Delivered', color: '#15803D' }, cancelled: { name: 'Cancelled', color: '#DC2626' } } },
     { table_name: 'Orders', name: 'Total Amount', type: 'number', order_index: 5, options: { format: 'currency' } },
     { table_name: 'Orders', name: 'Notes', type: 'text', order_index: 6, options: {} },
     
     // Stock Movements table fields
     { table_name: 'Stock Movements', name: 'Product', type: 'text', order_index: 0, options: {} },
-    { table_name: 'Stock Movements', name: 'Movement Type', type: 'single_select', order_index: 1, options: { choices: ['Purchase', 'Sale', 'Return', 'Adjustment', 'Transfer'] } },
+    { table_name: 'Stock Movements', name: 'Movement Type', type: 'single_select', order_index: 1, options: { purchase: { name: 'Purchase', color: '#15803D' }, sale: { name: 'Sale', color: '#3B82F6' }, return: { name: 'Return', color: '#F59E0B' }, adjustment: { name: 'Adjustment', color: '#7C3AED' }, transfer: { name: 'Transfer', color: '#6B7280' } } },
     { table_name: 'Stock Movements', name: 'Quantity', type: 'number', order_index: 2, options: {} },
     { table_name: 'Stock Movements', name: 'Date', type: 'date', order_index: 3, options: {} },
     { table_name: 'Stock Movements', name: 'Reference', type: 'text', order_index: 4, options: {} },
@@ -234,11 +234,11 @@ export const EVENT_PLANNING_TEMPLATE: ExportedBase = {
   fields: [
     // Events table fields
     { table_name: 'Events', name: 'Event Name', type: 'text', order_index: 0, options: {} },
-    { table_name: 'Events', name: 'Event Type', type: 'single_select', order_index: 1, options: { choices: ['Conference', 'Wedding', 'Corporate', 'Social', 'Workshop', 'Other'] } },
+    { table_name: 'Events', name: 'Event Type', type: 'single_select', order_index: 1, options: { conference: { name: 'Conference', color: '#3B82F6' }, wedding: { name: 'Wedding', color: '#EC4899' }, corporate: { name: 'Corporate', color: '#6B7280' }, social: { name: 'Social', color: '#10B981' }, workshop: { name: 'Workshop', color: '#F59E0B' }, other: { name: 'Other', color: '#7C3AED' } } },
     { table_name: 'Events', name: 'Date', type: 'date', order_index: 2, options: {} },
     { table_name: 'Events', name: 'Venue', type: 'text', order_index: 3, options: {} },
     { table_name: 'Events', name: 'Expected Attendees', type: 'number', order_index: 4, options: {} },
-    { table_name: 'Events', name: 'Status', type: 'single_select', order_index: 5, options: { choices: ['Planning', 'Confirmed', 'In Progress', 'Completed', 'Cancelled'] } },
+    { table_name: 'Events', name: 'Status', type: 'single_select', order_index: 5, options: { planning: { name: 'Planning', color: '#6B7280' }, confirmed: { name: 'Confirmed', color: '#3B82F6' }, in_progress: { name: 'In Progress', color: '#F59E0B' }, completed: { name: 'Completed', color: '#15803D' }, cancelled: { name: 'Cancelled', color: '#DC2626' } } },
     { table_name: 'Events', name: 'Total Budget', type: 'number', order_index: 6, options: { format: 'currency' } },
     { table_name: 'Events', name: 'Notes', type: 'text', order_index: 7, options: {} },
     
@@ -247,26 +247,26 @@ export const EVENT_PLANNING_TEMPLATE: ExportedBase = {
     { table_name: 'Attendees', name: 'Email', type: 'email', order_index: 1, options: {} },
     { table_name: 'Attendees', name: 'Phone', type: 'phone', order_index: 2, options: {} },
     { table_name: 'Attendees', name: 'Event', type: 'text', order_index: 3, options: {} },
-    { table_name: 'Attendees', name: 'RSVP Status', type: 'single_select', order_index: 4, options: { choices: ['Invited', 'Confirmed', 'Declined', 'Maybe', 'Attended'] } },
+    { table_name: 'Attendees', name: 'RSVP Status', type: 'single_select', order_index: 4, options: { invited: { name: 'Invited', color: '#6B7280' }, confirmed: { name: 'Confirmed', color: '#15803D' }, declined: { name: 'Declined', color: '#DC2626' }, maybe: { name: 'Maybe', color: '#F59E0B' }, attended: { name: 'Attended', color: '#3B82F6' } } },
     { table_name: 'Attendees', name: 'Dietary Restrictions', type: 'text', order_index: 5, options: {} },
     { table_name: 'Attendees', name: 'Special Requests', type: 'text', order_index: 6, options: {} },
     
     // Vendors table fields
     { table_name: 'Vendors', name: 'Vendor Name', type: 'text', order_index: 0, options: {} },
-    { table_name: 'Vendors', name: 'Service Type', type: 'single_select', order_index: 1, options: { choices: ['Catering', 'Photography', 'Venue', 'Entertainment', 'Decoration', 'Other'] } },
+    { table_name: 'Vendors', name: 'Service Type', type: 'single_select', order_index: 1, options: { catering: { name: 'Catering', color: '#15803D' }, photography: { name: 'Photography', color: '#3B82F6' }, venue: { name: 'Venue', color: '#F59E0B' }, entertainment: { name: 'Entertainment', color: '#EC4899' }, decoration: { name: 'Decoration', color: '#7C3AED' }, other: { name: 'Other', color: '#6B7280' } } },
     { table_name: 'Vendors', name: 'Contact Person', type: 'text', order_index: 2, options: {} },
     { table_name: 'Vendors', name: 'Email', type: 'email', order_index: 3, options: {} },
     { table_name: 'Vendors', name: 'Phone', type: 'phone', order_index: 4, options: {} },
     { table_name: 'Vendors', name: 'Cost', type: 'number', order_index: 5, options: { format: 'currency' } },
-    { table_name: 'Vendors', name: 'Status', type: 'single_select', order_index: 6, options: { choices: ['Inquiry', 'Quoted', 'Booked', 'Confirmed', 'Completed'] } },
+    { table_name: 'Vendors', name: 'Status', type: 'single_select', order_index: 6, options: { inquiry: { name: 'Inquiry', color: '#6B7280' }, quoted: { name: 'Quoted', color: '#F59E0B' }, booked: { name: 'Booked', color: '#3B82F6' }, confirmed: { name: 'Confirmed', color: '#15803D' }, completed: { name: 'Completed', color: '#10B981' } } },
     
     // Budget table fields
     { table_name: 'Budget', name: 'Item', type: 'text', order_index: 0, options: {} },
     { table_name: 'Budget', name: 'Event', type: 'text', order_index: 1, options: {} },
-    { table_name: 'Budget', name: 'Category', type: 'single_select', order_index: 2, options: { choices: ['Venue', 'Catering', 'Entertainment', 'Decoration', 'Staff', 'Marketing', 'Other'] } },
+    { table_name: 'Budget', name: 'Category', type: 'single_select', order_index: 2, options: { venue: { name: 'Venue', color: '#3B82F6' }, catering: { name: 'Catering', color: '#15803D' }, entertainment: { name: 'Entertainment', color: '#EC4899' }, decoration: { name: 'Decoration', color: '#7C3AED' }, staff: { name: 'Staff', color: '#F59E0B' }, marketing: { name: 'Marketing', color: '#DC2626' }, other: { name: 'Other', color: '#6B7280' } } },
     { table_name: 'Budget', name: 'Estimated Cost', type: 'number', order_index: 3, options: { format: 'currency' } },
     { table_name: 'Budget', name: 'Actual Cost', type: 'number', order_index: 4, options: { format: 'currency' } },
-    { table_name: 'Budget', name: 'Status', type: 'single_select', order_index: 5, options: { choices: ['Planned', 'Approved', 'Paid', 'Pending'] } },
+    { table_name: 'Budget', name: 'Status', type: 'single_select', order_index: 5, options: { planned: { name: 'Planned', color: '#6B7280' }, approved: { name: 'Approved', color: '#3B82F6' }, paid: { name: 'Paid', color: '#15803D' }, pending: { name: 'Pending', color: '#F59E0B' } } },
     { table_name: 'Budget', name: 'Notes', type: 'text', order_index: 6, options: {} }
   ],
   automations: [],
@@ -306,34 +306,34 @@ export const CONTENT_CALENDAR_TEMPLATE: ExportedBase = {
   fields: [
     // Content table fields
     { table_name: 'Content', name: 'Title', type: 'text', order_index: 0, options: {} },
-    { table_name: 'Content', name: 'Content Type', type: 'single_select', order_index: 1, options: { choices: ['Blog Post', 'Social Media', 'Video', 'Podcast', 'Newsletter', 'Infographic'] } },
-    { table_name: 'Content', name: 'Status', type: 'single_select', order_index: 2, options: { choices: ['Idea', 'In Progress', 'Review', 'Scheduled', 'Published', 'Archived'] } },
+    { table_name: 'Content', name: 'Content Type', type: 'single_select', order_index: 1, options: { blog_post: { name: 'Blog Post', color: '#3B82F6' }, social_media: { name: 'Social Media', color: '#EC4899' }, video: { name: 'Video', color: '#DC2626' }, podcast: { name: 'Podcast', color: '#7C3AED' }, newsletter: { name: 'Newsletter', color: '#F59E0B' }, infographic: { name: 'Infographic', color: '#15803D' } } },
+    { table_name: 'Content', name: 'Status', type: 'single_select', order_index: 2, options: { idea: { name: 'Idea', color: '#6B7280' }, in_progress: { name: 'In Progress', color: '#3B82F6' }, review: { name: 'Review', color: '#F59E0B' }, scheduled: { name: 'Scheduled', color: '#7C3AED' }, published: { name: 'Published', color: '#15803D' }, archived: { name: 'Archived', color: '#DC2626' } } },
     { table_name: 'Content', name: 'Author', type: 'text', order_index: 3, options: {} },
     { table_name: 'Content', name: 'Campaign', type: 'text', order_index: 4, options: {} },
     { table_name: 'Content', name: 'Publish Date', type: 'date', order_index: 5, options: {} },
-    { table_name: 'Content', name: 'Platform', type: 'multi_select', order_index: 6, options: { choices: ['Website', 'Facebook', 'Twitter', 'LinkedIn', 'Instagram', 'YouTube'] } },
+    { table_name: 'Content', name: 'Platform', type: 'multi_select', order_index: 6, options: { website: { name: 'Website', color: '#3B82F6' }, facebook: { name: 'Facebook', color: '#1877F2' }, twitter: { name: 'Twitter', color: '#1DA1F2' }, linkedin: { name: 'LinkedIn', color: '#0A66C2' }, instagram: { name: 'Instagram', color: '#E4405F' }, youtube: { name: 'YouTube', color: '#FF0000' } } },
     { table_name: 'Content', name: 'Keywords', type: 'text', order_index: 7, options: {} },
     { table_name: 'Content', name: 'Notes', type: 'text', order_index: 8, options: {} },
     
     // Authors table fields
     { table_name: 'Authors', name: 'Name', type: 'text', order_index: 0, options: {} },
     { table_name: 'Authors', name: 'Email', type: 'email', order_index: 1, options: {} },
-    { table_name: 'Authors', name: 'Role', type: 'single_select', order_index: 2, options: { choices: ['Writer', 'Editor', 'Social Media Manager', 'Video Producer', 'Designer'] } },
+    { table_name: 'Authors', name: 'Role', type: 'single_select', order_index: 2, options: { writer: { name: 'Writer', color: '#3B82F6' }, editor: { name: 'Editor', color: '#15803D' }, social_media_manager: { name: 'Social Media Manager', color: '#EC4899' }, video_producer: { name: 'Video Producer', color: '#DC2626' }, designer: { name: 'Designer', color: '#7C3AED' } } },
     { table_name: 'Authors', name: 'Specialization', type: 'text', order_index: 3, options: {} },
-    { table_name: 'Authors', name: 'Status', type: 'single_select', order_index: 4, options: { choices: ['Active', 'On Leave', 'Inactive'] } },
+    { table_name: 'Authors', name: 'Status', type: 'single_select', order_index: 4, options: { active: { name: 'Active', color: '#15803D' }, on_leave: { name: 'On Leave', color: '#F59E0B' }, inactive: { name: 'Inactive', color: '#6B7280' } } },
     
     // Campaigns table fields
     { table_name: 'Campaigns', name: 'Campaign Name', type: 'text', order_index: 0, options: {} },
     { table_name: 'Campaigns', name: 'Description', type: 'text', order_index: 1, options: {} },
     { table_name: 'Campaigns', name: 'Start Date', type: 'date', order_index: 2, options: {} },
     { table_name: 'Campaigns', name: 'End Date', type: 'date', order_index: 3, options: {} },
-    { table_name: 'Campaigns', name: 'Status', type: 'single_select', order_index: 4, options: { choices: ['Planning', 'Active', 'Completed', 'Paused'] } },
+    { table_name: 'Campaigns', name: 'Status', type: 'single_select', order_index: 4, options: { planning: { name: 'Planning', color: '#6B7280' }, active: { name: 'Active', color: '#3B82F6' }, completed: { name: 'Completed', color: '#15803D' }, paused: { name: 'Paused', color: '#F59E0B' } } },
     { table_name: 'Campaigns', name: 'Budget', type: 'number', order_index: 5, options: { format: 'currency' } },
     { table_name: 'Campaigns', name: 'Goals', type: 'text', order_index: 6, options: {} },
     
     // Analytics table fields
     { table_name: 'Analytics', name: 'Content Title', type: 'text', order_index: 0, options: {} },
-    { table_name: 'Analytics', name: 'Platform', type: 'single_select', order_index: 1, options: { choices: ['Website', 'Facebook', 'Twitter', 'LinkedIn', 'Instagram', 'YouTube'] } },
+    { table_name: 'Analytics', name: 'Platform', type: 'single_select', order_index: 1, options: { website: { name: 'Website', color: '#3B82F6' }, facebook: { name: 'Facebook', color: '#1877F2' }, twitter: { name: 'Twitter', color: '#1DA1F2' }, linkedin: { name: 'LinkedIn', color: '#0A66C2' }, instagram: { name: 'Instagram', color: '#E4405F' }, youtube: { name: 'YouTube', color: '#FF0000' } } },
     { table_name: 'Analytics', name: 'Views', type: 'number', order_index: 2, options: {} },
     { table_name: 'Analytics', name: 'Engagement', type: 'number', order_index: 3, options: {} },
     { table_name: 'Analytics', name: 'Shares', type: 'number', order_index: 4, options: {} },

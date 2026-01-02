@@ -330,6 +330,8 @@ function DashboardContent() {
                 loading={basesLoading}
                 initialLoad={initialBasesLoad}
                 onCollectionViewChange={setCollectionView}
+                onSortOptionChange={setSortOption}
+                onSortToggle={setIsSortOpen}
                 onCreateBase={openCreateModal}
                 onBaseStarToggle={toggleStar}
                 onBaseContextMenu={handleBaseContextMenu}

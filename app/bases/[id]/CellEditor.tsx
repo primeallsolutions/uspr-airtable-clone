@@ -288,6 +288,7 @@ export default function CellEditor({
     return (
       <div className="w-full min-h-[32px] px-2 py-1 text-center">
         <SelectDropdown
+          value={selectedValues.length > 0 ? selectedValues[0] : null}
           onUpdate={(newValue) => {
             if (newValue) {
               const currentValues = Array.isArray(value) ? value : (value ? [value] : []);
@@ -351,7 +352,6 @@ export default function CellEditor({
             const originalValue = value == null ? "" : String(value);
             const originalDay = originalValue.split('-')[2]; // Extract day from YYYY-MM-DD
             const currentDay = e.target.value.split('-')[2];
-            console.log({ originalValue, originalDay, currentDay });
             if (currentDay !== originalDay) {
               handleCommit();
             }
