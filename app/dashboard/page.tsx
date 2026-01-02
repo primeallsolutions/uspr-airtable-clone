@@ -45,6 +45,8 @@ function DashboardContent() {
     recentBases,
     workspaceBases,
     starredBases,
+    loading: basesLoading,
+    initialLoad: initialBasesLoad,
     loadRecentBases,
     loadWorkspaceBases,
     loadStarredBases,
@@ -307,6 +309,8 @@ function DashboardContent() {
                 collectionView={collectionView}
                 sortOption={sortOption}
                 isSortOpen={isSortOpen}
+                loading={basesLoading}
+                initialLoad={initialBasesLoad}
                 onCollectionViewChange={setCollectionView}
                 onSortOptionChange={setSortOption}
                 onSortToggle={setIsSortOpen}
@@ -322,6 +326,9 @@ function DashboardContent() {
                 selectedWorkspaceId={selectedWorkspaceId}
                 collectionView={collectionView}
                 sortOption={sortOption}
+                isSortOpen={isSortOpen}
+                loading={basesLoading}
+                initialLoad={initialBasesLoad}
                 onCollectionViewChange={setCollectionView}
                 onCreateBase={openCreateModal}
                 onBaseStarToggle={toggleStar}
@@ -336,7 +343,13 @@ function DashboardContent() {
               <StarredView
                 starredBases={starredBases}
                 collectionView={collectionView}
+                sortOption={sortOption}
+                isSortOpen={isSortOpen}
+                loading={basesLoading}
+                initialLoad={initialBasesLoad}
                 onCollectionViewChange={setCollectionView}
+                onSortOptionChange={setSortOption}
+                onSortToggle={setIsSortOpen}
                 onBaseStarToggle={toggleStar}
                 onBaseContextMenu={handleBaseContextMenu}
               />
