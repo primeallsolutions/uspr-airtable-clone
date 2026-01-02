@@ -10,7 +10,6 @@ import type {
   CreateFieldData,
   FieldType
 } from '../types/base-detail';
-import { AuditLogService } from './audit-log-service';
 
 // Simple in-memory cache for automations per base to reduce repeated fetches on cell updates
 const automationCache = new Map<string, Automation[]>();
@@ -229,28 +228,7 @@ export class BaseDetailService {
       .single();
 
     if (error) throw error;
-
-    const table = data as TableRow;
-
-    // Get workspace_id from base for audit log scope
-    const { data: baseData } = await supabase
-      .from("bases")
-      .select("workspace_id")
-      .eq("id", tableData.base_id)
-      .single();
-
-    if (baseData?.workspace_id) {
-      await AuditLogService.log({
-        action: 'create',
-        entity_type: 'table',
-        entity_id: table.id,
-        scope_type: 'workspace',
-        scope_id: baseData.workspace_id,
-        metadata: { name: tableData.name, base_id: tableData.base_id },
-      });
-    }
-
-    return table;
+    return data as TableRow;
   }
 
   static async updateTable(tableId: string, updates: Partial<TableRow>): Promise<void> {
@@ -263,24 +241,6 @@ export class BaseDetailService {
   }
 
   static async deleteTable(tableId: string): Promise<void> {
-    // Get table info before deletion for audit log
-    const { data: tableData } = await supabase
-      .from("tables")
-      .select("name, base_id")
-      .eq("id", tableId)
-      .single();
-
-    // Get workspace_id from base for audit log scope
-    let workspaceId: string | null = null;
-    if (tableData?.base_id) {
-      const { data: baseData } = await supabase
-        .from("bases")
-        .select("workspace_id")
-        .eq("id", tableData.base_id)
-        .single();
-      workspaceId = baseData?.workspace_id ?? null;
-    }
-
     // First delete records and fields to avoid FK violations
     const { error: recordsError } = await supabase
       .from("records")
@@ -308,18 +268,6 @@ export class BaseDetailService {
     if (error) {
       console.error('Failed to delete table', tableId, error);
       throw error;
-    }
-
-    // Log table deletion
-    if (workspaceId) {
-      await AuditLogService.log({
-        action: 'delete',
-        entity_type: 'table',
-        entity_id: tableId,
-        scope_type: 'workspace',
-        scope_id: workspaceId,
-        metadata: { name: tableData?.name, base_id: tableData?.base_id },
-      });
     }
   }
 
@@ -563,29 +511,7 @@ export class BaseDetailService {
     }
     
     console.log('✅ Field created successfully in table:', tableData.name);
-
-    const field = data as FieldRow;
-
-    // Get workspace_id from table -> base for audit log scope
-    const { data: tableWithBase } = await supabase
-      .from("tables")
-      .select("base_id, bases(workspace_id)")
-      .eq("id", fieldData.table_id)
-      .single();
-
-    const workspaceId = (tableWithBase?.bases as { workspace_id?: string } | null)?.workspace_id;
-    if (workspaceId) {
-      await AuditLogService.log({
-        action: 'create',
-        entity_type: 'field',
-        entity_id: field.id,
-        scope_type: 'workspace',
-        scope_id: workspaceId,
-        metadata: { name: fieldData.name, type: sanitizedType, table_id: fieldData.table_id },
-      });
-    }
-
-    return field;
+    return data as FieldRow;
   }
 
   static async updateField(fieldId: string, updates: Partial<FieldRow>): Promise<void> {
@@ -682,33 +608,12 @@ export class BaseDetailService {
   }
 
   static async deleteField(fieldId: string): Promise<void> {
-    // Get field info before deletion for audit log
-    const { data: fieldData } = await supabase
-      .from("fields")
-      .select("name, table_id, tables(base_id, bases(workspace_id))")
-      .eq("id", fieldId)
-      .single();
-
     const { error } = await supabase
       .from("fields")
       .delete()
       .eq("id", fieldId);
 
     if (error) throw error;
-
-    // Log field deletion
-    const tableInfo = fieldData?.tables as { base_id?: string; bases?: { workspace_id?: string } } | null;
-    const workspaceId = tableInfo?.bases?.workspace_id;
-    if (workspaceId) {
-      await AuditLogService.log({
-        action: 'delete',
-        entity_type: 'field',
-        entity_id: fieldId,
-        scope_type: 'workspace',
-        scope_id: workspaceId,
-        metadata: { name: fieldData?.name, table_id: fieldData?.table_id },
-      });
-    }
   }
 
   static async deleteAllFields(tableId: string): Promise<void> {
@@ -902,24 +807,6 @@ export class BaseDetailService {
       // Don't throw here as the record creation was successful
     }
 
-    // Log record creation
-    const { data: baseData } = await supabase
-      .from("bases")
-      .select("workspace_id")
-      .eq("id", table.base_id)
-      .single();
-
-    if (baseData?.workspace_id) {
-      await AuditLogService.log({
-        action: 'create',
-        entity_type: 'record',
-        entity_id: masterRecordId,
-        scope_type: 'workspace',
-        scope_id: baseData.workspace_id,
-        metadata: { table_id: tableId },
-      });
-    }
-
     return data as RecordRow;
   }
 
@@ -950,33 +837,12 @@ export class BaseDetailService {
   }
 
   static async deleteRecord(recordId: string): Promise<void> {
-    // Get record info before deletion for audit log
-    const { data: recordData } = await supabase
-      .from("records")
-      .select("table_id, tables(base_id, bases(workspace_id))")
-      .eq("id", recordId)
-      .single();
-
     const { error } = await supabase
       .from("records")
       .delete()
       .eq("id", recordId);
 
     if (error) throw error;
-
-    // Log record deletion
-    const tableInfo = recordData?.tables as { base_id?: string; bases?: { workspace_id?: string } } | null;
-    const workspaceId = tableInfo?.bases?.workspace_id;
-    if (workspaceId) {
-      await AuditLogService.log({
-        action: 'delete',
-        entity_type: 'record',
-        entity_id: recordId,
-        scope_type: 'workspace',
-        scope_id: workspaceId,
-        metadata: { table_id: recordData?.table_id },
-      });
-    }
   }
 
   static async updateCell(recordId: string, fieldId: string, value: unknown): Promise<void> {
@@ -1519,11 +1385,11 @@ export class BaseDetailService {
               mapping.fieldType = 'single_select';
 
               // Create options object for the field
-              const options: Record<string, { label: string; color: string }> = {};
+              const options: Record<string, { name: string; color: string }> = {};
               Array.from(uniqueValues).forEach((value, index) => {
                 const optionId = `option_${index + 1}`;
                 options[optionId] = {
-                  label: value,
+                  name: value,
                   color: getRandomColor() // Generate a random color for each option
                 };
               });
@@ -1542,11 +1408,11 @@ export class BaseDetailService {
           // Handle single_select fields that were already detected
           if (mapping.fieldType === 'single_select') {
             // Create options object for the field
-            const options: Record<string, { label: string; color: string }> = {};
+            const options: Record<string, { name: string; color: string }> = {};
             Array.from(uniqueValues).forEach((value, index) => {
               const optionId = `option_${index + 1}`;
               options[optionId] = {
-                label: value,
+                name: value,
                 color: getRandomColor() // Generate a random color for each option
               };
             });
@@ -1569,7 +1435,7 @@ export class BaseDetailService {
 
     // NEW STEP: Analyze existing single_select fields for new options
     console.log('🔍 Analyzing existing single_select fields for new options...');
-    const existingSingleSelectUpdates = new Map<string, { field: FieldRow, newOptions: Record<string, { label: string; color: string }> }>();
+    const existingSingleSelectUpdates = new Map<string, { field: FieldRow, newOptions: Record<string, { name: string; color: string }> }>();
 
     for (const [csvColumn, mapping] of Object.entries(fieldMappings)) {
       // Check if mapping is to an existing field ID
@@ -1603,22 +1469,22 @@ export class BaseDetailService {
             }
 
             // Check which values are missing from current options
-            const currentOptions = field.options as Record<string, { label?: string; name?: string; color: string }> || {};
-            const newOptionsToAdd: Record<string, { label: string; color: string }> = {};
+            const currentOptions = field.options as Record<string, { name: string; color: string }> || {};
+            const newOptionsToAdd: Record<string, { name: string; color: string }> = {};
             let nextOptionIndex = Object.keys(currentOptions).length + 1;
 
             for (const value of uniqueValues) {
-              // Check for exact match (check both label and name for backward compatibility)
-              const exactMatch = Object.values(currentOptions).some(opt => opt && (opt.label === value || opt.name === value));
+              // Check for exact match
+              const exactMatch = Object.values(currentOptions).some(opt => opt && opt.name === value);
 
-              // Check for case-insensitive match (check both label and name for backward compatibility)
-              const caseInsensitiveMatch = Object.values(currentOptions).some(opt => opt && ((opt.label && opt.label.toLowerCase() === value.toLowerCase()) || (opt.name && opt.name.toLowerCase() === value.toLowerCase())));
+              // Check for case-insensitive match
+              const caseInsensitiveMatch = Object.values(currentOptions).some(opt => opt && opt.name && opt.name.toLowerCase() === value.toLowerCase());
 
               if (!exactMatch && !caseInsensitiveMatch) {
                 console.log(`    Found new option value: "${value}"`);
                 const optionId = `option_${nextOptionIndex++}`;
                 newOptionsToAdd[optionId] = {
-                  label: value,
+                  name: value,
                   color: getRandomColor()
                 };
               }
@@ -1945,18 +1811,18 @@ export class BaseDetailService {
                     // Find the field to get its options - use fieldById so newly created masterlist fields are included
                     const field = fieldById.get(fieldId);
                   if (field && field.options) {
-                    const options = field.options as Record<string, { label?: string; name?: string; color: string }>;
+                    const options = field.options as Record<string, { name: string; color: string }>;
                     const trimmedValue = value.trim();
 
-                    // 1. Try exact match (check both label and name for backward compatibility)
+                    // 1. Try exact match
                     let optionEntry = Object.entries(options).find(([, optionData]) => {
-                      return optionData && (optionData.label === trimmedValue || optionData.name === trimmedValue);
+                      return optionData && optionData.name === trimmedValue;
                     });
 
-                    // 2. If no exact match, try case-insensitive match (check both label and name)
+                    // 2. If no exact match, try case-insensitive match
                     if (!optionEntry) {
                       optionEntry = Object.entries(options).find(([, optionData]) => {
-                        return optionData && ((optionData.label && optionData.label.toLowerCase() === trimmedValue.toLowerCase()) || (optionData.name && optionData.name.toLowerCase() === trimmedValue.toLowerCase()));
+                        return optionData && optionData.name && optionData.name.toLowerCase() === trimmedValue.toLowerCase();
                       });
                     }
 
@@ -3396,17 +3262,14 @@ export class BaseDetailService {
       if (changedFields) {
         for (const field of changedFields) {
           changedFieldNames.add(field.name);
-          changedFieldMeta.set(field.id, { name: field.name, type: field.type, options: field.options as Record<string, { label?: string; name?: string }> | null });
+          changedFieldMeta.set(field.id, { name: field.name, type: field.type, options: field.options as Record<string, { name?: string }> | null });
           const rawVal = newValues?.[field.id];
           const mapped = this.mapSelectValueBetweenFields(rawVal, field, field);
-          if (typeof rawVal === 'string' && rawVal.startsWith('option_') && field.options) {
-            // Check both label and name for backward compatibility
-            const optionData = (field.options as any)[rawVal];
-            changedFieldDisplay.set(field.id, optionData?.label || optionData?.name || mapped);
-          } else if (typeof rawVal === 'string' && field.options) {
+          if (typeof rawVal === 'string' && rawVal.startsWith('option_') && field.options && (field.options as any)[rawVal]?.name) {
+            changedFieldDisplay.set(field.id, (field.options as any)[rawVal].name);
+          } else if (typeof rawVal === 'string' && field.options && (field.options as any)[rawVal]?.name) {
             // Fallback: option key is not prefixed, but options map contains a display name
-            const optionData = (field.options as any)[rawVal];
-            changedFieldDisplay.set(field.id, optionData?.label || optionData?.name || mapped);
+            changedFieldDisplay.set(field.id, (field.options as any)[rawVal].name);
           } else {
             changedFieldDisplay.set(field.id, mapped);
           }

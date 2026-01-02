@@ -136,9 +136,9 @@ function extractMonetaryValue(value: unknown): number | null {
  */
 function extractSelectionValue(value: unknown, isMultiple: boolean): string | string[] | null {
   if (value === null || value === undefined) return null;
-  // Direct string (single or multiple options)
+  // Direct string (single option selected)
   if (typeof value === 'string') {
-    return isMultiple ? [value] : value;
+    return isMultiple ? [...value.split(',').map(item => item.trim())] : value;
   }
   
   // Array of selections (multiple options)
@@ -367,7 +367,7 @@ export function transformGHLContactToRecord(
 
         case 'tags':
           if (Array.isArray(contact.tags)) {
-            value = contact.tags.join(', ');
+            value = contact.tags;
           } else {
             value = contact.tags || '';
           }

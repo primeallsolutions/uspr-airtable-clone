@@ -21,7 +21,7 @@ export type WorkspaceRecord = {
   isShared?: boolean;
 };
 
-export type ActiveView = 'home' | 'workspace' | 'starred' | 'shared' | 'account' | 'templates';
+export type ActiveView = 'home' | 'workspace' | 'starred' | 'shared' | 'account';
 export type CollectionView = 'grid' | 'list';
 export type SortOption = 'lastOpened' | 'alphabetical' | 'oldestToNewest' | 'newestToOldest';
 

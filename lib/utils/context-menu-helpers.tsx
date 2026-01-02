@@ -7,7 +7,6 @@ interface ContextMenuActions {
   onRename: (base: BaseRecord) => void;
   onToggleStar: (base: BaseRecord) => void;
   onDuplicate: (base: BaseRecord) => void;
-  onSaveAsTemplate?: (base: BaseRecord) => void;
   onDelete: (base: BaseRecord) => void;
 }
 
@@ -53,16 +52,6 @@ export const getBaseContextMenuOptions = (
     ),
     onClick: () => actions.onDuplicate(base),
   },
-  ...(actions.onSaveAsTemplate ? [{
-    id: "save-as-template",
-    label: "Save as Template",
-    icon: (
-      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
-      </svg>
-    ),
-    onClick: () => actions.onSaveAsTemplate!(base),
-  }] : []),
   {
     id: "delete",
     label: "Delete",

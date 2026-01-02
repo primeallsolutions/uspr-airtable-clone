@@ -1,4 +1,4 @@
-import { Home as HomeIcon, Star, Share2, ChevronDown, Plus, Edit3, Trash2, Check, X, Sparkles } from "lucide-react";
+import { Home as HomeIcon, Star, Share2, ChevronDown, Plus, Edit3, Trash2, Check, X } from "lucide-react";
 import type { ActiveView, WorkspaceRecord } from "@/lib/types/dashboard";
 import type { RoleType } from "@/lib/services/membership-service";
 
@@ -99,18 +99,6 @@ export const Sidebar = ({
         >
           <Share2 size={18} />
           <span>Shared</span>
-        </button>
-        
-        <button
-          onClick={() => onViewChange('templates')}
-          className={`flex w-full items-center gap-2 rounded-md px-2 py-2 cursor-pointer ${
-            activeView === 'templates'
-              ? 'bg-blue-100 text-blue-700 font-medium'
-              : 'text-gray-900 hover:bg-gray-100'
-          }`}
-        >
-          <Sparkles size={18} />
-          <span>Templates</span>
         </button>
       </nav>
       

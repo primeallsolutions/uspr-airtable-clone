@@ -180,7 +180,7 @@ export const EditFieldModal = ({ isOpen, onClose, onEditField, field }: EditFiel
       const optionsMap: Record<string, unknown> = {};
       options.forEach(option => {
         optionsMap[option.id] = {
-          label: option.label,
+          name: option.label,
           color: option.color
         };
       });
