@@ -282,6 +282,49 @@ export class MembershipService {
     });
   }
 
+  static async leaveWorkspace(workspaceId: string): Promise<void> {
+    // Get current user
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      throw new Error('Not authenticated');
+    }
+
+    // Get user's membership in this workspace
+    const { data: membership, error: fetchError } = await supabase
+      .from('workspace_memberships')
+      .select('id, role')
+      .eq('workspace_id', workspaceId)
+      .eq('user_id', user.id)
+      .single();
+
+    if (fetchError || !membership) {
+      throw new Error('You are not a member of this workspace');
+    }
+
+    // Prevent owners from leaving (they should delete the workspace or transfer ownership)
+    if (membership.role === 'owner') {
+      throw new Error('Workspace owners cannot leave. Please delete the workspace or transfer ownership first.');
+    }
+
+    // Remove the membership
+    const { error: deleteError } = await supabase
+      .from('workspace_memberships')
+      .delete()
+      .eq('id', membership.id);
+
+    if (deleteError) throw deleteError;
+
+    // Log the leave action
+    await AuditLogService.log({
+      action: 'delete',
+      entity_type: 'member',
+      entity_id: membership.id,
+      scope_type: 'workspace',
+      scope_id: workspaceId,
+      metadata: { user_id: user.id, action_type: 'leave' },
+    });
+  }
+
   // Base membership
   static async listBaseMembers(baseId: string): Promise<BaseMember[]> {
     const { data, error } = await supabase
@@ -369,6 +412,18 @@ export class MembershipService {
 
   // Invites
   static async createInvite(params: { email: string; role: RoleType; workspaceId?: string; baseId?: string; token: string; redirectTo?: string; }): Promise<Invite> {
+    // Get current user
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      throw new Error('Not authenticated');
+    }
+
+    // Prevent self-invitation (case-insensitive)
+    if (params.email.trim().toLowerCase() === user.email?.toLowerCase()) {
+      const scopeType = params.workspaceId ? 'workspace' : 'base';
+      throw new Error(`You cannot invite yourself to this ${scopeType}. You are already a member.`);
+    }
+
     // Verify caller has admin/owner access to the workspace or base
     if (params.workspaceId) {
       const { hasAccess } = await checkWorkspaceAdminAccess(params.workspaceId);

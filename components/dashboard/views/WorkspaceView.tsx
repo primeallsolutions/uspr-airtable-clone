@@ -25,6 +25,8 @@ interface WorkspaceViewProps {
   onManageMembers?: () => void;
   canManageMembers?: boolean;
   onDeleteBaseClick?: (base: BaseRecord) => void;
+  onLeaveWorkspace?: () => void;
+  canLeaveWorkspace?: boolean;
 }
 
 export const WorkspaceView = ({
@@ -44,6 +46,9 @@ export const WorkspaceView = ({
   onBaseContextMenu,
   onManageMembers,
   canManageMembers = false,
+  onDeleteBaseClick,
+  onLeaveWorkspace,
+  canLeaveWorkspace = false,
 }: WorkspaceViewProps) => {
   const currentWorkspace = workspaces.find(w => w.id === selectedWorkspaceId);
   const [isActivityOpen, setIsActivityOpen] = useState(false);
@@ -73,6 +78,15 @@ export const WorkspaceView = ({
               className="rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer"
             >
               Manage members
+            </button>
+          )}
+          {canLeaveWorkspace && onLeaveWorkspace && (
+            <button
+              onClick={onLeaveWorkspace}
+              className="rounded-md border border-red-300 px-3 py-2 text-sm text-red-700 hover:bg-red-50 cursor-pointer"
+              title="Leave this workspace"
+            >
+              Leave workspace
             </button>
           )}
           {selectedWorkspaceId && (

@@ -58,22 +58,22 @@ export const REAL_ESTATE_CRM_TEMPLATE: ExportedBase = {
   automations: [],
   records: [
     // Sample contacts
-    { table_name: 'Contacts', values: { 'Full Name': 'John Smith', 'Email': 'john@example.com', 'Phone': '+1234567890', 'Type': 'Buyer', 'Status': 'Hot Lead', 'Notes': 'Looking for 3BR home in downtown' } },
-    { table_name: 'Contacts', values: { 'Full Name': 'Sarah Johnson', 'Email': 'sarah@example.com', 'Phone': '+1234567891', 'Type': 'Seller', 'Status': 'Active', 'Notes': 'Selling family home' } },
-    { table_name: 'Contacts', values: { 'Full Name': 'Michael Brown', 'Email': 'michael@example.com', 'Phone': '+1234567892', 'Type': 'Both', 'Status': 'Active', 'Notes': 'Upgrading to larger property' } },
+    { table_name: 'Contacts', values: { 'Full Name': 'John Smith', 'Email': 'john@example.com', 'Phone': '+1234567890', 'Type': 'buyer', 'Status': 'hot_lead', 'Notes': 'Looking for 3BR home in downtown' } },
+    { table_name: 'Contacts', values: { 'Full Name': 'Sarah Johnson', 'Email': 'sarah@example.com', 'Phone': '+1234567891', 'Type': 'seller', 'Status': 'active', 'Notes': 'Selling family home' } },
+    { table_name: 'Contacts', values: { 'Full Name': 'Michael Brown', 'Email': 'michael@example.com', 'Phone': '+1234567892', 'Type': 'both', 'Status': 'active', 'Notes': 'Upgrading to larger property' } },
     
     // Sample properties
-    { table_name: 'Properties', values: { 'Address': '123 Main St', 'Property Type': 'House', 'Price': 450000, 'Bedrooms': 3, 'Bathrooms': 2, 'Square Feet': 1800, 'Status': 'Available', 'Listed Date': '2025-01-15' } },
-    { table_name: 'Properties', values: { 'Address': '456 Oak Ave', 'Property Type': 'Condo', 'Price': 325000, 'Bedrooms': 2, 'Bathrooms': 2, 'Square Feet': 1200, 'Status': 'Under Contract', 'Listed Date': '2025-01-10' } },
-    { table_name: 'Properties', values: { 'Address': '789 Pine Rd', 'Property Type': 'House', 'Price': 675000, 'Bedrooms': 4, 'Bathrooms': 3, 'Square Feet': 2500, 'Status': 'Available', 'Listed Date': '2025-01-20' } },
+    { table_name: 'Properties', values: { 'Address': '123 Main St', 'Property Type': 'house', 'Price': 450000, 'Bedrooms': 3, 'Bathrooms': 2, 'Square Feet': 1800, 'Status': 'available', 'Listed Date': '2025-01-15' } },
+    { table_name: 'Properties', values: { 'Address': '456 Oak Ave', 'Property Type': 'condo', 'Price': 325000, 'Bedrooms': 2, 'Bathrooms': 2, 'Square Feet': 1200, 'Status': 'under_contract', 'Listed Date': '2025-01-10' } },
+    { table_name: 'Properties', values: { 'Address': '789 Pine Rd', 'Property Type': 'house', 'Price': 675000, 'Bedrooms': 4, 'Bathrooms': 3, 'Square Feet': 2500, 'Status': 'available', 'Listed Date': '2025-01-20' } },
     
     // Sample deals
-    { table_name: 'Deals', values: { 'Deal Name': 'John Smith - 123 Main St', 'Property': '123 Main St', 'Client': 'John Smith', 'Deal Value': 450000, 'Stage': 'Showing', 'Probability': '50%', 'Expected Close Date': '2025-03-01' } },
-    { table_name: 'Deals', values: { 'Deal Name': 'Michael Brown - 456 Oak Ave', 'Property': '456 Oak Ave', 'Client': 'Michael Brown', 'Deal Value': 325000, 'Stage': 'Under Contract', 'Probability': '90%', 'Expected Close Date': '2025-02-15' } },
+    { table_name: 'Deals', values: { 'Deal Name': 'John Smith - 123 Main St', 'Property': '123 Main St', 'Client': 'John Smith', 'Deal Value': 450000, 'Stage': 'showing', 'Probability': 'p50', 'Expected Close Date': '2025-03-01' } },
+    { table_name: 'Deals', values: { 'Deal Name': 'Michael Brown - 456 Oak Ave', 'Property': '456 Oak Ave', 'Client': 'Michael Brown', 'Deal Value': 325000, 'Stage': 'under_contract', 'Probability': 'p90', 'Expected Close Date': '2025-02-15' } },
     
     // Sample tasks
-    { table_name: 'Tasks', values: { 'Task Name': 'Schedule showing for John Smith', 'Description': 'Show 123 Main St', 'Related To': 'John Smith', 'Assignee': 'agent@example.com', 'Due Date': '2025-02-05', 'Priority': 'High', 'Status': 'To Do' } },
-    { table_name: 'Tasks', values: { 'Task Name': 'Follow up with Sarah Johnson', 'Description': 'Discuss listing price', 'Related To': 'Sarah Johnson', 'Assignee': 'agent@example.com', 'Due Date': '2025-02-03', 'Priority': 'Medium', 'Status': 'To Do' } }
+    { table_name: 'Tasks', values: { 'Task Name': 'Schedule showing for John Smith', 'Description': 'Show 123 Main St', 'Related To': 'John Smith', 'Assignee': 'agent@example.com', 'Due Date': '2025-02-05', 'Priority': 'high', 'Status': 'to_do' } },
+    { table_name: 'Tasks', values: { 'Task Name': 'Follow up with Sarah Johnson', 'Description': 'Discuss listing price', 'Related To': 'Sarah Johnson', 'Assignee': 'agent@example.com', 'Due Date': '2025-02-03', 'Priority': 'medium', 'Status': 'to_do' } }
   ]
 };
 
@@ -129,22 +129,22 @@ export const PROJECT_MANAGEMENT_TEMPLATE: ExportedBase = {
   automations: [],
   records: [
     // Sample projects
-    { table_name: 'Projects', values: { 'Project Name': 'Website Redesign', 'Description': 'Complete redesign of company website', 'Status': 'Active', 'Priority': 'High', 'Start Date': '2025-01-15', 'End Date': '2025-04-15', 'Budget': 50000, 'Project Manager': 'pm@example.com' } },
-    { table_name: 'Projects', values: { 'Project Name': 'Mobile App Development', 'Description': 'New mobile app for iOS and Android', 'Status': 'Planning', 'Priority': 'Critical', 'Start Date': '2025-02-01', 'End Date': '2025-08-01', 'Budget': 150000, 'Project Manager': 'pm@example.com' } },
+    { table_name: 'Projects', values: { 'Project Name': 'Website Redesign', 'Description': 'Complete redesign of company website', 'Status': 'active', 'Priority': 'high', 'Start Date': '2025-01-15', 'End Date': '2025-04-15', 'Budget': 50000, 'Project Manager': 'pm@example.com' } },
+    { table_name: 'Projects', values: { 'Project Name': 'Mobile App Development', 'Description': 'New mobile app for iOS and Android', 'Status': 'planning', 'Priority': 'critical', 'Start Date': '2025-02-01', 'End Date': '2025-08-01', 'Budget': 150000, 'Project Manager': 'pm@example.com' } },
     
     // Sample tasks
-    { table_name: 'Tasks', values: { 'Task Name': 'Design homepage mockup', 'Project': 'Website Redesign', 'Description': 'Create initial homepage design', 'Status': 'In Progress', 'Assignee': 'designer@example.com', 'Priority': 'High', 'Due Date': '2025-02-10', 'Estimated Hours': 16 } },
-    { table_name: 'Tasks', values: { 'Task Name': 'Set up development environment', 'Project': 'Mobile App Development', 'Description': 'Configure dev tools and CI/CD', 'Status': 'To Do', 'Assignee': 'dev@example.com', 'Priority': 'Critical', 'Due Date': '2025-02-05', 'Estimated Hours': 8 } },
-    { table_name: 'Tasks', values: { 'Task Name': 'Review design system', 'Project': 'Website Redesign', 'Description': 'Review and approve design system', 'Status': 'In Review', 'Assignee': 'pm@example.com', 'Priority': 'Medium', 'Due Date': '2025-02-08', 'Estimated Hours': 4 } },
+    { table_name: 'Tasks', values: { 'Task Name': 'Design homepage mockup', 'Project': 'Website Redesign', 'Description': 'Create initial homepage design', 'Status': 'in_progress', 'Assignee': 'designer@example.com', 'Priority': 'high', 'Due Date': '2025-02-10', 'Estimated Hours': 16 } },
+    { table_name: 'Tasks', values: { 'Task Name': 'Set up development environment', 'Project': 'Mobile App Development', 'Description': 'Configure dev tools and CI/CD', 'Status': 'to_do', 'Assignee': 'dev@example.com', 'Priority': 'critical', 'Due Date': '2025-02-05', 'Estimated Hours': 8 } },
+    { table_name: 'Tasks', values: { 'Task Name': 'Review design system', 'Project': 'Website Redesign', 'Description': 'Review and approve design system', 'Status': 'in_review', 'Assignee': 'pm@example.com', 'Priority': 'medium', 'Due Date': '2025-02-08', 'Estimated Hours': 4 } },
     
     // Sample team members
-    { table_name: 'Team Members', values: { 'Name': 'Alice Johnson', 'Email': 'alice@example.com', 'Role': 'Developer', 'Department': 'Engineering', 'Status': 'Active' } },
-    { table_name: 'Team Members', values: { 'Name': 'Bob Smith', 'Email': 'bob@example.com', 'Role': 'Designer', 'Department': 'Design', 'Status': 'Active' } },
-    { table_name: 'Team Members', values: { 'Name': 'Carol Davis', 'Email': 'carol@example.com', 'Role': 'Project Manager', 'Department': 'Management', 'Status': 'Active' } },
+    { table_name: 'Team Members', values: { 'Name': 'Alice Johnson', 'Email': 'alice@example.com', 'Role': 'developer', 'Department': 'Engineering', 'Status': 'active' } },
+    { table_name: 'Team Members', values: { 'Name': 'Bob Smith', 'Email': 'bob@example.com', 'Role': 'designer', 'Department': 'Design', 'Status': 'active' } },
+    { table_name: 'Team Members', values: { 'Name': 'Carol Davis', 'Email': 'carol@example.com', 'Role': 'project_manager', 'Department': 'Management', 'Status': 'active' } },
     
     // Sample milestones
-    { table_name: 'Milestones', values: { 'Milestone Name': 'Design Complete', 'Project': 'Website Redesign', 'Description': 'All design work completed and approved', 'Due Date': '2025-02-28', 'Status': 'In Progress', 'Completion %': 60 } },
-    { table_name: 'Milestones', values: { 'Milestone Name': 'Beta Release', 'Project': 'Mobile App Development', 'Description': 'First beta version ready for testing', 'Due Date': '2025-06-01', 'Status': 'Not Started', 'Completion %': 0 } }
+    { table_name: 'Milestones', values: { 'Milestone Name': 'Design Complete', 'Project': 'Website Redesign', 'Description': 'All design work completed and approved', 'Due Date': '2025-02-28', 'Status': 'in_progress', 'Completion %': 60 } },
+    { table_name: 'Milestones', values: { 'Milestone Name': 'Beta Release', 'Project': 'Mobile App Development', 'Description': 'First beta version ready for testing', 'Due Date': '2025-06-01', 'Status': 'not_started', 'Completion %': 0 } }
   ]
 };
 
@@ -200,21 +200,21 @@ export const INVENTORY_MANAGEMENT_TEMPLATE: ExportedBase = {
   automations: [],
   records: [
     // Sample products
-    { table_name: 'Products', values: { 'Product Name': 'Laptop Computer', 'SKU': 'ELEC-001', 'Category': 'Electronics', 'Current Stock': 25, 'Reorder Level': 10, 'Unit Price': 899, 'Supplier': 'Tech Supplies Inc', 'Status': 'In Stock' } },
-    { table_name: 'Products', values: { 'Product Name': 'Office Chair', 'SKU': 'FURN-001', 'Category': 'Furniture', 'Current Stock': 5, 'Reorder Level': 8, 'Unit Price': 249, 'Supplier': 'Office Furniture Co', 'Status': 'Low Stock' } },
-    { table_name: 'Products', values: { 'Product Name': 'Wireless Mouse', 'SKU': 'ELEC-002', 'Category': 'Electronics', 'Current Stock': 0, 'Reorder Level': 20, 'Unit Price': 29, 'Supplier': 'Tech Supplies Inc', 'Status': 'Out of Stock' } },
+    { table_name: 'Products', values: { 'Product Name': 'Laptop Computer', 'SKU': 'ELEC-001', 'Category': 'electronics', 'Current Stock': 25, 'Reorder Level': 10, 'Unit Price': 899, 'Supplier': 'Tech Supplies Inc', 'Status': 'in_stock' } },
+    { table_name: 'Products', values: { 'Product Name': 'Office Chair', 'SKU': 'FURN-001', 'Category': 'furniture', 'Current Stock': 5, 'Reorder Level': 8, 'Unit Price': 249, 'Supplier': 'Office Furniture Co', 'Status': 'low_stock' } },
+    { table_name: 'Products', values: { 'Product Name': 'Wireless Mouse', 'SKU': 'ELEC-002', 'Category': 'electronics', 'Current Stock': 0, 'Reorder Level': 20, 'Unit Price': 29, 'Supplier': 'Tech Supplies Inc', 'Status': 'out_of_stock' } },
     
     // Sample suppliers
-    { table_name: 'Suppliers', values: { 'Supplier Name': 'Tech Supplies Inc', 'Contact Person': 'John Doe', 'Email': 'john@techsupplies.com', 'Phone': '+1234567890', 'Address': '123 Tech Ave, Silicon Valley', 'Status': 'Preferred' } },
-    { table_name: 'Suppliers', values: { 'Supplier Name': 'Office Furniture Co', 'Contact Person': 'Jane Smith', 'Email': 'jane@officefurniture.com', 'Phone': '+1234567891', 'Address': '456 Business Rd, Corporate City', 'Status': 'Active' } },
+    { table_name: 'Suppliers', values: { 'Supplier Name': 'Tech Supplies Inc', 'Contact Person': 'John Doe', 'Email': 'john@techsupplies.com', 'Phone': '+1234567890', 'Address': '123 Tech Ave, Silicon Valley', 'Status': 'preferred' } },
+    { table_name: 'Suppliers', values: { 'Supplier Name': 'Office Furniture Co', 'Contact Person': 'Jane Smith', 'Email': 'jane@officefurniture.com', 'Phone': '+1234567891', 'Address': '456 Business Rd, Corporate City', 'Status': 'active' } },
     
     // Sample orders
-    { table_name: 'Orders', values: { 'Order Number': 'PO-2025-001', 'Supplier': 'Tech Supplies Inc', 'Order Date': '2025-01-25', 'Expected Delivery': '2025-02-05', 'Status': 'Confirmed', 'Total Amount': 2500, 'Notes': 'Rush order for wireless mice' } },
-    { table_name: 'Orders', values: { 'Order Number': 'PO-2025-002', 'Supplier': 'Office Furniture Co', 'Order Date': '2025-01-28', 'Expected Delivery': '2025-02-10', 'Status': 'Pending', 'Total Amount': 1995, 'Notes': 'Bulk order for office chairs' } },
+    { table_name: 'Orders', values: { 'Order Number': 'PO-2025-001', 'Supplier': 'Tech Supplies Inc', 'Order Date': '2025-01-25', 'Expected Delivery': '2025-02-05', 'Status': 'confirmed', 'Total Amount': 2500, 'Notes': 'Rush order for wireless mice' } },
+    { table_name: 'Orders', values: { 'Order Number': 'PO-2025-002', 'Supplier': 'Office Furniture Co', 'Order Date': '2025-01-28', 'Expected Delivery': '2025-02-10', 'Status': 'pending', 'Total Amount': 1995, 'Notes': 'Bulk order for office chairs' } },
     
     // Sample stock movements
-    { table_name: 'Stock Movements', values: { 'Product': 'Laptop Computer', 'Movement Type': 'Purchase', 'Quantity': 10, 'Date': '2025-01-20', 'Reference': 'PO-2025-001', 'Notes': 'Regular stock replenishment' } },
-    { table_name: 'Stock Movements', values: { 'Product': 'Wireless Mouse', 'Movement Type': 'Sale', 'Quantity': -15, 'Date': '2025-01-22', 'Reference': 'SO-2025-045', 'Notes': 'Sold to XYZ Corp' } }
+    { table_name: 'Stock Movements', values: { 'Product': 'Laptop Computer', 'Movement Type': 'purchase', 'Quantity': 10, 'Date': '2025-01-20', 'Reference': 'PO-2025-001', 'Notes': 'Regular stock replenishment' } },
+    { table_name: 'Stock Movements', values: { 'Product': 'Wireless Mouse', 'Movement Type': 'sale', 'Quantity': -15, 'Date': '2025-01-22', 'Reference': 'SO-2025-045', 'Notes': 'Sold to XYZ Corp' } }
   ]
 };
 
@@ -272,21 +272,21 @@ export const EVENT_PLANNING_TEMPLATE: ExportedBase = {
   automations: [],
   records: [
     // Sample events
-    { table_name: 'Events', values: { 'Event Name': 'Annual Tech Conference 2025', 'Event Type': 'Conference', 'Date': '2025-06-15', 'Venue': 'Grand Convention Center', 'Expected Attendees': 500, 'Status': 'Planning', 'Total Budget': 75000, 'Notes': 'Three-day tech conference with keynote speakers' } },
-    { table_name: 'Events', values: { 'Event Name': 'Smith-Johnson Wedding', 'Event Type': 'Wedding', 'Date': '2025-08-20', 'Venue': 'Sunset Gardens', 'Expected Attendees': 150, 'Status': 'Confirmed', 'Total Budget': 45000, 'Notes': 'Outdoor ceremony, indoor reception' } },
+    { table_name: 'Events', values: { 'Event Name': 'Annual Tech Conference 2025', 'Event Type': 'conference', 'Date': '2025-06-15', 'Venue': 'Grand Convention Center', 'Expected Attendees': 500, 'Status': 'planning', 'Total Budget': 75000, 'Notes': 'Three-day tech conference with keynote speakers' } },
+    { table_name: 'Events', values: { 'Event Name': 'Smith-Johnson Wedding', 'Event Type': 'wedding', 'Date': '2025-08-20', 'Venue': 'Sunset Gardens', 'Expected Attendees': 150, 'Status': 'confirmed', 'Total Budget': 45000, 'Notes': 'Outdoor ceremony, indoor reception' } },
     
     // Sample attendees
-    { table_name: 'Attendees', values: { 'Full Name': 'Alice Cooper', 'Email': 'alice@example.com', 'Phone': '+1234567890', 'Event': 'Annual Tech Conference 2025', 'RSVP Status': 'Confirmed', 'Dietary Restrictions': 'Vegetarian', 'Special Requests': 'Accessibility access needed' } },
-    { table_name: 'Attendees', values: { 'Full Name': 'Bob Williams', 'Email': 'bob@example.com', 'Phone': '+1234567891', 'Event': 'Smith-Johnson Wedding', 'RSVP Status': 'Confirmed', 'Dietary Restrictions': 'None', 'Special Requests': 'Plus one' } },
-    { table_name: 'Attendees', values: { 'Full Name': 'Carol Davis', 'Email': 'carol@example.com', 'Phone': '+1234567892', 'Event': 'Annual Tech Conference 2025', 'RSVP Status': 'Maybe', 'Dietary Restrictions': 'Gluten-free', 'Special Requests': '' } },
+    { table_name: 'Attendees', values: { 'Full Name': 'Alice Cooper', 'Email': 'alice@example.com', 'Phone': '+1234567890', 'Event': 'Annual Tech Conference 2025', 'RSVP Status': 'confirmed', 'Dietary Restrictions': 'Vegetarian', 'Special Requests': 'Accessibility access needed' } },
+    { table_name: 'Attendees', values: { 'Full Name': 'Bob Williams', 'Email': 'bob@example.com', 'Phone': '+1234567891', 'Event': 'Smith-Johnson Wedding', 'RSVP Status': 'confirmed', 'Dietary Restrictions': 'None', 'Special Requests': 'Plus one' } },
+    { table_name: 'Attendees', values: { 'Full Name': 'Carol Davis', 'Email': 'carol@example.com', 'Phone': '+1234567892', 'Event': 'Annual Tech Conference 2025', 'RSVP Status': 'maybe', 'Dietary Restrictions': 'Gluten-free', 'Special Requests': '' } },
     
     // Sample vendors
-    { table_name: 'Vendors', values: { 'Vendor Name': 'Elite Catering Services', 'Service Type': 'Catering', 'Contact Person': 'Chef Marco', 'Email': 'marco@elitecatering.com', 'Phone': '+1234567893', 'Cost': 15000, 'Status': 'Booked' } },
-    { table_name: 'Vendors', values: { 'Vendor Name': 'Picture Perfect Photography', 'Service Type': 'Photography', 'Contact Person': 'Sarah Lens', 'Email': 'sarah@pictureperfect.com', 'Phone': '+1234567894', 'Cost': 3500, 'Status': 'Confirmed' } },
+    { table_name: 'Vendors', values: { 'Vendor Name': 'Elite Catering Services', 'Service Type': 'catering', 'Contact Person': 'Chef Marco', 'Email': 'marco@elitecatering.com', 'Phone': '+1234567893', 'Cost': 15000, 'Status': 'booked' } },
+    { table_name: 'Vendors', values: { 'Vendor Name': 'Picture Perfect Photography', 'Service Type': 'photography', 'Contact Person': 'Sarah Lens', 'Email': 'sarah@pictureperfect.com', 'Phone': '+1234567894', 'Cost': 3500, 'Status': 'confirmed' } },
     
     // Sample budget items
-    { table_name: 'Budget', values: { 'Item': 'Venue Rental', 'Event': 'Annual Tech Conference 2025', 'Category': 'Venue', 'Estimated Cost': 25000, 'Actual Cost': 25000, 'Status': 'Paid', 'Notes': 'Three-day rental including setup' } },
-    { table_name: 'Budget', values: { 'Item': 'Catering - Dinner', 'Event': 'Smith-Johnson Wedding', 'Category': 'Catering', 'Estimated Cost': 12000, 'Actual Cost': null, 'Status': 'Approved', 'Notes': 'Buffet style for 150 guests' } }
+    { table_name: 'Budget', values: { 'Item': 'Venue Rental', 'Event': 'Annual Tech Conference 2025', 'Category': 'venue', 'Estimated Cost': 25000, 'Actual Cost': 25000, 'Status': 'paid', 'Notes': 'Three-day rental including setup' } },
+    { table_name: 'Budget', values: { 'Item': 'Catering - Dinner', 'Event': 'Smith-Johnson Wedding', 'Category': 'catering', 'Estimated Cost': 12000, 'Actual Cost': null, 'Status': 'approved', 'Notes': 'Buffet style for 150 guests' } }
   ]
 };
 
@@ -343,22 +343,22 @@ export const CONTENT_CALENDAR_TEMPLATE: ExportedBase = {
   automations: [],
   records: [
     // Sample content
-    { table_name: 'Content', values: { 'Title': '10 Tips for Remote Work Productivity', 'Content Type': 'Blog Post', 'Status': 'Published', 'Author': 'Jane Smith', 'Campaign': 'Remote Work Series', 'Publish Date': '2025-01-15', 'Platform': ['Website', 'LinkedIn'], 'Keywords': 'remote work, productivity, tips', 'Notes': 'Include infographic' } },
-    { table_name: 'Content', values: { 'Title': 'Company Culture Video', 'Content Type': 'Video', 'Status': 'In Progress', 'Author': 'Mike Johnson', 'Campaign': 'Recruitment Campaign', 'Publish Date': '2025-02-20', 'Platform': ['YouTube', 'Website'], 'Keywords': 'company culture, careers', 'Notes': 'Interview 5 employees' } },
-    { table_name: 'Content', values: { 'Title': 'Weekly Newsletter - Tech Updates', 'Content Type': 'Newsletter', 'Status': 'Review', 'Author': 'Sarah Lee', 'Campaign': 'Tech Updates 2025', 'Publish Date': '2025-02-05', 'Platform': ['Website'], 'Keywords': 'technology, updates, news', 'Notes': 'Ready for editor review' } },
+    { table_name: 'Content', values: { 'Title': '10 Tips for Remote Work Productivity', 'Content Type': 'blog_post', 'Status': 'published', 'Author': 'Jane Smith', 'Campaign': 'Remote Work Series', 'Publish Date': '2025-01-15', 'Platform': ['website', 'linkedin'], 'Keywords': 'remote work, productivity, tips', 'Notes': 'Include infographic' } },
+    { table_name: 'Content', values: { 'Title': 'Company Culture Video', 'Content Type': 'video', 'Status': 'in_progress', 'Author': 'Mike Johnson', 'Campaign': 'Recruitment Campaign', 'Publish Date': '2025-02-20', 'Platform': ['youtube', 'website'], 'Keywords': 'company culture, careers', 'Notes': 'Interview 5 employees' } },
+    { table_name: 'Content', values: { 'Title': 'Weekly Newsletter - Tech Updates', 'Content Type': 'newsletter', 'Status': 'review', 'Author': 'Sarah Lee', 'Campaign': 'Tech Updates 2025', 'Publish Date': '2025-02-05', 'Platform': ['website'], 'Keywords': 'technology, updates, news', 'Notes': 'Ready for editor review' } },
     
     // Sample authors
-    { table_name: 'Authors', values: { 'Name': 'Jane Smith', 'Email': 'jane@example.com', 'Role': 'Writer', 'Specialization': 'Business and Productivity', 'Status': 'Active' } },
-    { table_name: 'Authors', values: { 'Name': 'Mike Johnson', 'Email': 'mike@example.com', 'Role': 'Video Producer', 'Specialization': 'Corporate Video', 'Status': 'Active' } },
-    { table_name: 'Authors', values: { 'Name': 'Sarah Lee', 'Email': 'sarah@example.com', 'Role': 'Writer', 'Specialization': 'Technology and Innovation', 'Status': 'Active' } },
+    { table_name: 'Authors', values: { 'Name': 'Jane Smith', 'Email': 'jane@example.com', 'Role': 'writer', 'Specialization': 'Business and Productivity', 'Status': 'active' } },
+    { table_name: 'Authors', values: { 'Name': 'Mike Johnson', 'Email': 'mike@example.com', 'Role': 'video_producer', 'Specialization': 'Corporate Video', 'Status': 'active' } },
+    { table_name: 'Authors', values: { 'Name': 'Sarah Lee', 'Email': 'sarah@example.com', 'Role': 'writer', 'Specialization': 'Technology and Innovation', 'Status': 'active' } },
     
     // Sample campaigns
-    { table_name: 'Campaigns', values: { 'Campaign Name': 'Remote Work Series', 'Description': 'Content series about remote work best practices', 'Start Date': '2025-01-01', 'End Date': '2025-03-31', 'Status': 'Active', 'Budget': 5000, 'Goals': 'Increase blog traffic by 30%' } },
-    { table_name: 'Campaigns', values: { 'Campaign Name': 'Recruitment Campaign', 'Description': 'Attract top talent through engaging content', 'Start Date': '2025-02-01', 'End Date': '2025-05-31', 'Status': 'Planning', 'Budget': 10000, 'Goals': 'Increase job applications by 50%' } },
+    { table_name: 'Campaigns', values: { 'Campaign Name': 'Remote Work Series', 'Description': 'Content series about remote work best practices', 'Start Date': '2025-01-01', 'End Date': '2025-03-31', 'Status': 'active', 'Budget': 5000, 'Goals': 'Increase blog traffic by 30%' } },
+    { table_name: 'Campaigns', values: { 'Campaign Name': 'Recruitment Campaign', 'Description': 'Attract top talent through engaging content', 'Start Date': '2025-02-01', 'End Date': '2025-05-31', 'Status': 'planning', 'Budget': 10000, 'Goals': 'Increase job applications by 50%' } },
     
     // Sample analytics
-    { table_name: 'Analytics', values: { 'Content Title': '10 Tips for Remote Work Productivity', 'Platform': 'Website', 'Views': 2500, 'Engagement': 185, 'Shares': 42, 'Comments': 18, 'Date': '2025-01-25' } },
-    { table_name: 'Analytics', values: { 'Content Title': '10 Tips for Remote Work Productivity', 'Platform': 'LinkedIn', 'Views': 5200, 'Engagement': 420, 'Shares': 89, 'Comments': 35, 'Date': '2025-01-25' } }
+    { table_name: 'Analytics', values: { 'Content Title': '10 Tips for Remote Work Productivity', 'Platform': 'website', 'Views': 2500, 'Engagement': 185, 'Shares': 42, 'Comments': 18, 'Date': '2025-01-25' } },
+    { table_name: 'Analytics', values: { 'Content Title': '10 Tips for Remote Work Productivity', 'Platform': 'linkedin', 'Views': 5200, 'Engagement': 420, 'Shares': 89, 'Comments': 35, 'Date': '2025-01-25' } }
   ]
 };
 

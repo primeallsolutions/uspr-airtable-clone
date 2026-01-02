@@ -64,6 +64,7 @@ function DashboardContent() {
     createWorkspace,
     updateWorkspace,
     deleteWorkspace,
+    leaveWorkspace,
   } = useWorkspaces();
   
   const {
@@ -192,6 +193,24 @@ function DashboardContent() {
       closeDeleteWorkspaceModal();
     }
   }, [workspaceToDelete, deleteWorkspace, selectedWorkspaceId, switchToHomeView, setSelectedWorkspaceId, closeDeleteWorkspaceModal]);
+
+  const handleLeaveWorkspace = useCallback(async () => {
+    if (!selectedWorkspaceId) return;
+    
+    const confirmed = window.confirm('Are you sure you want to leave this workspace? You will lose access to all bases in this workspace.');
+    if (!confirmed) return;
+    
+    try {
+      await leaveWorkspace(selectedWorkspaceId);
+      // After leaving, switch to home view
+      switchToHomeView();
+      setSelectedWorkspaceId(null);
+      toast.success('You have left the workspace');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to leave workspace';
+      toast.error(message);
+    }
+  }, [selectedWorkspaceId, leaveWorkspace, switchToHomeView, setSelectedWorkspaceId]);
 
   const handleWorkspaceSelect = useCallback((workspaceId: string) => {
     switchToWorkspaceView(workspaceId);
@@ -338,6 +357,8 @@ function DashboardContent() {
                 onManageMembers={() => setIsManageWorkspaceMembersOpen(true)}
                 canManageMembers={role === 'owner' || role === 'admin'}
                 onDeleteBaseClick={handleDeleteBaseShortcut}
+                onLeaveWorkspace={handleLeaveWorkspace}
+                canLeaveWorkspace={role === 'member' || role === 'admin'}
               />
             )}
             

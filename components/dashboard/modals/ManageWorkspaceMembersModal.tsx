@@ -4,6 +4,7 @@ import { MembershipService, type RoleType } from "@/lib/services/membership-serv
 import { useTimezone } from "@/lib/hooks/useTimezone";
 import { formatInTimezone } from "@/lib/utils/date-helpers";
 import { useRole } from "@/lib/hooks/useRole";
+import { useAuth } from "@/lib/hooks/useAuth";
 
 interface ManageWorkspaceMembersModalProps {
   isOpen: boolean;
@@ -22,6 +23,7 @@ type WorkspaceMemberRow = {
 
 export const ManageWorkspaceMembersModal = ({ isOpen, onClose, workspaceId }: ManageWorkspaceMembersModalProps) => {
   const { timezone } = useTimezone();
+  const { user } = useAuth();
   const { role: currentUserRole, loading: roleLoading } = useRole({ workspaceId });
   const [loading, setLoading] = useState(false);
   const [members, setMembers] = useState<WorkspaceMemberRow[]>([]);
@@ -34,6 +36,9 @@ export const ManageWorkspaceMembersModal = ({ isOpen, onClose, workspaceId }: Ma
 
   // Check if current user has permission to manage members (only owner/admin)
   const canManageMembers = currentUserRole === 'owner' || currentUserRole === 'admin';
+  
+  // Check if the invite email is the current user's email (case-insensitive)
+  const isInvitingSelf = inviteEmail.trim().toLowerCase() === user?.email?.toLowerCase();
 
   const loadMembers = useMemo(() => async () => {
     if (!workspaceId || !canManageMembers) return;
@@ -90,6 +95,13 @@ export const ManageWorkspaceMembersModal = ({ isOpen, onClose, workspaceId }: Ma
 
   const handleInvite = async () => {
     if (!inviteEmail.trim()) return;
+    
+    // Prevent inviting yourself
+    if (isInvitingSelf) {
+      setError("You cannot invite yourself. You are already a member of this workspace.");
+      return;
+    }
+    
     setInviting(true);
     setError(null);
     setSuccess(null);
@@ -237,8 +249,9 @@ export const ManageWorkspaceMembersModal = ({ isOpen, onClose, workspaceId }: Ma
               </select>
               <button
                 onClick={handleInvite}
-                disabled={inviting || !inviteEmail.trim()}
+                disabled={inviting || !inviteEmail.trim() || isInvitingSelf}
                 className="px-4 py-2 text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50"
+                title={isInvitingSelf ? "You cannot invite yourself" : ""}
               >
                 {inviting ? 'Sending...' : 'Send Invite'}
               </button>
