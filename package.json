@@ -16,7 +16,7 @@
     "@udecode/plate-break": "^48.0.0",
     "@udecode/plate-common": "^41.0.13",
     "@udecode/plate-core": "^48.0.5",
-    "@udecode/plate-serializer-html": "^48.0.0",
+    "@udecode/plate-serializer-html": "^37.0.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "libphonenumber-js": "^1.12.31",
