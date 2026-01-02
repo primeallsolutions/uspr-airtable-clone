@@ -8,6 +8,7 @@ export const useBases = () => {
   const [starredBases, setStarredBases] = useState<BaseRecord[]>([]);
   const [sharedBases, setSharedBases] = useState<BaseRecord[]>([]);
   const [loading, setLoading] = useState(false);
+  const [initialLoad, setInitialLoad] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Request IDs to prevent stale responses from updating state (race condition fix)
@@ -36,6 +37,7 @@ export const useBases = () => {
       // Only update loading state if this is still the latest request
       if (requestId === recentBasesRequestId.current) {
         setLoading(false);
+        setInitialLoad(true);
       }
     }
   }, []);
@@ -61,6 +63,7 @@ export const useBases = () => {
       // Only update loading state if this is still the latest request
       if (requestId === workspaceBasesRequestId.current) {
         setLoading(false);
+        setInitialLoad(true);
       }
     }
   }, []);
@@ -86,6 +89,7 @@ export const useBases = () => {
       // Only update loading state if this is still the latest request
       if (requestId === starredBasesRequestId.current) {
         setLoading(false);
+        setInitialLoad(true);
       }
     }
   }, []);
@@ -102,6 +106,7 @@ export const useBases = () => {
       console.error('Error loading shared bases:', err);
     } finally {
       setLoading(false);
+      setInitialLoad(true);
     }
   }, []);
 
@@ -216,6 +221,7 @@ export const useBases = () => {
     starredBases,
     sharedBases,
     loading,
+    initialLoad,
     error,
     loadRecentBases,
     loadWorkspaceBases,
