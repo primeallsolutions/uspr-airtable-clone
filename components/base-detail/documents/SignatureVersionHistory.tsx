@@ -14,10 +14,6 @@ export const SignatureVersionHistory = ({ requestId }: SignatureVersionHistoryPr
   const [versions, setVersions] = useState<SignatureVersion[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadVersions();
-  }, [requestId, loadVersions]);
-
   const loadVersions = useCallback(async () => {
     try {
       setLoading(true);
@@ -42,6 +38,10 @@ export const SignatureVersionHistory = ({ requestId }: SignatureVersionHistoryPr
       setLoading(false);
     }
   }, [requestId]);
+
+  useEffect(() => {
+    loadVersions();
+  }, [requestId, loadVersions]);
 
   const handleDownload = async (version: SignatureVersion) => {
     try {

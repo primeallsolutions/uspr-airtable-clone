@@ -53,10 +53,6 @@ export const EmbeddedSigningUI = ({
   const overlayRef = useRef<HTMLDivElement>(null);
   const renderTaskRef = useRef<any>(null);
 
-  useEffect(() => {
-    loadSigningData();
-  }, [token, loadSigningData]);
-
   const loadSigningData = useCallback(async () => {
     try {
       setLoading(true);
@@ -100,6 +96,10 @@ export const EmbeddedSigningUI = ({
       setLoading(false);
     }
   }, [token]);
+
+  useEffect(() => {
+    loadSigningData();
+  }, [token, loadSigningData]);
 
   // Update field bounds for overlay positioning
   const updateFieldBounds = useCallback((viewport: any) => {
