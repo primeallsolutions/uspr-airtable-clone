@@ -1,9 +1,11 @@
 "use client";
 import { useState, useEffect, useCallback } from 'react';
-import { Search, Grid3x3, List, Building2, Kanban, Package, Calendar, FileText, Sparkles } from 'lucide-react';
+import { Search, Building2, Kanban, Package, Calendar, FileText, Sparkles } from 'lucide-react';
 import type { Template, TemplateCategory, CategoryInfo } from '@/lib/types/templates';
 import { TemplateService } from '@/lib/services/template-service';
 import { toast } from 'sonner';
+import type { CollectionView } from "@/lib/types/dashboard";
+import { ViewToggle } from '../ViewToggle';
 
 interface TemplatesViewProps {
   onUseTemplate: (template: Template) => void;
@@ -11,6 +13,8 @@ interface TemplatesViewProps {
   onEditTemplate?: (template: Template) => void;
   onDeleteTemplate?: (template: Template) => void;
   userId?: string;
+  collectionView: CollectionView;
+  onCollectionViewChange: (view: CollectionView) => void;
 }
 
 const CATEGORY_INFO: Record<TemplateCategory | 'all', CategoryInfo | { id: 'all'; label: string; icon: string; description: string }> = {
@@ -72,13 +76,14 @@ export const TemplatesView = ({
   onPreviewTemplate,
   onEditTemplate,
   onDeleteTemplate,
-  userId
+  userId,
+  collectionView,
+  onCollectionViewChange
 }: TemplatesViewProps) => {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<TemplateCategory | 'all'>('all');
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
   const loadTemplates = useCallback(async () => {
     try {
@@ -115,7 +120,7 @@ export const TemplatesView = ({
     const IconComponent = template.icon ? ICON_MAP[template.icon] : Sparkles;
     const isUserTemplate = !template.is_global;
 
-    if (viewMode === 'list') {
+    if (collectionView === 'list') {
       return (
         <div
           key={template.id}
@@ -262,21 +267,11 @@ export const TemplatesView = ({
           <h1 className="text-2xl font-bold text-gray-900">Templates</h1>
           <p className="text-gray-600 mt-1">Create bases from pre-built templates or your custom designs</p>
         </div>
-        
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setViewMode('grid')}
-            className={`p-2 rounded-md ${viewMode === 'grid' ? 'bg-blue-100 text-blue-600' : 'text-gray-600 hover:bg-gray-100'}`}
-          >
-            <Grid3x3 className="w-5 h-5" />
-          </button>
-          <button
-            onClick={() => setViewMode('list')}
-            className={`p-2 rounded-md ${viewMode === 'list' ? 'bg-blue-100 text-blue-600' : 'text-gray-600 hover:bg-gray-100'}`}
-          >
-            <List className="w-5 h-5" />
-          </button>
-        </div>
+
+        <ViewToggle
+          collectionView={collectionView}
+          setCollectionView={onCollectionViewChange}
+        />
       </div>
 
       {/* Search and Filters */}
@@ -331,7 +326,7 @@ export const TemplatesView = ({
           {globalTemplates.length > 0 && (
             <div>
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Pre-built Templates</h2>
-              <div className={viewMode === 'grid' 
+              <div className={collectionView === 'grid' 
                 ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4'
                 : 'space-y-3'
               }>
@@ -344,7 +339,7 @@ export const TemplatesView = ({
           {userTemplates.length > 0 && (
             <div>
               <h2 className="text-lg font-semibold text-gray-900 mb-4">My Templates</h2>
-              <div className={viewMode === 'grid'
+              <div className={collectionView === 'grid'
                 ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4'
                 : 'space-y-3'
               }>

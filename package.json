@@ -16,7 +16,6 @@
     "@udecode/plate-break": "^48.0.0",
     "@udecode/plate-common": "^41.0.13",
     "@udecode/plate-core": "^48.0.5",
-    "@udecode/plate-serializer-html": "^21.5.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "libphonenumber-js": "^1.12.31",
@@ -30,7 +29,7 @@
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.3.1",
     "zod": "^4.1.13",
-    "zustand": "^4.5.5",
+    "zustand": "^5.0.9",
     "zxcvbn": "4.4.2"
   },
   "devDependencies": {

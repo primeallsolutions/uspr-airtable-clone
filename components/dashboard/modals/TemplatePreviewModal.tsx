@@ -149,7 +149,7 @@ export const TemplatePreviewModal = ({
                           key={fieldIdx}
                           className="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded"
                         >
-                          {field.name} ({field.type})
+                          {field.name} ({field.type.replace('_', ' ') /* convert from internal value to display value */})
                         </span>
                       ))}
                     </div>

@@ -53,6 +53,7 @@ function DashboardContent() {
     starredBases,
     sharedBases,
     loading: basesLoading,
+    initialLoad: initialBasesLoad,
     loadRecentBases,
     loadWorkspaceBases,
     loadStarredBases,
@@ -71,6 +72,7 @@ function DashboardContent() {
     createWorkspace,
     updateWorkspace,
     deleteWorkspace,
+    leaveWorkspace,
   } = useWorkspaces();
   
   const {
@@ -240,6 +242,24 @@ function DashboardContent() {
       closeDeleteWorkspaceModal();
     }
   }, [workspaceToDelete, deleteWorkspace, selectedWorkspaceId, switchToHomeView, setSelectedWorkspaceId, closeDeleteWorkspaceModal]);
+
+  const handleLeaveWorkspace = useCallback(async () => {
+    if (!selectedWorkspaceId) return;
+    
+    const confirmed = window.confirm('Are you sure you want to leave this workspace? You will lose access to all bases in this workspace.');
+    if (!confirmed) return;
+    
+    try {
+      await leaveWorkspace(selectedWorkspaceId);
+      // After leaving, switch to home view
+      switchToHomeView();
+      setSelectedWorkspaceId(null);
+      toast.success('You have left the workspace');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to leave workspace';
+      toast.error(message);
+    }
+  }, [selectedWorkspaceId, leaveWorkspace, switchToHomeView, setSelectedWorkspaceId]);
 
   const handleWorkspaceSelect = useCallback((workspaceId: string) => {
     switchToWorkspaceView(workspaceId);
@@ -420,6 +440,7 @@ function DashboardContent() {
                 sortOption={sortOption}
                 isSortOpen={isSortOpen}
                 loading={basesLoading}
+                initialLoad={initialBasesLoad}
                 onCollectionViewChange={setCollectionView}
                 onSortOptionChange={setSortOption}
                 onSortToggle={setIsSortOpen}
@@ -437,6 +458,7 @@ function DashboardContent() {
                 sortOption={sortOption}
                 isSortOpen={isSortOpen}
                 loading={basesLoading}
+                initialLoad={initialBasesLoad}
                 onCollectionViewChange={setCollectionView}
                 onSortOptionChange={setSortOption}
                 onSortToggle={setIsSortOpen}
@@ -446,6 +468,8 @@ function DashboardContent() {
                 onManageMembers={() => setIsManageWorkspaceMembersOpen(true)}
                 canManageMembers={canManageMembers}
                 onDeleteBaseClick={handleDeleteBaseShortcut}
+                onLeaveWorkspace={handleLeaveWorkspace}
+                canLeaveWorkspace={role === 'member' || role === 'admin'}
               />
             )}
             
@@ -456,6 +480,7 @@ function DashboardContent() {
                 sortOption={sortOption}
                 isSortOpen={isSortOpen}
                 loading={basesLoading}
+                initialLoad={initialBasesLoad}
                 onCollectionViewChange={setCollectionView}
                 onSortOptionChange={setSortOption}
                 onSortToggle={setIsSortOpen}
@@ -470,6 +495,8 @@ function DashboardContent() {
                 collectionView={collectionView}
                 sortOption={sortOption}
                 isSortOpen={isSortOpen}
+                loading={basesLoading}
+                initialLoad={initialBasesLoad}
                 onCollectionViewChange={setCollectionView}
                 onSortOptionChange={setSortOption}
                 onSortToggle={setIsSortOpen}
@@ -483,6 +510,8 @@ function DashboardContent() {
                 onUseTemplate={handleUseTemplate}
                 onPreviewTemplate={handlePreviewTemplate}
                 userId={user?.id}
+                collectionView={collectionView}
+                onCollectionViewChange={setCollectionView}
               />
             )}
 

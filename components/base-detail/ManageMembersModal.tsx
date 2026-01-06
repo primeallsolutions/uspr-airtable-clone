@@ -3,6 +3,7 @@ import { X } from "lucide-react";
 import { MembershipService, type BaseMember, type RoleType } from "@/lib/services/membership-service";
 import { useTimezone } from "@/lib/hooks/useTimezone";
 import { formatInTimezone } from "@/lib/utils/date-helpers";
+import { useAuth } from "@/lib/hooks/useAuth";
 
 interface ManageMembersModalProps {
   isOpen: boolean;
@@ -12,6 +13,7 @@ interface ManageMembersModalProps {
 
 export const ManageMembersModal = ({ isOpen, onClose, baseId }: ManageMembersModalProps) => {
   const { timezone } = useTimezone();
+  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [members, setMembers] = useState<BaseMember[]>([]);
   const [inviteEmail, setInviteEmail] = useState("");
@@ -19,6 +21,9 @@ export const ManageMembersModal = ({ isOpen, onClose, baseId }: ManageMembersMod
   const [inviting, setInviting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  
+  // Check if the invite email is the current user's email (case-insensitive)
+  const isInvitingSelf = inviteEmail.trim().toLowerCase() === user?.email?.toLowerCase();
 
   const loadMembers = useMemo(() => async () => {
     if (!baseId) return;
@@ -62,6 +67,13 @@ export const ManageMembersModal = ({ isOpen, onClose, baseId }: ManageMembersMod
 
   const handleInvite = async () => {
     if (!inviteEmail.trim()) return;
+    
+    // Prevent inviting yourself
+    if (isInvitingSelf) {
+      setError("You cannot invite yourself. You are already a member of this base.");
+      return;
+    }
+    
     setInviting(true);
     setError(null);
     setSuccess(null);
@@ -161,8 +173,9 @@ export const ManageMembersModal = ({ isOpen, onClose, baseId }: ManageMembersMod
               </select>
               <button
                 onClick={handleInvite}
-                disabled={inviting || !inviteEmail.trim()}
+                disabled={inviting || !inviteEmail.trim() || isInvitingSelf}
                 className="px-4 py-2 text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50"
+                title={isInvitingSelf ? "You cannot invite yourself" : ""}
               >
                 {inviting ? 'Sending...' : 'Send Invite'}
               </button>

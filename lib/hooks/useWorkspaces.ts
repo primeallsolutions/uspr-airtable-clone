@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import { WorkspaceService } from '../services/workspace-service';
+import { MembershipService } from '../services/membership-service';
 import type { WorkspaceRecord, CreateWorkspaceFormData } from '../types/dashboard';
 import { supabase } from '../supabaseClient';
 import type { RoleType } from '../services/membership-service';
@@ -237,6 +238,19 @@ export const useWorkspaces = () => {
     }
   }, []);
 
+  const leaveWorkspace = useCallback(async (workspaceId: string): Promise<void> => {
+    try {
+      setError(null);
+      await MembershipService.leaveWorkspace(workspaceId);
+      // Remove the workspace from shared workspaces list
+      setSharedWorkspaces(prev => prev.filter(w => w.id !== workspaceId));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to leave workspace';
+      setError(message);
+      throw new Error(message);
+    }
+  }, []);
+
   return {
     workspaces,
     sharedWorkspaces,
@@ -246,6 +260,7 @@ export const useWorkspaces = () => {
     createWorkspace,
     updateWorkspace,
     deleteWorkspace,
+    leaveWorkspace,
     clearError: () => setError(null)
   };
 };

@@ -46,6 +46,11 @@ export const ConnectGHLModal = ({
   const [fields, setFields] = useState<FieldRow[]>([]);
   const [savingMapping, setSavingMapping] = useState(false);
 
+  // Auto-sync settings state
+  const [autoSyncEnabled, setAutoSyncEnabled] = useState(false);
+  const [autoSyncInterval, setAutoSyncInterval] = useState<number>(15);
+  const [savingAutoSync, setSavingAutoSync] = useState(false);
+
   // Form state for Private Integration Token
   const [accessToken, setAccessToken] = useState("");
   const [locationId, setLocationId] = useState("");
@@ -69,8 +74,13 @@ export const ConnectGHLModal = ({
       const integrationData = await GHLService.getIntegrationByBaseId(baseId);
       if (integrationData) {
         setIntegration(integrationData);
+        // Load auto-sync settings
+        setAutoSyncEnabled(integrationData.auto_sync_enabled || false);
+        setAutoSyncInterval(integrationData.auto_sync_interval_minutes || 15);
       } else {
         setIntegration(null);
+        setAutoSyncEnabled(false);
+        setAutoSyncInterval(15);
       }
     } catch (error) {
       console.error('Failed to load integration:', error);
@@ -508,6 +518,26 @@ export const ConnectGHLModal = ({
     }
   };
 
+  const handleSaveAutoSyncSettings = async () => {
+    if (!integration) return;
+
+    setSavingAutoSync(true);
+    try {
+      await GHLService.updateAutoSyncSettings(baseId, {
+        auto_sync_enabled: autoSyncEnabled,
+        auto_sync_interval_minutes: autoSyncInterval
+      });
+      toast.success('Auto-sync settings updated successfully');
+      // Reload integration to get updated timestamps
+      await loadIntegration();
+    } catch (error) {
+      console.error('Failed to save auto-sync settings:', error);
+      toast.error('Failed to update auto-sync settings');
+    } finally {
+      setSavingAutoSync(false);
+    }
+  };
+
   const addFieldMapping = () => {
     setFieldMappings(prev => [
       ...prev,
@@ -795,6 +825,83 @@ export const ConnectGHLModal = ({
                     </p>
                   </div>
                 )}
+              </div>
+
+              {/* Auto-Sync Settings */}
+              <div className="border-t border-gray-200 pt-6 space-y-4">
+                <div>
+                  <h3 className="font-medium text-gray-900 mb-1">Auto-Sync Settings</h3>
+                  <p className="text-sm text-gray-600">
+                    Automatically sync new or modified contacts in the background while the base is open.
+                  </p>
+                </div>
+                
+                {/* Toggle Auto-Sync */}
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium text-gray-700">Enable auto-sync</label>
+                  <button
+                    type="button"
+                    onClick={() => setAutoSyncEnabled(!autoSyncEnabled)}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      autoSyncEnabled ? 'bg-blue-600' : 'bg-gray-300'
+                    }`}
+                    aria-label="Toggle auto-sync"
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        autoSyncEnabled ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                {/* Interval Selector */}
+                {autoSyncEnabled && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-700 block">Sync interval</label>
+                    <select
+                      value={autoSyncInterval}
+                      onChange={(e) => setAutoSyncInterval(Number(e.target.value))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value={1}>Every 1 minute</option>
+                      <option value={5}>Every 5 minutes</option>
+                      <option value={15}>Every 15 minutes (recommended)</option>
+                      <option value={30}>Every 30 minutes</option>
+                      <option value={60}>Every 1 hour</option>
+                    </select>
+                    
+                    {autoSyncInterval === 1 && (
+                      <p className="text-xs text-amber-600 flex items-center gap-1">
+                        <AlertCircle size={14} />
+                        1-minute sync may impact performance. Use only if critical.
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Last Auto-Sync Time */}
+                {integration?.last_auto_sync_at && (
+                  <div className="text-xs text-gray-500">
+                    Last auto-sync: {new Date(integration.last_auto_sync_at).toLocaleString()}
+                  </div>
+                )}
+
+                {/* Save Button */}
+                <button
+                  onClick={handleSaveAutoSyncSettings}
+                  disabled={savingAutoSync}
+                  className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 font-medium flex items-center justify-center gap-2"
+                >
+                  {savingAutoSync ? (
+                    <>
+                      <Loader2 size={16} className="animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    'Save Auto-Sync Settings'
+                  )}
+                </button>
               </div>
 
               {/* Field Mapping */}

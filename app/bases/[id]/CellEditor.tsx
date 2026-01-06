@@ -20,6 +20,7 @@ export default function CellEditor({
   const [local, setLocal] = useState<string>(() => (value == null ? "" : String(value)));
   const [emailError, setEmailError] = useState<string | null>(null);
   const [phoneError, setPhoneError] = useState<string | null>(null);
+  const [linkError, setLinkError] = useState<string | null>(null);
   const isEmptyValue =
     value === null ||
     value === undefined ||
@@ -31,10 +32,102 @@ export default function CellEditor({
     setLocal(value == null ? "" : String(value));
   }, [value]);
 
+  const SelectDropdown = ({ 
+    value,
+    onUpdate,
+    selectChoices,
+    selectedColor,
+    isEmptyValue,
+    EMPTY_LABEL,
+    isSaving
+  }: {
+    value?: unknown;
+    onUpdate: (val: unknown) => void;
+    selectChoices: { key: string; label: string; color: string }[];
+    selectedColor?: string;
+    isEmptyValue: boolean;
+    EMPTY_LABEL: string;
+    isSaving?: boolean;
+  }) => {
+    const [isOpen, setIsOpen] = useState(false);
+
+    // Find the label of the currently selected item
+    const selectedChoice = selectChoices.find(c => String(c.key) === String(value));
+    const displayLabel = selectedChoice ? selectedChoice.label : (isEmptyValue ? EMPTY_LABEL : 'Select...');
+
+    const handleSelect = (key: string) => {
+      onUpdate(key || null);
+      setIsOpen(false);
+    };
+
+    return (
+      <div className="relative inline-block w-full">
+        {/* Dropdown select box */}
+        <button
+          type="button"
+          disabled={isSaving}
+          onClick={() => setIsOpen(!isOpen)}
+          className={`w-full px-3 py-1 text-left border rounded-sm transition-colors cursor-pointer flex justify-between items-center ${isSaving ? 'opacity-50' : ''}`}
+          style={selectedColor ? {
+            backgroundColor: selectedColor,
+            borderColor: selectedColor,
+            color: 'white'
+          } : {
+            backgroundColor: 'white',
+            borderColor: '#e2e8f0',
+            color: '#1a202c'
+          }}
+        >
+          <span>{displayLabel}</span>
+          <span className="ml-2 text-xs">▼</span>
+        </button>
+
+        {/* Dropdown menu */}
+        {isOpen && (
+          <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg overflow-hidden">
+            <div
+              onClick={() => handleSelect('')}
+              className="px-3 py-1 cursor-pointer hover:brightness-95 text-gray-700 bg-white"
+              style={{
+                backgroundColor: 'white',
+                borderLeft: `4px solid ${hexToRgba('', 0.3)}`
+              }}
+            >
+              {isEmptyValue ? EMPTY_LABEL : 'Select...'}
+            </div>
+
+            {selectChoices.map((choice) => (
+              <div
+                key={choice.key}
+                onClick={() => handleSelect(choice.key)}
+                className="px-3 py-1 cursor-pointer hover:brightness-150 transition-all text-black"
+                style={{
+                  // Separate background to avoid parent element color being inherited
+                  backgroundColor: choice.color ? hexToRgba(choice.color, 0.3) : 'white',
+                  borderLeft: choice.color ? `4px solid ${hexToRgba(choice.color, 0.3)}` : 'none'
+                }}
+              >
+                {choice.label}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Close dropdown when user clicks outside */}
+        {isOpen && (
+          <div 
+            className="fixed inset-0 z-0" 
+            onClick={() => setIsOpen(false)}
+          />
+        )}
+      </div>
+    );
+  };
+
   type SelectOptions = { choices?: string[] } | Record<string, { label: string; color: string }>;
 
   const selectChoices = useMemo(() => {
-    if (field.type === 'single_select' || field.type === 'multi_select') {
+    if (field.type === 'single_select' || field.type === 'multi_select' || field.type === 'radio_select') {
       const options = field.options as SelectOptions | null | undefined;
 
       // Handle format: { optionId: { name: string, color: string } }
@@ -68,7 +161,7 @@ export default function CellEditor({
     return [];
   }, [field]);
   const choiceColors = useMemo(() => {
-    if (field.type !== 'single_select' && field.type !== 'multi_select') return {} as Record<string, string>;
+    if (field.type !== 'single_select' && field.type !== 'multi_select' && field.type !== 'radio_select') return {} as Record<string, string>;
 
     const map: Record<string, string> = {};
     selectChoices.forEach((choice) => {
@@ -154,6 +247,21 @@ export default function CellEditor({
       onUpdate(formatted);
       return;
     }
+    if (field.type === 'link') {
+      const urlValue = local.trim();
+      if (urlValue === '') {
+        setLinkError(null);
+        onUpdate(null);
+        return;
+      }
+      if (!/^https?:\/\/[^\s$.?#].[^\s]*$/i.test(urlValue)) {
+        setLinkError('Please enter a valid URL (must start with http:// or https://)');
+        return;
+      }
+      setLinkError(null);
+      onUpdate(urlValue);
+      return;
+    }
     onUpdate(local);
   };
 
@@ -163,30 +271,15 @@ export default function CellEditor({
   if (field.type === 'single_select') {
     const selectedColor = value == null ? undefined : choiceColors[String(value)];
 
-    return (
-      <select
-        className={`${centeredInputClass} cursor-pointer rounded-sm`}
-        value={value == null ? '' : String(value)}
-        onChange={(e) => onUpdate(e.target.value || null)}
-        disabled={isSaving}
-        style={selectedColor ? {
-          backgroundColor: selectedColor,
-          borderColor: selectedColor,
-          color: 'white'
-        } : undefined}
-      >
-        <option value="">{isEmptyValue ? EMPTY_LABEL : 'Select...'}</option>
-        {selectChoices.map((choice) => (
-          <option
-            key={choice.key}
-            value={choice.key}
-            style={{ backgroundColor: hexToRgba(choice.color, 0.18) }}
-          >
-            {choice.label}
-          </option>
-        ))}
-      </select>
-    );
+    return <SelectDropdown
+      value={value}
+      onUpdate={onUpdate}
+      selectChoices={selectChoices}
+      selectedColor={selectedColor}
+      isEmptyValue={isEmptyValue}
+      EMPTY_LABEL={EMPTY_LABEL}
+      isSaving={isSaving}
+    />;
   }
 
   if (field.type === 'multi_select') {
@@ -194,11 +287,9 @@ export default function CellEditor({
 
     return (
       <div className="w-full min-h-[32px] px-2 py-1 text-center">
-        <select
-          className={`${centeredInputClass} cursor-pointer rounded-sm`}
-          value=""
-          onChange={(e) => {
-            const newValue = e.target.value;
+        <SelectDropdown
+          value={selectedValues.length > 0 ? "" : null}
+          onUpdate={(newValue) => {
             if (newValue) {
               const currentValues = Array.isArray(value) ? value : (value ? [value] : []);
               if (!currentValues.includes(newValue)) {
@@ -206,21 +297,13 @@ export default function CellEditor({
               }
             }
           }}
-          disabled={isSaving}
-        >
-          <option value="">{isEmptyValue ? EMPTY_LABEL : 'Add option...'}</option>
-          {selectChoices.map((choice) => (
-            <option
-              key={choice.key}
-              value={choice.key}
-              style={{ backgroundColor: hexToRgba(choice.color, 0.18) }}
-            >
-              {choice.label}
-            </option>
-          ))}
-        </select>
+          selectChoices={selectChoices}
+          isEmptyValue={isEmptyValue}
+          EMPTY_LABEL={EMPTY_LABEL}
+          isSaving={isSaving}
+        />
 
-        {selectedValues.length > 0 ? (
+        {selectedValues.length > 0 && (
           <div className="flex flex-wrap gap-1 mt-1 justify-center">
             {selectedValues.map((val) => {
               const choice = selectChoices.find(c => c.key === String(val));
@@ -247,8 +330,6 @@ export default function CellEditor({
               );
             })}
           </div>
-        ) : (
-          <div className="text-xs text-gray-400 italic mt-1">{EMPTY_LABEL}</div>
         )}
       </div>
     );
@@ -256,30 +337,38 @@ export default function CellEditor({
 
   if (field.type === 'date') {
     return (
-      <div className="flex items-center">
+      <div className="flex items-center hover:overflow-hidden hover:w-full">
         <input
           type="date"
-          className={centeredInputClass}
+          className={`${centeredInputClass} max-w-full [&::-webkit-calendar-picker-indicator]:opacity-0 hover:[&::-webkit-calendar-picker-indicator]:opacity-100 [&::-webkit-calendar-picker-indicator]:cursor-pointer`}
           value={local}
-          onChange={(e) => setLocal(e.target.value)}
+          onChange={(e) => {
+            setLocal(e.target.value);
+            // Only commit if the day actually changed from the original saved value; the month can be changed while the popup is still open so we don't want to save yet
+            // This won't autosave when, for example, the date is changed from 2025-01-01 to 2025-02-01, but this is better than the alternative of it never autosaving
+            // The date will still always save when the user clicks elsewhere on the page and defocuses the input box.
+            const originalValue = value == null ? "" : String(value);
+            const originalDay = originalValue.split('-')[2]; // Extract day from YYYY-MM-DD
+            const currentDay = e.target.value.split('-')[2];
+            if (currentDay !== originalDay) {
+              handleCommit();
+            }
+          }}
           onBlur={handleCommit}
           onKeyDown={(e) => { if (e.key === 'Enter') handleCommit(); }}
           disabled={isSaving}
           placeholder={isEmptyValue ? EMPTY_LABEL : undefined}
         />
-        {isEmptyValue && !local && (
-          <span className="ml-2 text-xs text-gray-400 italic">{EMPTY_LABEL}</span>
-        )}
       </div>
     );
   }
 
   if (field.type === 'datetime') {
     return (
-      <div className="flex items-center">
+      <div className="flex items-center hover:overflow-hidden hover:w-full">
         <input
           type="datetime-local"
-          className={centeredInputClass}
+          className={`${centeredInputClass} max-w-full [&::-webkit-calendar-picker-indicator]:opacity-0 hover:[&::-webkit-calendar-picker-indicator]:opacity-100 [&::-webkit-calendar-picker-indicator]:cursor-pointer`}
           value={local}
           onChange={(e) => setLocal(e.target.value)}
           onBlur={handleCommit}
@@ -287,9 +376,6 @@ export default function CellEditor({
           disabled={isSaving}
           placeholder={isEmptyValue ? EMPTY_LABEL : undefined}
         />
-        {isEmptyValue && !local && (
-          <span className="ml-2 text-xs text-gray-400 italic">{EMPTY_LABEL}</span>
-        )}
       </div>
     );
   }
@@ -465,6 +551,30 @@ export default function CellEditor({
         )}
       </div>
     );
+  }
+
+  // Link type - this is here for data validation
+  if (field.type === 'link') {
+    return (
+      <div className="w-full">
+        <input
+          type="url"
+          className={`${centeredInputClass} ${linkError ? 'focus:ring-red-500 text-red-600' : ''}`}
+          value={local}
+          onChange={(e) => {
+            setLocal(e.target.value);
+            if (linkError) setLinkError(null); // Clear error on typing
+          }}
+          onBlur={handleCommit}
+          onKeyDown={(e) => { if (e.key === 'Enter') handleCommit(); }}
+          disabled={isSaving}
+          placeholder={isEmptyValue ? EMPTY_LABEL : 'Enter URL...'}
+        />
+        {linkError && (
+          <div className="text-xs text-red-600 mt-1 px-3">{linkError}</div>
+        )}
+      </div>
+    )
   }
 
   // Long text - always renders as textarea
