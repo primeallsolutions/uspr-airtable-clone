@@ -33,7 +33,8 @@ import {
 import {
   BaseBasicElementsPlugin,
 } from "@udecode/plate-basic-elements";
-import { serializeHtml } from "@udecode/plate-serializer-html";
+// HTML serializer - removed @udecode/plate-serializer-html due to version incompatibility
+// Implementing simple HTML serialization function below
 import {
   X,
   Save,
@@ -50,6 +51,62 @@ import {
 import type { StoredDocument } from "@/lib/services/documents-service";
 import { isPdf } from "./utils";
 import { PDFDocument, StandardFonts } from "pdf-lib";
+
+// Simple HTML serializer for Slate/Plate nodes
+const serializeToHtml = (nodes: any[]): string => {
+  const serializeNode = (node: any): string => {
+    if (node.text !== undefined) {
+      // Text node
+      let text = node.text;
+      if (node.bold) text = `<strong>${text}</strong>`;
+      if (node.italic) text = `<em>${text}</em>`;
+      if (node.underline) text = `<u>${text}</u>`;
+      if (node.code) text = `<code>${text}</code>`;
+      return text;
+    }
+
+    // Element node
+    const children = node.children?.map(serializeNode).join('') || '';
+    
+    switch (node.type) {
+      case 'h1':
+        return `<h1>${children}</h1>`;
+      case 'h2':
+        return `<h2>${children}</h2>`;
+      case 'h3':
+        return `<h3>${children}</h3>`;
+      case 'p':
+        return `<p>${children}</p>`;
+      case 'ul':
+        return `<ul>${children}</ul>`;
+      case 'ol':
+        return `<ol>${children}</ol>`;
+      case 'li':
+        return `<li>${children}</li>`;
+      case 'blockquote':
+        return `<blockquote>${children}</blockquote>`;
+      case 'img':
+        return `<img src="${node.url}" alt="Document content" />`;
+      default:
+        return `<div>${children}</div>`;
+    }
+  };
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; line-height: 1.6; padding: 2rem; max-width: 800px; margin: 0 auto; }
+    img { max-width: 100%; height: auto; }
+  </style>
+</head>
+<body>
+${nodes.map(serializeNode).join('\n')}
+</body>
+</html>`;
+};
 
 type PlateEditorProps = {
   document: StoredDocument | null;
@@ -655,9 +712,7 @@ export const PlateEditor = ({
         }
       } else {
         // For text-based documents, save as HTML
-        const html = serializeHtml(editor as any, {
-          nodes: editorValue,
-        });
+        const html = serializeToHtml(editorValue);
         const blob = new Blob([html], { type: "text/html" });
         const fileName = document.path.split("/").pop()?.replace(/\.[^/.]+$/, "") || "document";
         const file = new File([blob], `${fileName}.html`, { type: "text/html" });
