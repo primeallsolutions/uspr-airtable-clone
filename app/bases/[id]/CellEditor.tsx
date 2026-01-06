@@ -288,6 +288,7 @@ export default function CellEditor({
     return (
       <div className="w-full min-h-[32px] px-2 py-1 text-center">
         <SelectDropdown
+          value={selectedValues.length > 0 ? "" : null}
           onUpdate={(newValue) => {
             if (newValue) {
               const currentValues = Array.isArray(value) ? value : (value ? [value] : []);
@@ -302,7 +303,7 @@ export default function CellEditor({
           isSaving={isSaving}
         />
 
-        {selectedValues.length > 0 ? (
+        {selectedValues.length > 0 && (
           <div className="flex flex-wrap gap-1 mt-1 justify-center">
             {selectedValues.map((val) => {
               const choice = selectChoices.find(c => c.key === String(val));
@@ -329,8 +330,6 @@ export default function CellEditor({
               );
             })}
           </div>
-        ) : (
-          <div className="text-xs text-gray-400 italic mt-1">{EMPTY_LABEL}</div>
         )}
       </div>
     );
@@ -351,7 +350,6 @@ export default function CellEditor({
             const originalValue = value == null ? "" : String(value);
             const originalDay = originalValue.split('-')[2]; // Extract day from YYYY-MM-DD
             const currentDay = e.target.value.split('-')[2];
-            console.log({ originalValue, originalDay, currentDay });
             if (currentDay !== originalDay) {
               handleCommit();
             }
