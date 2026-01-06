@@ -49,7 +49,7 @@ async function logAuditEvent(params: {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { baseId, fullSync } = body; // fullSync option to force full sync
+    const { baseId, fullSync, isAutoSync } = body; // fullSync option to force full sync, isAutoSync to track auto-sync
 
     if (!baseId) {
       return NextResponse.json(
@@ -459,12 +459,19 @@ export async function POST(request: NextRequest) {
     }
 
     // Update last sync timestamp
+    const updateData: Record<string, string> = {
+      last_sync_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    // If this was an auto-sync, also update last_auto_sync_at
+    if (isAutoSync) {
+      updateData.last_auto_sync_at = new Date().toISOString();
+    }
+
     await supabaseAdmin
       .from('ghl_integrations')
-      .update({
-        last_sync_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      })
+      .update(updateData)
       .eq('id', integration.id);
 
     // Clear progress

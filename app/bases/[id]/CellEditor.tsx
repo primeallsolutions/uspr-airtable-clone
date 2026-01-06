@@ -127,7 +127,7 @@ export default function CellEditor({
   type SelectOptions = { choices?: string[] } | Record<string, { label: string; color: string }>;
 
   const selectChoices = useMemo(() => {
-    if (field.type === 'single_select' || field.type === 'multi_select') {
+    if (field.type === 'single_select' || field.type === 'multi_select' || field.type === 'radio_select') {
       const options = field.options as SelectOptions | null | undefined;
 
       // Handle format: { optionId: { name: string, color: string } }
@@ -161,7 +161,7 @@ export default function CellEditor({
     return [];
   }, [field]);
   const choiceColors = useMemo(() => {
-    if (field.type !== 'single_select' && field.type !== 'multi_select') return {} as Record<string, string>;
+    if (field.type !== 'single_select' && field.type !== 'multi_select' && field.type !== 'radio_select') return {} as Record<string, string>;
 
     const map: Record<string, string> = {};
     selectChoices.forEach((choice) => {
