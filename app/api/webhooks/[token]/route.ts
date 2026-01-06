@@ -90,7 +90,7 @@ export async function POST(
       .from('fields')
       .select('*')
       .eq('table_id', targetTableId)
-      .order('position', { ascending: true });
+      .order('order_index', { ascending: true });
 
     // 5. Smart field mapping
     const recordData: Record<string, any> = {};
@@ -110,7 +110,7 @@ export async function POST(
 
       if (matchingField) {
         // Field exists, validate and convert value
-        recordData[matchingField.name] = convertValueToFieldType(value, matchingField.type);
+        recordData[matchingField.id] = convertValueToFieldType(value, matchingField.type);
       } else {
         // Field doesn't exist, queue for creation
         const inferredType = inferFieldType(value);
@@ -128,13 +128,13 @@ export async function POST(
           table_id: targetTableId,
           name: newField.name,
           type: newField.type,
-          position
+          order_index: position
         })
         .select()
         .single();
 
       if (createdField && !fieldError) {
-        recordData[createdField.name] = convertValueToFieldType(newField.value, newField.type);
+        recordData[createdField.id] = convertValueToFieldType(newField.value, newField.type);
       }
     }
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { X, Plus, Copy, Trash2, ToggleLeft, ToggleRight, ExternalLink, AlertCircle, CheckCircle, Loader2 } from "lucide-react";
+import { X, Plus, Copy, Trash2, ToggleLeft, ToggleRight, Link, AlertCircle, CheckCircle, Loader2 } from "lucide-react";
 import { WebhookService } from "@/lib/services/webhook-service";
 import type { Webhook, WebhookLog } from "@/lib/types/webhooks";
 import type { TableRow } from "@/lib/types/base-detail";
@@ -138,7 +138,7 @@ export const ManageWebhooksModal = ({
     const url = WebhookService.getWebhookUrl(webhook.secret_token);
     const examplePayload = {
       table_name: tables[0]?.name || "YourTableName",
-      "Field Name": "Example Value",
+      "Your Field Name Here": "Example Value",
       "Another Field": "Another Value"
     };
 
@@ -147,7 +147,7 @@ export const ManageWebhooksModal = ({
   -d '${JSON.stringify(examplePayload, null, 2)}'`;
 
     navigator.clipboard.writeText(testCommand);
-    toast.success('Test command copied to clipboard! Paste it in your terminal to test.');
+    toast.success('Example command copied to clipboard! Paste it in your terminal to test.');
   };
 
   if (!isOpen) return null;
@@ -445,8 +445,8 @@ export const ManageWebhooksModal = ({
                             onClick={() => handleTestWebhook(webhook)}
                             className="px-3 py-1.5 text-sm text-blue-700 bg-blue-50 border border-blue-200 rounded hover:bg-blue-100 flex items-center gap-1"
                           >
-                            <ExternalLink size={14} />
-                            Copy Test Command
+                            <Link size={14} />
+                            Copy Example Command
                           </button>
                           <button
                             onClick={() => handleViewLogs(webhook)}

@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
 // PUT: Update webhook
 export async function PUT(request: NextRequest) {
   const body = await request.json();
-  const { webhookId, name, isEnabled, defaultTableId } = body;
+  const { webhookId, name, is_enabled, default_table_id } = body;
 
   if (!webhookId) {
     return NextResponse.json({ error: 'webhookId required' }, { status: 400 });
@@ -75,8 +75,8 @@ export async function PUT(request: NextRequest) {
     .from('webhooks')
     .update({
       name,
-      is_enabled: isEnabled,
-      default_table_id: defaultTableId
+      is_enabled,
+      default_table_id
     })
     .eq('id', webhookId)
     .select()
