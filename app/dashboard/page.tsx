@@ -24,7 +24,6 @@ import { CreateBaseModal } from "@/components/dashboard/modals/CreateBaseModal";
 import { CreateWorkspaceModal } from "@/components/dashboard/modals/CreateWorkspaceModal";
 import { DeleteWorkspaceModal } from "@/components/dashboard/modals/DeleteWorkspaceModal";
 import { DeleteBaseModal } from "@/components/dashboard/modals/DeleteBaseModal";
-import { ManageWorkspaceMembersModal } from "@/components/dashboard/modals/ManageWorkspaceMembersModal";
 import { ImportBaseModal } from "@/components/dashboard/modals/ImportBaseModal";
 import { TemplatePreviewModal } from "@/components/dashboard/modals/TemplatePreviewModal";
 import { CreateTemplateModal } from "@/components/dashboard/modals/CreateTemplateModal";
@@ -124,7 +123,6 @@ function DashboardContent() {
   
   // Only show manage members button if role is definitively owner/admin (not while loading)
   const canManageMembers = !roleLoading && (role === 'owner' || role === 'admin');
-  const [isManageWorkspaceMembersOpen, setIsManageWorkspaceMembersOpen] = useState(false);
   const [isImportBaseModalOpen, setIsImportBaseModalOpen] = useState(false);
   
   // Template modal states
@@ -465,9 +463,7 @@ function DashboardContent() {
                 onCreateBase={openCreateModal}
                 onBaseStarToggle={toggleStar}
                 onBaseContextMenu={handleBaseContextMenu}
-                onManageMembers={() => setIsManageWorkspaceMembersOpen(true)}
                 canManageMembers={canManageMembers}
-                onDeleteBaseClick={handleDeleteBaseShortcut}
                 onLeaveWorkspace={handleLeaveWorkspace}
                 canLeaveWorkspace={role === 'member' || role === 'admin'}
               />
@@ -564,15 +560,6 @@ function DashboardContent() {
             onDelete={handleDeleteWorkspace}
             deleting={false}
           />
-
-          {/* Manage Workspace Members */}
-          {selectedWorkspaceId && (
-            <ManageWorkspaceMembersModal
-              isOpen={isManageWorkspaceMembersOpen}
-              onClose={() => setIsManageWorkspaceMembersOpen(false)}
-              workspaceId={selectedWorkspaceId}
-            />
-          )}
 
           {/* Context Menu */}
           {selectedBase && (
