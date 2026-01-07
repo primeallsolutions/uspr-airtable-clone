@@ -489,7 +489,7 @@ export default function CellEditor({
         <input
           type="text"
           className={baseInputClass}
-          value={local}
+          value={formatMonetary(local)}
           onChange={(e) => setLocal(e.target.value)}
           onBlur={() => {
             setLocal(formatMonetary(local));
@@ -514,14 +514,14 @@ export default function CellEditor({
       <div className="w-full min-h-[32px] px-2 py-1">
         <div className="flex flex-wrap gap-2">
           {selectChoices.map((choice) => {
-            const isSelected = String(value) === choice.key;
+            const isSelected = local === choice.key;
             return (
               <label
                 key={choice.key}
-                className={`flex items-center gap-1.5 px-2 py-1 rounded cursor-pointer text-xs font-medium transition-all ${
+                className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium transition-all ${
                   isSelected 
                     ? 'text-white' 
-                    : 'text-gray-600 hover:bg-gray-100'
+                    : (!isSaving ? 'text-gray-600 hover:bg-gray-100 cursor-pointer' : 'text-gray-400')
                 }`}
                 style={isSelected ? { backgroundColor: choice.color } : undefined}
               >
@@ -530,7 +530,10 @@ export default function CellEditor({
                   name={`radio_${field.id}`}
                   value={choice.key}
                   checked={isSelected}
-                  onChange={(e) => onUpdate(e.target.value || null)}
+                  onChange={(e) => {
+                    setLocal(choice.key);
+                    onUpdate(e.target.value || null);
+                  }}
                   disabled={isSaving}
                   className="sr-only"
                 />
@@ -555,11 +558,21 @@ export default function CellEditor({
 
   // Link type - this is here for data validation
   if (field.type === 'link') {
+    const handleLinkClick = (e: React.MouseEvent<HTMLInputElement>) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        if (local && /^https?:\/\/[^\s$.?#].[^\s]*$/i.test(local)) {
+          window.open(local, '_blank');
+        }
+      }
+    };
+
     return (
       <div className="w-full">
         <input
           type="url"
-          className={`${centeredInputClass} ${linkError ? 'focus:ring-red-500 text-red-600' : ''}`}
+          title={local ? 'Ctrl+Click to open link in new tab' : undefined}
+          className={`${centeredInputClass} ${linkError ? 'focus:ring-red-500 text-red-600' : ''} ${local && /^https?:\/\/[^\s$.?#].[^\s]*$/i.test(local) ? 'cursor-pointer' : ''}`}
           value={local}
           onChange={(e) => {
             setLocal(e.target.value);
@@ -567,6 +580,7 @@ export default function CellEditor({
           }}
           onBlur={handleCommit}
           onKeyDown={(e) => { if (e.key === 'Enter') handleCommit(); }}
+          onClick={handleLinkClick}
           disabled={isSaving}
           placeholder={isEmptyValue ? EMPTY_LABEL : 'Enter URL...'}
         />

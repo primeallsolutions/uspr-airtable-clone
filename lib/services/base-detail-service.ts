@@ -527,7 +527,7 @@ export class BaseDetailService {
     }
     
     // Validate and sanitize field type
-    const allowedTypes = ['text', 'number', 'date', 'datetime', 'email', 'phone', 'single_select', 'multi_select', 'checkbox', 'link'];
+    const allowedTypes = ['text', 'long_text', 'number', 'monetary', 'date', 'datetime', 'email', 'phone', 'single_select', 'multi_select', 'radio_select', 'checkbox', 'link'];
 
     // Sanitize the field type - remove any whitespace and ensure it's lowercase
     const sanitizedType = fieldData.type.trim().toLowerCase();
