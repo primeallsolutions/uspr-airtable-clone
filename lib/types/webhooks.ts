@@ -17,9 +17,25 @@ export interface Webhook {
   failed_calls: number;
 }
 
+export interface GHLSyncTriggerWebhook {
+  id: string;
+  base_id: string;
+  name: string;
+  secret_token: string;
+  is_enabled: boolean;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+  last_triggered_at: string | null;
+  total_calls: number;
+  successful_calls: number;
+  failed_calls: number;
+}
+
 export interface WebhookLog {
   id: string;
-  webhook_id: string;
+  webhook_id: string | null;
+  ghl_sync_trigger_webhook_id?: string | null;
   status: 'success' | 'error';
   request_payload: any;
   response_status: number;
@@ -28,4 +44,3 @@ export interface WebhookLog {
   table_id: string | null;
   created_at: string;
 }
-

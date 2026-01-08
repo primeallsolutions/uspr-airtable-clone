@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback } from "react";
 import { X, CheckCircle, AlertCircle, Loader2, Link as LinkIcon, Key, MapPin, RefreshCw, Plus, Trash2, Wand2, StopCircle } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { GHLService } from "@/lib/services/ghl-service";
+import { GHLTriggerWebhookService } from "@/lib/services/ghl-trigger-webhook-service";
+import { ManageGHLTriggerWebhooksModal } from "@/components/base-detail/ManageGHLTriggerWebhooksModal";
 import type { GHLIntegration, GHLFieldMapping } from "@/lib/types/ghl-integration";
 import type { FieldRow } from "@/lib/types/base-detail";
 import { toast } from "sonner";
@@ -51,6 +53,11 @@ export const ConnectGHLModal = ({
   const [autoSyncInterval, setAutoSyncInterval] = useState<number>(15);
   const [savingAutoSync, setSavingAutoSync] = useState(false);
 
+  // Trigger webhook management state
+  const [isTriggerWebhooksModalOpen, setIsTriggerWebhooksModalOpen] = useState(false);
+  const [triggerWebhookSummary, setTriggerWebhookSummary] = useState({ total: 0, active: 0 });
+  const [loadingTriggerWebhooks, setLoadingTriggerWebhooks] = useState(false);
+
   // Form state for Private Integration Token
   const [accessToken, setAccessToken] = useState("");
   const [locationId, setLocationId] = useState("");
@@ -81,6 +88,8 @@ export const ConnectGHLModal = ({
         setIntegration(null);
         setAutoSyncEnabled(false);
         setAutoSyncInterval(15);
+        setTriggerWebhookSummary({ total: 0, active: 0 });
+        setIsTriggerWebhooksModalOpen(false);
       }
     } catch (error) {
       console.error('Failed to load integration:', error);
@@ -105,6 +114,21 @@ export const ConnectGHLModal = ({
     }
   }, [tableId]);
 
+  const loadTriggerWebhookSummary = useCallback(async () => {
+    if (!baseId) return;
+    try {
+      setLoadingTriggerWebhooks(true);
+      const data = await GHLTriggerWebhookService.getTriggerWebhooksByBaseId(baseId);
+      const active = data.filter(webhook => webhook.is_enabled).length;
+      setTriggerWebhookSummary({ total: data.length, active });
+    } catch (error) {
+      console.error('Failed to load trigger webhook summary:', error);
+      setTriggerWebhookSummary({ total: 0, active: 0 });
+    } finally {
+      setLoadingTriggerWebhooks(false);
+    }
+  }, [baseId]);
+
   // Load integration status and fields
   useEffect(() => {
     if (isOpen && baseId) {
@@ -112,6 +136,12 @@ export const ConnectGHLModal = ({
       loadFields();
     }
   }, [isOpen, baseId, tableId, loadIntegration, loadFields]);
+
+  useEffect(() => {
+    if (isOpen && baseId && integration) {
+      void loadTriggerWebhookSummary();
+    }
+  }, [isOpen, baseId, integration, loadTriggerWebhookSummary]);
 
   // Reset form when modal opens
   useEffect(() => {
@@ -314,6 +344,8 @@ export const ConnectGHLModal = ({
       setFieldMappings([]);
       setAccessToken("");
       setLocationId("");
+      setTriggerWebhookSummary({ total: 0, active: 0 });
+      setIsTriggerWebhooksModalOpen(false);
       toast.success('GoHighLevel disconnected successfully');
       if (onConnected) onConnected();
     } catch (error) {
@@ -538,6 +570,12 @@ export const ConnectGHLModal = ({
     }
   };
 
+  const openTriggerWebhooksModal = () => setIsTriggerWebhooksModalOpen(true);
+  const closeTriggerWebhooksModal = () => {
+    setIsTriggerWebhooksModalOpen(false);
+    void loadTriggerWebhookSummary();
+  };
+
   const addFieldMapping = () => {
     setFieldMappings(prev => [
       ...prev,
@@ -573,7 +611,8 @@ export const ConnectGHLModal = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+    <>
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
       <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
@@ -904,6 +943,42 @@ export const ConnectGHLModal = ({
                 </button>
               </div>
 
+              {/* Sync Trigger Webhooks */}
+              <div className="border-t border-gray-200 pt-6 space-y-4">
+                <div>
+                  <h3 className="font-medium text-gray-900 mb-1">Sync Trigger Webhooks</h3>
+                  <p className="text-sm text-gray-600">
+                    Trigger incremental GHL syncs from external services using secure webhook URLs.
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg bg-gray-50">
+                  <div>
+                    <div className="text-sm font-medium text-gray-900">
+                      {loadingTriggerWebhooks
+                        ? 'Loading trigger webhooks...'
+                        : `${triggerWebhookSummary.active} active of ${triggerWebhookSummary.total} total`}
+                    </div>
+                    <div className="text-xs text-gray-600 mt-1">
+                      Each trigger calls the incremental sync endpoint for this base.
+                    </div>
+                  </div>
+                  <button
+                    onClick={openTriggerWebhooksModal}
+                    className="px-4 py-2 text-sm font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 flex items-center gap-2"
+                  >
+                    <LinkIcon size={16} />
+                    Manage Sync Triggers
+                  </button>
+                </div>
+
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                  <p className="text-xs text-gray-600">
+                    Use these webhooks to sync right after form submissions, CRM events, or automation steps.
+                  </p>
+                </div>
+              </div>
+
               {/* Field Mapping */}
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
@@ -1032,5 +1107,13 @@ export const ConnectGHLModal = ({
         </div>
       </div>
     </div>
+      {integration && (
+        <ManageGHLTriggerWebhooksModal
+          isOpen={isTriggerWebhooksModalOpen}
+          onClose={closeTriggerWebhooksModal}
+          baseId={baseId}
+        />
+      )}
+    </>
   );
 };
