@@ -1,12 +1,10 @@
+import { ChevronDown } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { X } from "lucide-react";
 import { AuditLogService, type AuditLogRow } from "@/lib/services/audit-log-service";
 import { formatInTimezone } from "@/lib/utils/date-helpers";
 import { useTimezone } from "@/lib/hooks/useTimezone";
 
-interface WorkspaceActivityModalProps {
-  isOpen: boolean;
-  onClose: () => void;
+interface WorkspaceActivityCardProps {
   workspaceId: string;
 }
 
@@ -116,12 +114,13 @@ function formatAction(log: AuditLogRow): string {
   return `${actor} ${action}d ${entity}`;
 }
 
-export const WorkspaceActivityModal = ({ isOpen, onClose, workspaceId }: WorkspaceActivityModalProps) => {
+export const WorkspaceActivityCard = ({ workspaceId }: WorkspaceActivityCardProps) => {
   const { timezone } = useTimezone();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [logs, setLogs] = useState<AuditLogRow[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [isCollapsed, setIsCollapsed] = useState(false);
 
   const load = useMemo(() => async (cursor?: string) => {
     if (!workspaceId) return;
@@ -143,24 +142,23 @@ export const WorkspaceActivityModal = ({ isOpen, onClose, workspaceId }: Workspa
   }, [workspaceId]);
 
   useEffect(() => {
-    if (isOpen) {
-      void load();
-    }
-  }, [isOpen, load]);
-
-  if (!isOpen) return null;
+    void load();
+  }, [load]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-2xl h-3/4 rounded-lg bg-white shadow-xl flex flex-col overflow-hidden">
-        <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
+    <div className="w-3/4 rounded-lg border border-gray-200 bg-white">
+      <button
+        onClick={() => setIsCollapsed(!isCollapsed)}
+        className={`w-full border-b border-gray-200 px-6 py-4 transition-colors text-left ${isCollapsed ? 'rounded-lg' : ''} hover:bg-gray-50`}
+      >
+        <div className="flex items-center justify-between">
           <h3 className="text-lg font-semibold text-gray-900">Workspace Activity</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-            <X className="w-5 h-5" />
-          </button>
+          <ChevronDown size={14} className={`text-gray-600 transition-transform duration-200 ${isCollapsed ? '-rotate-90' : ''}`} />
         </div>
+      </button>
 
-        <div className="flex-1 min-h-0 px-6 py-4 space-y-4 overflow-y-auto">
+      {!isCollapsed && (
+        <div className="flex-1 min-h-0 px-6 py-4 space-y-4 max-h-96 overflow-y-auto">
           {error && (
             <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md p-3">{error}</div>
           )}
@@ -190,15 +188,7 @@ export const WorkspaceActivityModal = ({ isOpen, onClose, workspaceId }: Workspa
             </button>
           </div>
         </div>
-
-        <div className="flex items-center justify-end gap-3 border-t border-gray-200 px-6 py-4">
-          <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50">
-            Close
-          </button>
-        </div>
-      </div>
+      )}
     </div>
   );
 };
-
-
