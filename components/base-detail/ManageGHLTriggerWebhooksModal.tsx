@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { X, Plus, Copy, Trash2, ToggleLeft, ToggleRight, Link, AlertCircle, CheckCircle, Loader2 } from "lucide-react";
+import { X, Plus, Copy, Trash2, ToggleLeft, ToggleRight, AlertCircle, CheckCircle, Loader2 } from "lucide-react";
 import { GHLTriggerWebhookService } from "@/lib/services/ghl-trigger-webhook-service";
 import type { GHLSyncTriggerWebhook, WebhookLog } from "@/lib/types/webhooks";
 import { toast } from "sonner";
@@ -129,7 +129,7 @@ export const ManageGHLTriggerWebhooksModal = ({
 
   const handleCopyExample = (webhook: GHLSyncTriggerWebhook) => {
     const url = GHLTriggerWebhookService.getWebhookUrl(webhook.secret_token);
-    const testCommand = `curl -X POST "${url}" -H "Content-Type: application/json" -d '{}'`;
+    const testCommand = `curl -X POST "${url}"`;
     navigator.clipboard.writeText(testCommand);
     toast.success('Example command copied to clipboard!');
   };
@@ -151,7 +151,7 @@ export const ManageGHLTriggerWebhooksModal = ({
             <div>
               <h2 className="text-xl font-semibold text-gray-900">Sync Trigger Webhooks</h2>
               <p className="text-sm text-gray-600 mt-1">
-                Create webhook URLs to trigger incremental GoHighLevel syncs
+                Use these webhooks to sync right after form submissions, CRM events, or automation steps.
               </p>
             </div>
             <button
@@ -204,7 +204,7 @@ export const ManageGHLTriggerWebhooksModal = ({
                             : 'border-red-200 bg-red-50'
                         }`}
                       >
-                        <div className="flex items-start justify-between mb-2">
+                        <div className="flex items-start justify-between">
                           <div className="flex items-center gap-2">
                             {log.status === 'success' ? (
                               <CheckCircle size={16} className="text-green-600" />
@@ -232,19 +232,10 @@ export const ManageGHLTriggerWebhooksModal = ({
                         </div>
 
                         {log.error_message && (
-                          <div className="mb-2 text-sm text-red-700">
+                          <div className="mt-2 text-sm text-red-700">
                             Error: {log.error_message}
                           </div>
                         )}
-
-                        <details className="text-xs">
-                          <summary className="cursor-pointer text-gray-700 hover:text-gray-900">
-                            View payload
-                          </summary>
-                          <pre className="mt-2 p-2 bg-white border border-gray-200 rounded overflow-x-auto">
-                            {JSON.stringify(log.request_payload, null, 2)}
-                          </pre>
-                        </details>
                       </div>
                     ))}
                   </div>
@@ -400,8 +391,8 @@ export const ManageGHLTriggerWebhooksModal = ({
                             onClick={() => handleCopyExample(webhook)}
                             className="px-3 py-1.5 text-sm text-blue-700 bg-blue-50 border border-blue-200 rounded hover:bg-blue-100 flex items-center gap-1"
                           >
-                            <Link size={14} />
-                            Copy Example Command
+                            <Copy size={14} />
+                            Copy cURL Command
                           </button>
                           <button
                             onClick={() => handleViewLogs(webhook)}

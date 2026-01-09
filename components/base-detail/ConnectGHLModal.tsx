@@ -948,19 +948,21 @@ export const ConnectGHLModal = ({
                 <div>
                   <h3 className="font-medium text-gray-900 mb-1">Sync Trigger Webhooks</h3>
                   <p className="text-sm text-gray-600">
-                    Trigger incremental GHL syncs from external services using secure webhook URLs.
+                    Manually trigger a contact sync from GoHighLevel using webhooks.
                   </p>
                 </div>
 
                 <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg bg-gray-50">
                   <div>
                     <div className="text-sm font-medium text-gray-900">
-                      {loadingTriggerWebhooks
-                        ? 'Loading trigger webhooks...'
-                        : `${triggerWebhookSummary.active} active of ${triggerWebhookSummary.total} total`}
+                      {triggerWebhookSummary.total > 0 ? (
+                        loadingTriggerWebhooks
+                          ? 'Loading trigger webhooks...'
+                          : `${triggerWebhookSummary.active} active of ${triggerWebhookSummary.total} total`
+                      ) : 'No trigger webhooks configured'}
                     </div>
                     <div className="text-xs text-gray-600 mt-1">
-                      Each trigger calls the incremental sync endpoint for this base.
+                      Each trigger will sync new contacts from GoHighLevel
                     </div>
                   </div>
                   <button
@@ -971,16 +973,10 @@ export const ConnectGHLModal = ({
                     Manage Sync Triggers
                   </button>
                 </div>
-
-                <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
-                  <p className="text-xs text-gray-600">
-                    Use these webhooks to sync right after form submissions, CRM events, or automation steps.
-                  </p>
-                </div>
               </div>
 
               {/* Field Mapping */}
-              <div className="space-y-4">
+              <div className="border-t border-gray-200 pt-6 space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
                     <h3 className="font-medium text-gray-900">Field Mapping</h3>
