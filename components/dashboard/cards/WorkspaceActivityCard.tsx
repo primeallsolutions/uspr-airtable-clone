@@ -6,6 +6,7 @@ import { useTimezone } from "@/lib/hooks/useTimezone";
 
 interface WorkspaceActivityCardProps {
   workspaceId: string;
+  className?: string;
 }
 
 function formatAction(log: AuditLogRow): string {
@@ -114,7 +115,7 @@ function formatAction(log: AuditLogRow): string {
   return `${actor} ${action}d ${entity}`;
 }
 
-export const WorkspaceActivityCard = ({ workspaceId }: WorkspaceActivityCardProps) => {
+export const WorkspaceActivityCard = ({ workspaceId, className }: WorkspaceActivityCardProps) => {
   const { timezone } = useTimezone();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -146,7 +147,7 @@ export const WorkspaceActivityCard = ({ workspaceId }: WorkspaceActivityCardProp
   }, [load]);
 
   return (
-    <div className="w-3/4 rounded-lg border border-gray-200 bg-white">
+    <div className={`rounded-lg border border-gray-200 bg-white ${className || "w-3/4"}`}>
       <button
         onClick={() => setIsCollapsed(!isCollapsed)}
         className={`w-full border-b border-gray-200 px-6 py-4 transition-colors text-left ${isCollapsed ? 'rounded-lg' : ''} hover:bg-gray-50`}

@@ -5,6 +5,7 @@ import { sortBases } from "@/lib/utils/sort-helpers";
 import type { BaseRecord, CollectionView, SortOption, WorkspaceRecord } from "@/lib/types/dashboard";
 import { useState } from "react";
 import { WorkspaceActivityCard } from "../cards/WorkspaceActivityCard";
+import { WorkspaceAnalyticsDashboard } from "../WorkspaceAnalyticsDashboard";
 import { BaseCard } from "../BaseCard";
 import { ManageWorkspaceMembersCard } from "../cards/ManageWorkspaceMembersCard";
 
@@ -48,7 +49,9 @@ export const WorkspaceView = ({
   canLeaveWorkspace = false,
 }: WorkspaceViewProps) => {
   const currentWorkspace = workspaces.find(w => w.id === selectedWorkspaceId);
-  const [activeTab, setActiveTab] = useState<'bases' | 'analytics' | 'settings'>('bases');
+  const [activeTab, setActiveTab] = useState<'bases' | 'analytics' | 'settings'>(
+    canManageMembers ? 'analytics' : 'bases'
+  );
 
   if (loading && !initialLoad) {
     return (
@@ -64,7 +67,7 @@ export const WorkspaceView = ({
       {/* Tab Navigation */}
       <div className="mb-6 border-b border-gray-200">
         <div className="flex gap-8">
-          {(canManageMembers ? ['bases', 'analytics', 'settings'] as const : ['bases', 'settings'] as const).map((tab) => (
+          {(canManageMembers ? ['analytics', 'bases', 'settings'] as const : ['bases', 'settings'] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -127,11 +130,17 @@ export const WorkspaceView = ({
 
       {/* Analytics tab, only visible to admins */}
       {activeTab === 'analytics' && canManageMembers && (
-        <div className="space-y-8">
-          {selectedWorkspaceId && (
-            <WorkspaceActivityCard workspaceId={selectedWorkspaceId} />
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[2fr_1fr]">
+          {selectedWorkspaceId ? (
+            <WorkspaceAnalyticsDashboard workspaceId={selectedWorkspaceId} />
+          ) : (
+            <div className="rounded-lg border border-gray-200 bg-white p-6 text-sm text-gray-500">
+              Select a workspace to view analytics.
+            </div>
           )}
-          <p className="text-gray-500">More analytics coming soon...</p>
+          {selectedWorkspaceId && (
+            <WorkspaceActivityCard workspaceId={selectedWorkspaceId} className="w-full" />
+          )}
         </div>
       )}
 
