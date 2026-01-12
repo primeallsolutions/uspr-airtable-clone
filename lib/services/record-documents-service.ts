@@ -62,7 +62,20 @@ export const RecordDocumentsService = {
    * Attach an existing document to a record
    */
   async attachDocument(params: AttachDocumentParams): Promise<RecordDocument> {
-    const { data: user } = await supabase.auth.getUser();
+    // Get current user
+    const { data: { user } } = await supabase.auth.getUser();
+
+    // Verify user exists in profiles table
+    let uploadedBy: string | null = null;
+    if (user?.id) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("id", user.id)
+        .single();
+      
+      uploadedBy = profile?.id || null;
+    }
 
     const { data, error } = await supabase
       .from("record_documents")
@@ -74,7 +87,7 @@ export const RecordDocumentsService = {
         document_name: params.documentName,
         mime_type: params.mimeType || null,
         size_bytes: params.sizeBytes || null,
-        uploaded_by: user?.user?.id || null,
+        uploaded_by: uploadedBy,
       })
       .select()
       .single();
