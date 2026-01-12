@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { X, Plus, Trash2, Mail, User, FileText, Loader2, Save, Send } from "lucide-react";
+import { X, Plus, Trash2, Mail, User, FileText, Loader2, Save, Send, ChevronDown, ChevronUp, Database } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { StoredDocument } from "@/lib/services/documents-service";
 import { ESignatureService, SignatureRequestSigner, SignatureField } from "@/lib/services/esign-service";
@@ -14,6 +14,10 @@ type SignatureRequestModalProps = {
   tableId?: string | null;
   selectedDocument?: StoredDocument | null;
   onRequestCreated?: () => void;
+  // Optional: Pre-selected record for status update
+  recordId?: string | null;
+  // Optional: Fields available for status column selection
+  availableFields?: Array<{ id: string; name: string; type: string; options?: Record<string, { name?: string; label?: string }> }>;
 };
 
 export const SignatureRequestModal = ({
@@ -23,18 +27,26 @@ export const SignatureRequestModal = ({
   tableId,
   selectedDocument,
   onRequestCreated,
+  recordId,
+  availableFields = [],
 }: SignatureRequestModalProps) => {
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
   const [availableTemplates, setAvailableTemplates] = useState<Array<{ id: string; name: string; description?: string }>>([]);
-  const [signers, setSigners] = useState<Array<{ email: string; name: string; role: "signer" | "viewer" | "approver"; sign_order: number }>>([
-    { email: "", name: "", role: "signer", sign_order: 0 },
-  ]);
+  const [signers, setSigners] = useState<Array<{ email: string; name: string; role: "signer" | "viewer" | "approver"; sign_order: number }>>([{
+    email: "", name: "", role: "signer", sign_order: 0,
+  }]);
   const [expiresAt, setExpiresAt] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
+  
+  // Status column update state
+  const [showStatusUpdate, setShowStatusUpdate] = useState(false);
+  const [selectedStatusFieldId, setSelectedStatusFieldId] = useState<string>("");
+  const [statusValueOnComplete, setStatusValueOnComplete] = useState("Signed");
+  const [statusValueOnDecline, setStatusValueOnDecline] = useState("Declined");
 
   // Load available templates with valid signature fields
   const loadTemplates = useCallback(async () => {
@@ -210,6 +222,11 @@ export const SignatureRequestModal = ({
             sign_order: s.sign_order,
           })),
           fields: signatureFields.length > 0 ? signatureFields : undefined,
+          // Status column update fields
+          record_id: showStatusUpdate && recordId ? recordId : null,
+          status_field_id: showStatusUpdate && selectedStatusFieldId ? selectedStatusFieldId : null,
+          status_value_on_complete: showStatusUpdate ? statusValueOnComplete : null,
+          status_value_on_decline: showStatusUpdate ? statusValueOnDecline : null,
         }),
       });
 
@@ -332,6 +349,11 @@ export const SignatureRequestModal = ({
             sign_order: s.sign_order,
           })),
           fields: signatureFields.length > 0 ? signatureFields : undefined,
+          // Status column update fields
+          record_id: showStatusUpdate && recordId ? recordId : null,
+          status_field_id: showStatusUpdate && selectedStatusFieldId ? selectedStatusFieldId : null,
+          status_value_on_complete: showStatusUpdate ? statusValueOnComplete : null,
+          status_value_on_decline: showStatusUpdate ? statusValueOnDecline : null,
         }),
       });
 
@@ -569,6 +591,97 @@ export const SignatureRequestModal = ({
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
+
+          {/* Status Column Update - Advanced Option */}
+          {recordId && availableFields.length > 0 && (
+            <div className="mb-6 border border-gray-200 rounded-lg overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setShowStatusUpdate(!showStatusUpdate)}
+                className="w-full px-4 py-3 bg-gray-50 flex items-center justify-between hover:bg-gray-100 transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <Database className="w-4 h-4 text-gray-500" />
+                  <span className="text-sm font-medium text-gray-700">Auto-Update Record Status</span>
+                  {showStatusUpdate && selectedStatusFieldId && (
+                    <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
+                      Enabled
+                    </span>
+                  )}
+                </div>
+                {showStatusUpdate ? (
+                  <ChevronUp className="w-4 h-4 text-gray-500" />
+                ) : (
+                  <ChevronDown className="w-4 h-4 text-gray-500" />
+                )}
+              </button>
+              {showStatusUpdate && (
+                <div className="p-4 border-t border-gray-200 bg-white space-y-4">
+                  <p className="text-xs text-gray-500">
+                    Automatically update a field in the linked record when this signature request is completed or declined.
+                  </p>
+                  
+                  {/* Status Field Selection */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">
+                      Field to Update
+                    </label>
+                    <select
+                      value={selectedStatusFieldId}
+                      onChange={(e) => setSelectedStatusFieldId(e.target.value)}
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="">Select a field...</option>
+                      {availableFields
+                        .filter(f => f.type === "single_select" || f.type === "text")
+                        .map((field) => (
+                          <option key={field.id} value={field.id}>
+                            {field.name} ({field.type === "single_select" ? "Single Select" : "Text"})
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                  
+                  {/* Status Values */}
+                  {selectedStatusFieldId && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">
+                          Value on Signed
+                        </label>
+                        <input
+                          type="text"
+                          value={statusValueOnComplete}
+                          onChange={(e) => setStatusValueOnComplete(e.target.value)}
+                          placeholder="Signed"
+                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">
+                          Value on Declined
+                        </label>
+                        <input
+                          type="text"
+                          value={statusValueOnDecline}
+                          onChange={(e) => setStatusValueOnDecline(e.target.value)}
+                          placeholder="Declined"
+                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Help text for single_select fields */}
+                  {selectedStatusFieldId && availableFields.find(f => f.id === selectedStatusFieldId)?.type === "single_select" && (
+                    <p className="text-xs text-amber-600">
+                      Tip: For single select fields, make sure the values match existing options in the field.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Footer */}

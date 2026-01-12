@@ -150,6 +150,11 @@ export async function POST(request: NextRequest) {
       signers,
       fields,
       packItems,
+      // Status column update fields
+      record_id,
+      status_field_id,
+      status_value_on_complete,
+      status_value_on_decline,
     } = body;
 
     if (!baseId || !title || !document_path) {
@@ -193,6 +198,11 @@ export async function POST(request: NextRequest) {
           document_path,
           expires_at,
           created_by: createdBy,
+          // Status column update fields
+          record_id: record_id || null,
+          status_field_id: status_field_id || null,
+          status_value_on_complete: status_value_on_complete || "Signed",
+          status_value_on_decline: status_value_on_decline || "Declined",
         },
         packItems,
         supabase
@@ -207,6 +217,11 @@ export async function POST(request: NextRequest) {
         document_path,
         expires_at,
         created_by: createdBy,
+        // Status column update fields
+        record_id: record_id || null,
+        status_field_id: status_field_id || null,
+        status_value_on_complete: status_value_on_complete || "Signed",
+        status_value_on_decline: status_value_on_decline || "Declined",
       }, supabase);
     }
 

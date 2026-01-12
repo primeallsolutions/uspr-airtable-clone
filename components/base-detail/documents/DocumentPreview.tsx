@@ -7,6 +7,7 @@ import { PdfViewer } from "../PdfViewer";
 import { isPdf, isImage, isFolder } from "./utils";
 import { PreviewSkeleton } from "./DocumentsSkeleton";
 import { DocumentVersionHistory } from "./DocumentVersionHistory";
+import { TransactionMetadata } from "./TransactionMetadata";
 
 type DocumentPreviewProps = {
   selectedDoc: StoredDocument | null;
@@ -18,6 +19,8 @@ type DocumentPreviewProps = {
   onDelete: () => void;
   onSplit?: () => void;
   loading?: boolean;
+  // Transaction metadata support
+  recordId?: string | null;
 };
 
 export const DocumentPreview = ({
@@ -30,6 +33,7 @@ export const DocumentPreview = ({
   onDelete,
   onSplit,
   loading = false,
+  recordId,
 }: DocumentPreviewProps) => {
   const [showVersionHistory, setShowVersionHistory] = useState(false);
 
@@ -101,6 +105,16 @@ export const DocumentPreview = ({
                 </div>
               </div>
             </div>
+            
+            {/* Transaction Metadata - Show linked record data */}
+            {baseId && (
+              <TransactionMetadata
+                baseId={baseId}
+                tableId={tableId}
+                documentPath={selectedDoc.path}
+                recordId={recordId}
+              />
+            )}
             <div className="flex-1 min-h-0">
               {viewerError ? (
                 <div className="h-full flex items-center justify-center text-sm text-red-600">

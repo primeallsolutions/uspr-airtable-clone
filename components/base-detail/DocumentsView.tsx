@@ -14,6 +14,7 @@ import { TemplateManagementModal } from "./documents/TemplateManagementModal";
 import { SignatureRequestModal } from "./documents/SignatureRequestModal";
 import { SignatureRequestStatus } from "./documents/SignatureRequestStatus";
 import { MergePackModal } from "./documents/MergePackModal";
+import { PdfMergeWithReorderModal } from "./documents/PdfMergeWithReorderModal";
 import { TemplateFieldEditor } from "./documents/TemplateFieldEditor";
 import { DocumentGeneratorForm } from "./documents/DocumentGeneratorForm";
 import { FolderNameModal } from "./documents/FolderNameModal";
@@ -21,6 +22,8 @@ import { RenameDocumentModal } from "./documents/RenameDocumentModal";
 import { RenameFolderModal } from "./documents/RenameFolderModal";
 import { DeleteFolderModal } from "./documents/DeleteFolderModal";
 import { PdfSplitModal } from "./documents/PdfSplitModal";
+import { AuditLogViewer } from "./documents/AuditLogViewer";
+import { TransactionFolderSetupModal } from "./documents/TransactionFolderSetupModal";
 import { PhotoGallery } from "./documents/PhotoGallery";
 import { isFolder, isPdf } from "./documents/utils";
 import type { DocumentTemplate } from "@/lib/services/template-service";
@@ -75,11 +78,14 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable }: Docu
   const [showSignatureRequestModal, setShowSignatureRequestModal] = useState<boolean>(false);
   const [showSignatureStatus, setShowSignatureStatus] = useState<boolean>(false);
   const [showMergePackModal, setShowMergePackModal] = useState<boolean>(false);
+  const [showMergeWithReorderModal, setShowMergeWithReorderModal] = useState<boolean>(false);
   const [showActivityFeed, setShowActivityFeed] = useState<boolean>(true);
   const [showPdfSplitModal, setShowPdfSplitModal] = useState<boolean>(false);
   const [splitDoc, setSplitDoc] = useState<StoredDocument | null>(null);
   const [splitSignedUrl, setSplitSignedUrl] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"documents" | "photos">("documents");
+  const [showAuditLog, setShowAuditLog] = useState<boolean>(false);
+  const [showFolderSetup, setShowFolderSetup] = useState<boolean>(false);
 
   const currentPrefix = useMemo(
     () => (folderPath && !folderPath.endsWith("/") ? `${folderPath}/` : folderPath),
@@ -813,6 +819,7 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable }: Docu
         onManageTemplates={() => setShowTemplateManagement(true)}
         onRequestSignature={() => setShowSignatureRequestModal(true)}
         onViewSignatures={() => setShowSignatureStatus(true)}
+        onMergeDocuments={() => setShowMergeWithReorderModal(true)}
         onGenerateDocument={async () => {
           // Load templates and show selection
           try {
@@ -892,7 +899,19 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable }: Docu
             </button>
             
             {/* Activity Feed Toggle */}
-            <div className="ml-auto">
+            <div className="ml-auto flex items-center gap-2">
+              <button
+                onClick={() => setShowFolderSetup(true)}
+                className="px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
+              >
+                Setup Folders
+              </button>
+              <button
+                onClick={() => setShowAuditLog(true)}
+                className="px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
+              >
+                View Audit Log
+              </button>
               <button
                 onClick={() => setShowActivityFeed(!showActivityFeed)}
                 className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
@@ -918,6 +937,8 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable }: Docu
                   folderPath={folderPath}
                   onDocumentSelect={setSelectedDocPath}
                   onDocumentEdit={handleDocumentEdit}
+                  baseId={baseId}
+                  tableId={selectedTable?.id}
                 />
 
                 <DocumentPreview
@@ -1124,6 +1145,42 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable }: Docu
           }}
         />
       )}
+
+      {/* PDF Merge with Page Reordering Modal */}
+      <PdfMergeWithReorderModal
+        isOpen={showMergeWithReorderModal}
+        onClose={() => setShowMergeWithReorderModal(false)}
+        baseId={baseId}
+        tableId={selectedTable?.id}
+        onMergeComplete={() => {
+          refresh();
+        }}
+      />
+
+      {/* Audit Log Viewer Modal */}
+      {showAuditLog && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
+            <AuditLogViewer
+              baseId={baseId}
+              tableId={selectedTable?.id}
+              onClose={() => setShowAuditLog(false)}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Transaction Folder Setup Modal */}
+      <TransactionFolderSetupModal
+        isOpen={showFolderSetup}
+        onClose={() => setShowFolderSetup(false)}
+        baseId={baseId}
+        tableId={selectedTable?.id}
+        existingFolders={rootFolders}
+        onComplete={() => {
+          refresh();
+        }}
+      />
     </div>
   );
 };

@@ -13,12 +13,14 @@ import {
   ChevronUp,
   X,
   Eye,
+  GitCompare,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
   DocumentVersionService,
   type DocumentVersion,
 } from "@/lib/services/document-version-service";
+import { VersionComparisonModal } from "./VersionComparisonModal";
 
 type DocumentVersionHistoryProps = {
   documentPath: string;
@@ -69,6 +71,7 @@ export const DocumentVersionHistory = ({
   const [deleting, setDeleting] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewVersion, setPreviewVersion] = useState<DocumentVersion | null>(null);
+  const [showComparison, setShowComparison] = useState(false);
 
   // Load versions
   const loadVersions = useCallback(async () => {
@@ -186,11 +189,26 @@ export const DocumentVersionHistory = ({
           <h3 className="font-semibold text-gray-900">Version History</h3>
           <span className="text-sm text-gray-500">({versions.length} version{versions.length !== 1 ? "s" : ""})</span>
         </div>
-        {expanded ? (
-          <ChevronUp className="w-5 h-5 text-gray-400" />
-        ) : (
-          <ChevronDown className="w-5 h-5 text-gray-400" />
-        )}
+        <div className="flex items-center gap-2">
+          {versions.length >= 2 && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowComparison(true);
+              }}
+              className="px-2 py-1 text-xs font-medium text-purple-600 hover:bg-purple-100 rounded transition-colors flex items-center gap-1"
+              title="Compare versions"
+            >
+              <GitCompare className="w-3.5 h-3.5" />
+              Compare
+            </button>
+          )}
+          {expanded ? (
+            <ChevronUp className="w-5 h-5 text-gray-400" />
+          ) : (
+            <ChevronDown className="w-5 h-5 text-gray-400" />
+          )}
+        </div>
       </button>
 
       {/* Version List */}
@@ -374,6 +392,15 @@ export const DocumentVersionHistory = ({
           </div>
         </div>
       )}
+
+      {/* Version Comparison Modal */}
+      <VersionComparisonModal
+        isOpen={showComparison}
+        onClose={() => setShowComparison(false)}
+        documentPath={documentPath}
+        baseId={baseId}
+        tableId={tableId}
+      />
     </div>
   );
 };

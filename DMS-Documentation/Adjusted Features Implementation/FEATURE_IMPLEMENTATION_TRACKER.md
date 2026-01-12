@@ -2,7 +2,7 @@
 
 **Last Updated:** January 2025  
 **Based On:** Accelerated Project Plan: AppFiles Clone MVP  
-**Overall Progress:** 95% Complete
+**Overall Progress:** 98% Complete
 
 ---
 
@@ -49,8 +49,8 @@
 | PDF Viewer | ✅ | `components/base-detail/documents/PdfEditor.tsx` | pdfjs-dist, zoom, page nav |
 | PDF Annotations | ✅ | `PdfEditor.tsx` | Text, highlights, signatures |
 | PDF Split (Extract Pages) | ✅ | `app/api/documents/split/route.ts`, `components/base-detail/documents/PdfSplitModal.tsx` | Visual page selector, extract to new file |
-| PDF Merge | ⚠️ | `components/base-detail/documents/MergePackModal.tsx` | Works, but no page reordering UI |
-| Page Re-ordering | ❌ | - | **MISSING**: Drag-to-reorder before merge |
+| PDF Merge | ✅ | `components/base-detail/documents/PdfMergeWithReorderModal.tsx` | Full page-level reordering with drag-drop |
+| Page Re-ordering | ✅ | `PdfMergeWithReorderModal.tsx` | Drag-to-reorder, page preview, position controls |
 | Photo Gallery Tab | ✅ | `components/base-detail/documents/PhotoGallery.tsx` | Tab-based view with masonry/grid layouts |
 | Masonry Grid for Photos | ✅ | `PhotoGallery.tsx` | Lightbox viewer, delete/download |
 
@@ -58,9 +58,9 @@
 
 | Feature | Status | Location | Notes |
 |---------|--------|----------|-------|
-| PDF Manipulation Logic | ⚠️ | `app/api/esignature/requests/[id]/pack/merge/route.ts` | Merge only, no split |
+| PDF Manipulation Logic | ✅ | `app/api/documents/merge/route.ts`, `app/api/documents/split/route.ts` | Full merge with reorder + split |
 | Template Schema | ✅ | `document_templates`, `template_fields` tables | Full field positioning |
-| Thumbnail Generation | ❌ | - | **MISSING**: Server-side thumbnails |
+| Thumbnail Generation | ✅ | `lib/services/thumbnail-service.ts`, `components/base-detail/documents/DocumentThumbnail.tsx`, `app/api/documents/thumbnail/route.ts` | Client-side PDF thumbnail generation with grid view |
 
 ---
 
@@ -96,8 +96,8 @@
 | Activity Feed UI | ✅ | `components/base-detail/documents/ActivityFeed.tsx` | Right sidebar with real-time updates |
 | Real-time Updates | ✅ | `document-activity-service.ts` | Supabase Realtime subscription |
 | Document Operation Logging | ✅ | `DocumentsView.tsx` | Upload/delete/rename/folder ops logged |
-| Audit Log Viewer | ❌ | - | **MISSING**: Searchable audit UI |
-| Activity Export | ❌ | - | **MISSING**: CSV/PDF export |
+| Audit Log Viewer | ✅ | `components/base-detail/documents/AuditLogViewer.tsx` | Full search, filter by action/date/user |
+| Activity Export | ✅ | `AuditLogViewer.tsx` | CSV and PDF export with print view |
 
 ### Version History
 
@@ -105,8 +105,8 @@
 |---------|--------|----------|-------|
 | Signature Version History | ✅ | `components/base-detail/documents/SignatureVersionHistory.tsx` | For e-sign docs |
 | Document Version History | ✅ | `lib/services/document-version-service.ts`, `components/base-detail/documents/DocumentVersionHistory.tsx` | Version tracking, restore, compare |
-| Version Comparison | ❌ | - | **MISSING**: Side-by-side diff |
-| Rollback Functionality | ❌ | - | **MISSING**: Restore previous version |
+| Version Comparison | ✅ | `components/base-detail/documents/VersionComparisonModal.tsx` | Side-by-side PDF diff with zoom/sync |
+| Rollback Functionality | ✅ | `lib/services/document-version-service.ts` | Restore previous version with confirmation |
 
 ### Sharing & Permissions
 
@@ -124,9 +124,9 @@
 | Feature | Status | Location | Notes |
 |---------|--------|----------|-------|
 | Record-Level Documents | ✅ | `lib/services/record-documents-service.ts`, `RecordDocuments.tsx` | Upload/attach per record, DB table `record_documents` |
-| Auto-Folder Creation | ❌ | - | **MISSING**: Based on transaction type |
-| Status Column Update | ❌ | - | **MISSING**: Push signed status to Database Software |
-| Transaction Metadata | ❌ | - | **MISSING**: Display in file header |
+| Auto-Folder Creation | ✅ | `lib/services/auto-folder-service.ts`, `TransactionFolderSetupModal.tsx` | Template-based folders for transaction types |
+| Status Column Update | ✅ | `lib/services/esign-service.ts`, `migrations/022_*`, `SignatureRequestModal.tsx` | Auto-updates record field on signature completion |
+| Transaction Metadata | ✅ | `TransactionMetadata.tsx`, `DocumentPreview.tsx` | Shows record data in document preview header |
 
 ---
 
@@ -147,17 +147,17 @@
 |---|---------|--------|-------------|----------|
 | 5 | Document Version History | ✅ | 4-6 days | COMPLETE |
 | 6 | Granular Sharing | ❌ | 5-7 days | - |
-| 7 | Audit Log UI | ❌ | 3-4 days | - |
-| 8 | Page Re-ordering | ❌ | 2-3 days | - |
+| 7 | Audit Log UI | ✅ | 3-4 days | COMPLETE |
+| 8 | Page Re-ordering | ✅ | 2-3 days | COMPLETE |
 
 ### LOW Priority (Nice to Have)
 
 | # | Feature | Status | Est. Effort | Assigned |
 |---|---------|--------|-------------|----------|
 | 9 | Email Upload | ❌ | 5-7 days | - |
-| 10 | Thumbnails | ❌ | 2-3 days | - |
+| 10 | Thumbnails | ✅ | 2-3 days | COMPLETE |
 | 11 | Bulk Operations | ❌ | 3-4 days | - |
-| 12 | Version Comparison | ❌ | 3-4 days | - |
+| 12 | Version Comparison | ✅ | 3-4 days | COMPLETE |
 
 ---
 

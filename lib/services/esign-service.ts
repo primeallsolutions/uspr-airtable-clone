@@ -52,6 +52,11 @@ export interface SignatureRequest {
   expires_at?: string;
   signers?: SignatureRequestSigner[];
   fields?: SignatureField[];
+  // Status column update fields
+  record_id?: string | null;
+  status_field_id?: string | null;
+  status_value_on_complete?: string;
+  status_value_on_decline?: string;
 }
 
 export interface SignatureVersion {
@@ -107,6 +112,11 @@ export const ESignatureService = {
         status: "draft",
         expires_at: request.expires_at,
         created_by: request.created_by,
+        // Status column update fields
+        record_id: request.record_id || null,
+        status_field_id: request.status_field_id || null,
+        status_value_on_complete: request.status_value_on_complete || "Signed",
+        status_value_on_decline: request.status_value_on_decline || "Declined",
       })
       .select()
       .single();
@@ -327,10 +337,14 @@ export const ESignatureService = {
     if (allSigned) {
       if (anyDeclined && !anySigned) {
         await this.updateRequestStatus(requestId, "declined", undefined, client);
+        // Update record status with decline value
+        await this.updateRecordStatus(request, "declined", client);
       } else {
         await this.updateRequestStatus(requestId, "completed", {
           completed_at: new Date().toISOString(),
         }, client);
+        // Update record status with completion value
+        await this.updateRecordStatus(request, "completed", client);
       }
       return true;
     } else if (request.status === "draft" || request.status === "sent") {
@@ -343,6 +357,89 @@ export const ESignatureService = {
       }
     }
     return false;
+  },
+
+  /**
+   * Update record status field when signature request is completed or declined
+   */
+  async updateRecordStatus(
+    request: SignatureRequest,
+    status: "completed" | "declined",
+    client?: SupabaseClient
+  ): Promise<void> {
+    const db = client || supabase;
+    
+    // Check if status update is configured
+    if (!request.record_id || !request.status_field_id) {
+      console.log("Status update not configured for this signature request");
+      return;
+    }
+
+    try {
+      // Get the field to check its type (single_select requires option key mapping)
+      const { data: field, error: fieldError } = await db
+        .from("fields")
+        .select("id, type, options")
+        .eq("id", request.status_field_id)
+        .single();
+
+      if (fieldError || !field) {
+        console.error("Failed to get status field:", fieldError);
+        return;
+      }
+
+      // Determine the status value to set
+      const statusValue = status === "completed"
+        ? request.status_value_on_complete || "Signed"
+        : request.status_value_on_decline || "Declined";
+
+      // For single_select fields, we need to find the option key that matches the status value
+      let valueToSet: string = statusValue;
+      if (field.type === "single_select" && field.options) {
+        const options = field.options as Record<string, { name?: string; label?: string }>;
+        // Find option key by name/label
+        const matchingEntry = Object.entries(options).find(
+          ([, opt]) => (opt?.name || opt?.label)?.toLowerCase() === statusValue.toLowerCase()
+        );
+        if (matchingEntry) {
+          valueToSet = matchingEntry[0]; // Use the option key (e.g., "option_1")
+        } else {
+          console.warn(`No matching option found for status "${statusValue}" in field ${field.id}`);
+          // Fall back to creating a new option or using the raw value
+        }
+      }
+
+      // Get current record values
+      const { data: record, error: recordError } = await db
+        .from("records")
+        .select("values")
+        .eq("id", request.record_id)
+        .single();
+
+      if (recordError || !record) {
+        console.error("Failed to get record for status update:", recordError);
+        return;
+      }
+
+      // Update the field value
+      const updatedValues = {
+        ...record.values,
+        [request.status_field_id]: valueToSet,
+      };
+
+      const { error: updateError } = await db
+        .from("records")
+        .update({ values: updatedValues })
+        .eq("id", request.record_id);
+
+      if (updateError) {
+        console.error("Failed to update record status:", updateError);
+      } else {
+        console.log(`✅ Updated record ${request.record_id} status field to "${statusValue}"`);
+      }
+    } catch (error) {
+      console.error("Error updating record status:", error);
+    }
   },
 
   /**

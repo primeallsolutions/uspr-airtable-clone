@@ -1,4 +1,4 @@
-import { FolderPlus, FileUp, Hash, Loader2, FileText, Sparkles, PenTool, CheckCircle2 } from "lucide-react";
+import { FolderPlus, FileUp, Hash, Loader2, FileText, Sparkles, PenTool, CheckCircle2, Layers } from "lucide-react";
 
 type DocumentsHeaderProps = {
   prefixLabel: string;
@@ -10,6 +10,7 @@ type DocumentsHeaderProps = {
   onGenerateDocument?: () => void;
   onRequestSignature?: () => void;
   onViewSignatures?: () => void;
+  onMergeDocuments?: () => void;
 };
 
 export const DocumentsHeader = ({
@@ -22,6 +23,7 @@ export const DocumentsHeader = ({
   onGenerateDocument,
   onRequestSignature,
   onViewSignatures,
+  onMergeDocuments,
 }: DocumentsHeaderProps) => {
   return (
     <div className="flex flex-wrap items-center gap-2 border-b border-gray-200 px-4 py-3 bg-gray-50">
@@ -68,6 +70,16 @@ export const DocumentsHeader = ({
           >
             <CheckCircle2 className="w-4 h-4" />
             View Signatures
+          </button>
+        )}
+        {onMergeDocuments && (
+          <button
+            onClick={onMergeDocuments}
+            className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:border-indigo-400 hover:text-indigo-700 transition-colors"
+            title="Merge PDFs with page reordering"
+          >
+            <Layers className="w-4 h-4" />
+            Merge PDFs
           </button>
         )}
         <button
