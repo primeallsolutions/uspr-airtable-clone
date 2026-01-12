@@ -94,13 +94,25 @@ export class DocumentActivityService {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       
+      // Verify user exists in profiles table
+      let userId: string | null = null;
+      if (user?.id) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('id', user.id)
+          .single();
+        
+        userId = profile?.id || null;
+      }
+      
       const { error } = await supabase
         .from('document_activity_log')
         .insert({
           base_id: params.baseId,
           table_id: params.tableId || null,
           record_id: params.recordId || null,
-          user_id: user?.id || null,
+          user_id: userId,
           action: params.action,
           document_path: params.documentPath || null,
           folder_path: params.folderPath || null,

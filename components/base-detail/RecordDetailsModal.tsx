@@ -50,10 +50,10 @@ export const RecordDetailsModal = ({
     return (record.values[nameField.id] as string) || "";
   }, [record, nameField]);
 
-  // Sync local name value with record value
+  // Sync local name value with record value whenever record changes
   useEffect(() => {
     setLocalNameValue(nameValue);
-  }, [nameValue]);
+  }, [nameValue, record?.id]); // Add record.id to ensure sync on record change
 
   // Fields to display (exclude Name field if it exists, as it's shown in title)
   // Sort by order_index to match table column order
@@ -205,22 +205,28 @@ export const RecordDetailsModal = ({
     }
   };
 
-  // Reset editing state when modal closes
+  // Reset editing state when modal closes or record changes
   useEffect(() => {
     if (!isOpen) {
       setEditingFieldId(null);
       setEditValue("");
       setLocalNameValue("");
       setActiveTab("fields");
+    } else if (record) {
+      // If modal is open and record changes, clear editing state
+      setEditingFieldId(null);
+      setEditValue("");
     }
-  }, [isOpen]);
+  }, [isOpen, record?.id, record?.values]); // React to record changes
 
-  // Load document count
+  // Load document count whenever record changes
   useEffect(() => {
     if (record?.id) {
       RecordDocumentsService.getDocumentCount(record.id).then(setDocumentCount).catch(() => {});
+    } else {
+      setDocumentCount(0);
     }
-  }, [record?.id]);
+  }, [record?.id, record?.values]); // Reload count if record updates
 
   if (!isOpen || !record) return null;
 
