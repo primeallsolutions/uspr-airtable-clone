@@ -123,83 +123,49 @@ export default function RecordDocumentsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* Header */}
       <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              {/* Back button */}
-              <button
-                onClick={() => router.push(`/bases/${baseId}`)}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                title="Back to base"
-              >
-                <ArrowLeft size={20} className="text-gray-600" />
-              </button>
+        <div className="px-6 py-4">
+          <div className="flex items-center gap-4">
+            {/* Back button */}
+            <button
+              onClick={() => router.push(`/bases/${baseId}`)}
+              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              title="Back to base"
+            >
+              <ArrowLeft size={20} className="text-gray-600" />
+            </button>
 
-              {/* Title */}
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">
-                  {recordName}
-                </h1>
-                <div className="flex items-center gap-2 text-sm text-gray-500 mt-1">
-                  <span>{baseName}</span>
-                  {table && (
-                    <>
-                      <span>•</span>
-                      <span>{table.name}</span>
-                    </>
-                  )}
-                  <span>•</span>
-                  <span>Documents & Files</span>
-                </div>
+            {/* Title */}
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">
+                {recordName}
+              </h1>
+              <div className="flex items-center gap-2 text-sm text-gray-500 mt-1">
+                <span>{baseName}</span>
+                {table && (
+                  <>
+                    <span>•</span>
+                    <span>{table.name}</span>
+                  </>
+                )}
+                <span>•</span>
+                <span>Documents & Files</span>
               </div>
             </div>
-
-            {/* Actions could go here */}
           </div>
         </div>
       </div>
 
-      {/* Content */}
-      <div className="max-w-7xl mx-auto px-6 py-6">
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-          <div className="p-6">
-            <div className="mb-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-2">
-                Document Management
-              </h2>
-              <p className="text-sm text-gray-600">
-                Manage documents, generate from templates, request e-signatures, merge PDFs, and more.
-              </p>
-            </div>
-
-            {/* Use DocumentsView with table context */}
-            <DocumentsView
-              baseId={baseId}
-              baseName={baseName}
-              selectedTable={table}
-            />
-          </div>
-        </div>
-
-        {/* Info Card */}
-        <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <div className="flex items-start gap-3">
-            <FileText className="w-5 h-5 text-blue-600 mt-0.5" />
-            <div>
-              <h3 className="text-sm font-semibold text-blue-900 mb-1">
-                Advanced Document Operations
-              </h3>
-              <p className="text-sm text-blue-700">
-                This page provides access to all document management features including:
-                template generation, e-signature requests, PDF merging, document editing,
-                version history, and more. All documents are linked to this specific record.
-              </p>
-            </div>
-          </div>
-        </div>
+      {/* Content - Full Width */}
+      <div className="flex-1 flex flex-col">
+        {/* Use DocumentsView with table context - takes full height */}
+        <DocumentsView
+          baseId={baseId}
+          baseName={baseName}
+          selectedTable={table}
+        />
       </div>
     </div>
   );
