@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { X, Save, Plus, Trash2, Type, Hash, Calendar, CheckSquare, PenTool, Loader2, Grid } from "lucide-react";
+import { X, Save, Plus, Trash2, Type, Hash, Calendar, CheckSquare, PenTool, Loader2, Grid, FileText } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import type { DocumentTemplate, TemplateField } from "@/lib/services/template-service";
 
@@ -117,27 +117,37 @@ export const TemplateFieldEditor = ({
   const updateFieldBounds = useCallback(async () => {
     if (!pdfDoc || !canvasRef.current) return;
 
-    const page = await pdfDoc.getPage(currentPage);
-    const viewport = page.getViewport({ scale: zoom });
-    const bounds = new Map<string, { x: number; y: number; width: number; height: number }>();
+    try {
+      // Validate page number
+      if (currentPage < 1 || currentPage > pdfDoc.numPages) {
+        console.error(`Invalid page number: ${currentPage}. PDF has ${pdfDoc.numPages} pages.`);
+        return;
+      }
 
-    const pageFields = fields.filter((f) => f.page_number === currentPage);
-    pageFields.forEach((field) => {
-      const scale = viewport.scale;
-      const x = field.x_position * scale;
-      const y = viewport.height - field.y_position * scale; // PDF Y is from bottom
-      const width = (field.width || 200) * scale;
-      const height = (field.height || 20) * scale;
+      const page = await pdfDoc.getPage(currentPage);
+      const viewport = page.getViewport({ scale: zoom });
+      const bounds = new Map<string, { x: number; y: number; width: number; height: number }>();
 
-      bounds.set(field.id || field.field_key, {
-        x,
-        y: y - height,
-        width,
-        height,
+      const pageFields = fields.filter((f) => f.page_number === currentPage);
+      pageFields.forEach((field) => {
+        const scale = viewport.scale;
+        const x = field.x_position * scale;
+        const y = viewport.height - field.y_position * scale; // PDF Y is from bottom
+        const width = (field.width || 200) * scale;
+        const height = (field.height || 20) * scale;
+
+        bounds.set(field.id || field.field_key, {
+          x,
+          y: y - height,
+          width,
+          height,
+        });
       });
-    });
 
-    setFieldBounds(bounds);
+      setFieldBounds(bounds);
+    } catch (err) {
+      console.error("Failed to update field bounds:", err);
+    }
   }, [pdfDoc, currentPage, zoom, fields]);
 
   // Cache viewport data for drag operations
@@ -162,12 +172,14 @@ export const TemplateFieldEditor = ({
       context.strokeStyle = "#e5e7eb";
       context.lineWidth = 0.5;
       context.setLineDash([2, 2]);
+      // Draw vertical grid lines
       for (let x = 0; x <= viewport.width; x += gridSize * viewport.scale) {
         context.beginPath();
         context.moveTo(x, 0);
         context.lineTo(x, viewport.height);
         context.stroke();
-    }
+      }
+      // Draw horizontal grid lines
       for (let y = 0; y <= viewport.height; y += gridSize * viewport.scale) {
         context.beginPath();
         context.moveTo(0, y);
@@ -207,14 +219,24 @@ export const TemplateFieldEditor = ({
   // Re-draw field markers when drag state changes (to hide/show dragging field on canvas)
   useEffect(() => {
     if (pdfDoc && canvasRef.current && !loading) {
+      // Validate page number before fetching
+      if (currentPage < 1 || currentPage > pdfDoc.numPages) {
+        console.error(`Invalid page number for marker redraw: ${currentPage}`);
+        return;
+      }
+
       pdfDoc.getPage(currentPage).then((page: any) => {
         const viewport = page.getViewport({ scale: zoom });
         const canvas = canvasRef.current;
         const context = canvas?.getContext("2d");
-        if (context) {
+        if (context && canvas) {
+          // Clear and re-draw canvas to prevent ghost frames
+          context.clearRect(0, 0, canvas.width, canvas.height);
           // Re-draw markers (excluding dragging/resizing field to prevent ghost frame)
           drawFieldMarkers(context, viewport);
         }
+      }).catch((err: any) => {
+        console.error("Failed to redraw field markers:", err);
       });
     }
   }, [draggingField, resizingField, pdfDoc, currentPage, zoom, loading, drawFieldMarkers]);
@@ -234,6 +256,12 @@ export const TemplateFieldEditor = ({
     }
 
     try {
+      // Validate page number is within bounds
+      if (currentPage < 1 || currentPage > pdfDoc.numPages) {
+        console.error(`Invalid page number: ${currentPage}. PDF has ${pdfDoc.numPages} pages.`);
+        return;
+      }
+
       const page = await pdfDoc.getPage(currentPage);
       const viewport = page.getViewport({ scale: zoom });
       const canvas = canvasRef.current;
@@ -263,8 +291,8 @@ export const TemplateFieldEditor = ({
     } catch (err: any) {
       // Ignore cancellation errors
       if (err?.name !== "RenderingCancelledException") {
-      console.error("Failed to render PDF page", err);
-    }
+        console.error("Failed to render PDF page", err);
+      }
       renderTaskRef.current = null;
     }
   }, [pdfDoc, currentPage, zoom, drawFieldMarkers]);
@@ -482,9 +510,10 @@ export const TemplateFieldEditor = ({
     }
   };
 
-  // Drag handlers
+  // Drag handlers - optimized for smooth performance
   const handleFieldMouseDown = useCallback((e: React.MouseEvent, field: TemplateField) => {
     e.stopPropagation();
+    e.preventDefault(); // Prevent text selection during drag
     if (!canvasRef.current) return;
     
     const canvas = canvasRef.current;
@@ -495,10 +524,15 @@ export const TemplateFieldEditor = ({
     const fieldKey = field.id || field.field_key;
     const bounds = fieldBounds.get(fieldKey);
     
+    if (!bounds) {
+      console.warn(`No bounds found for field: ${fieldKey}`);
+      return;
+    }
+    
     setDraggingField(fieldKey);
     setDragStart({ x: startX, y: startY });
     setDragOffset({ x: 0, y: 0 }); // Reset offset
-    setInitialDragBounds(bounds ? { x: bounds.x, y: bounds.y } : null); // Store initial position
+    setInitialDragBounds({ x: bounds.x, y: bounds.y }); // Store initial position
     setSelectedField(field);
     setEditingField(field);
   }, [fieldBounds]);
@@ -517,7 +551,7 @@ export const TemplateFieldEditor = ({
         cancelAnimationFrame(rafRef.current);
       }
 
-      // Use requestAnimationFrame for smooth updates
+      // Use requestAnimationFrame for smooth 60fps updates
       rafRef.current = requestAnimationFrame(() => {
         let deltaX = currentX - dragStart.x;
         let deltaY = currentY - dragStart.y;
@@ -565,21 +599,27 @@ export const TemplateFieldEditor = ({
         newWidth = Math.max(20, (field.width || 200) + pdfDeltaX);
       }
       if (handle.includes("w")) { // West (left)
-        newWidth = Math.max(20, (field.width || 200) - pdfDeltaX);
-        newX = field.x_position + pdfDeltaX;
+        const widthDelta = pdfDeltaX;
+        newWidth = Math.max(20, (field.width || 200) - widthDelta);
+        if (newWidth >= 20) { // Only move if width is valid
+          newX = field.x_position + widthDelta;
+        }
       }
       if (handle.includes("s")) { // South (bottom)
         newHeight = Math.max(10, (field.height || 20) - pdfDeltaY);
       }
       if (handle.includes("n")) { // North (top)
-        newHeight = Math.max(10, (field.height || 20) + pdfDeltaY);
-        newY = field.y_position - pdfDeltaY;
+        const heightDelta = pdfDeltaY;
+        newHeight = Math.max(10, (field.height || 20) + heightDelta);
+        if (newHeight >= 10) { // Only move if height is valid
+          newY = field.y_position - heightDelta;
+        }
       }
 
       // Snap to grid
       if (snapToGrid) {
-        newWidth = Math.round(newWidth / gridSize) * gridSize;
-        newHeight = Math.round(newHeight / gridSize) * gridSize;
+        newWidth = Math.max(20, Math.round(newWidth / gridSize) * gridSize);
+        newHeight = Math.max(10, Math.round(newHeight / gridSize) * gridSize);
       }
 
       const updatedField: TemplateField = {
@@ -598,27 +638,16 @@ export const TemplateFieldEditor = ({
         
         // Update bounds immediately for visual feedback
         const newBounds = new Map(fieldBounds);
-        const pageFields = fields.filter((f) => f.page_number === currentPage);
-        pageFields.forEach((f) => {
-          if ((f.id || f.field_key) === resizingField.id) {
-            const scale = viewport.scale;
-            const x = updatedField.x_position * scale;
-            const y = viewport.height - updatedField.y_position * scale;
-            const width = (updatedField.width || 200) * scale;
-            const height = (updatedField.height || 20) * scale;
-            newBounds.set(resizingField.id, {
-              x,
-              y: y - height,
-              width,
-              height,
-            });
-          } else {
-            // Keep existing bounds for other fields
-            const existing = fieldBounds.get(f.id || f.field_key);
-            if (existing) {
-              newBounds.set(f.id || f.field_key, existing);
-            }
-          }
+        const scale = viewport.scale;
+        const x = updatedField.x_position * scale;
+        const y = viewport.height - updatedField.y_position * scale;
+        const width = (updatedField.width || 200) * scale;
+        const height = (updatedField.height || 20) * scale;
+        newBounds.set(resizingField.id, {
+          x,
+          y: y - height,
+          width,
+          height,
         });
         setFieldBounds(newBounds);
       });
@@ -649,10 +678,20 @@ export const TemplateFieldEditor = ({
           y_position: field.y_position + pdfDeltaY,
         };
 
+        // Update fields immediately
         setFields(fields.map(f => (f.id || f.field_key) === draggingField ? updatedField : f));
         setEditingField(updatedField);
 
-        // Auto-save field changes
+        // Reset drag state BEFORE updating bounds to prevent twitch
+        setDraggingField(null);
+        setDragStart(null);
+        setDragOffset(null);
+        setInitialDragBounds(null);
+
+        // Update bounds with new position (this will remove the transform)
+        await updateFieldBounds();
+
+        // Auto-save field changes (non-blocking)
         if (template) {
           try {
             const { data: { session } } = await supabase.auth.getSession();
@@ -671,13 +710,25 @@ export const TemplateFieldEditor = ({
           }
         }
 
-        // Re-render PDF and update bounds
+        // Re-render PDF to show updated markers
         await renderPage();
-        await updateFieldBounds();
+      } else {
+        // Field not found, just reset drag state
+        setDraggingField(null);
+        setDragStart(null);
+        setDragOffset(null);
+        setInitialDragBounds(null);
       }
     } else if (resizingField && dragStart) {
       // Handle resize completion
       const fieldToSave = fields.find(f => (f.id || f.field_key) === resizingField.id);
+      
+      // Reset resize state immediately
+      setResizingField(null);
+      setDragStart(null);
+
+      // Update bounds
+      await updateFieldBounds();
       
       if (fieldToSave && template) {
         try {
@@ -697,14 +748,14 @@ export const TemplateFieldEditor = ({
         }
       }
       await renderPage();
-      await updateFieldBounds();
+    } else {
+      // No active drag/resize, just reset state
+      setDraggingField(null);
+      setResizingField(null);
+      setDragStart(null);
+      setDragOffset(null);
+      setInitialDragBounds(null);
     }
-    
-    setDraggingField(null);
-    setResizingField(null);
-    setDragStart(null);
-    setDragOffset(null);
-    setInitialDragBounds(null);
   }, [draggingField, resizingField, dragStart, dragOffset, fields, template, pdfDoc, currentPage, zoom, updateFieldBounds, renderPage]);
 
   useEffect(() => {
@@ -725,6 +776,7 @@ export const TemplateFieldEditor = ({
 
   const handleResizeStart = useCallback((e: React.MouseEvent, field: TemplateField, handle: string) => {
     e.stopPropagation();
+    e.preventDefault(); // Prevent text selection during resize
     if (!canvasRef.current) return;
     
     const canvas = canvasRef.current;
@@ -732,7 +784,9 @@ export const TemplateFieldEditor = ({
     const startX = e.clientX - rect.left;
     const startY = e.clientY - rect.top;
     
-    setResizingField({ id: field.id || field.field_key, handle });
+    const fieldKey = field.id || field.field_key;
+    
+    setResizingField({ id: fieldKey, handle });
     setDragStart({ x: startX, y: startY });
     setSelectedField(field);
     setEditingField(field);
@@ -834,15 +888,15 @@ export const TemplateFieldEditor = ({
                   </button>
                 </div>
 
-                {/* Canvas Container */}
-                <div className="relative inline-block">
-                <canvas
-                  ref={canvasRef}
-                  onClick={handleCanvasClick}
-                  className={`border border-gray-300 shadow-lg ${isPlacingField ? "cursor-crosshair" : ""}`}
-                  style={{ maxWidth: "100%" }}
-                />
-                  {/* Field Overlays */}
+                {/* Canvas Container with proper positioning */}
+                <div className="relative inline-block" style={{ lineHeight: 0 }}>
+                  <canvas
+                    ref={canvasRef}
+                    onClick={handleCanvasClick}
+                    className={`border border-gray-300 shadow-lg ${isPlacingField ? "cursor-crosshair" : "cursor-default"}`}
+                    style={{ maxWidth: "100%", display: "block" }}
+                  />
+                  {/* Field Overlays - Positioned absolutely over canvas */}
                   {canvasRef.current && fieldBounds.size > 0 && (
                     <div
                       ref={overlayRef}
@@ -869,13 +923,13 @@ export const TemplateFieldEditor = ({
                           return (
                             <div
                               key={field.id || field.field_key}
-                              className={`absolute border-2 pointer-events-auto ${
+                              className={`absolute pointer-events-auto transition-colors ${
                                 isSelected
-                                  ? "border-blue-500 bg-blue-500/10"
+                                  ? "border-2 border-blue-500 bg-blue-500/10 shadow-lg"
                                   : isDragging || isResizing
-                                  ? "border-green-500 bg-green-500/10"
-                                  : "border-green-500/50 bg-green-500/5 hover:border-green-500 hover:bg-green-500/10"
-                              } cursor-move`}
+                                  ? "border-2 border-green-500 bg-green-500/10 shadow-lg"
+                                  : "border-2 border-green-500/50 bg-green-500/5 hover:border-green-500 hover:bg-green-500/10 hover:shadow-md"
+                              } ${isDragging ? "cursor-grabbing" : "cursor-move"} rounded-sm`}
                               style={{
                                 left: `${bounds.x}px`,
                                 top: `${bounds.y}px`,
@@ -883,50 +937,56 @@ export const TemplateFieldEditor = ({
                                 height: `${bounds.height}px`,
                                 transform: `translate(${dragX}px, ${dragY}px)`,
                                 willChange: isDragging || isResizing ? "transform" : "auto",
-                                transition: isDragging || isResizing ? "none" : "all 0.2s",
+                                transition: isDragging || isResizing ? "none" : "border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease",
+                                zIndex: isSelected || isDragging || isResizing ? 10 : 1,
                               }}
                               onMouseDown={(e) => handleFieldMouseDown(e, field)}
+                              title={`${field.field_name} (${field.field_type})`}
                             >
-                              {/* Field Label */}
-                              <div className="absolute -top-5 left-0 text-xs font-medium text-gray-700 bg-white px-1 rounded">
+                              {/* Field Label with better visibility */}
+                              <div className={`absolute -top-6 left-0 text-xs font-semibold px-2 py-0.5 rounded shadow-sm whitespace-nowrap ${
+                                isSelected
+                                  ? "bg-blue-500 text-white"
+                                  : "bg-white text-gray-700 border border-gray-300"
+                              }`}>
                                 {field.field_name}
                               </div>
 
-                              {/* Resize Handles */}
-                              {isSelected && (
+                              {/* Resize Handles - Only show when selected, improved styling */}
+                              {isSelected && !isDragging && (
                                 <>
-                                  {/* Corner handles */}
+                                  {/* Corner handles - larger and more visible */}
                                   <div
-                                    className="absolute -top-1 -left-1 w-3 h-3 bg-blue-500 border-2 border-white rounded-full cursor-nwse-resize z-10"
+                                    className="absolute -top-1.5 -left-1.5 w-4 h-4 bg-blue-500 border-2 border-white rounded-full cursor-nwse-resize z-20 shadow-md hover:scale-110 transition-transform"
                                     onMouseDown={(e) => handleResizeStart(e, field, "nw")}
                                   />
                                   <div
-                                    className="absolute -top-1 -right-1 w-3 h-3 bg-blue-500 border-2 border-white rounded-full cursor-nesw-resize z-10"
+                                    className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-blue-500 border-2 border-white rounded-full cursor-nesw-resize z-20 shadow-md hover:scale-110 transition-transform"
                                     onMouseDown={(e) => handleResizeStart(e, field, "ne")}
                                   />
                                   <div
-                                    className="absolute -bottom-1 -left-1 w-3 h-3 bg-blue-500 border-2 border-white rounded-full cursor-nesw-resize z-10"
+                                    className="absolute -bottom-1.5 -left-1.5 w-4 h-4 bg-blue-500 border-2 border-white rounded-full cursor-nesw-resize z-20 shadow-md hover:scale-110 transition-transform"
                                     onMouseDown={(e) => handleResizeStart(e, field, "sw")}
                                   />
                                   <div
-                                    className="absolute -bottom-1 -right-1 w-3 h-3 bg-blue-500 border-2 border-white rounded-full cursor-nwse-resize z-10"
+                                    className="absolute -bottom-1.5 -right-1.5 w-4 h-4 bg-blue-500 border-2 border-white rounded-full cursor-nwse-resize z-20 shadow-md hover:scale-110 transition-transform"
                                     onMouseDown={(e) => handleResizeStart(e, field, "se")}
                                   />
                                   {/* Edge handles */}
                                   <div
-                                    className="absolute -top-1 left-1/2 -translate-x-1/2 w-3 h-3 bg-blue-500 border-2 border-white rounded-full cursor-ns-resize z-10"
+                                    className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-4 h-4 bg-blue-500 border-2 border-white rounded-full cursor-ns-resize z-20 shadow-md hover:scale-110 transition-transform"
                                     onMouseDown={(e) => handleResizeStart(e, field, "n")}
                                   />
                                   <div
-                                    className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-3 h-3 bg-blue-500 border-2 border-white rounded-full cursor-ns-resize z-10"
+                                    className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-4 h-4 bg-blue-500 border-2 border-white rounded-full cursor-ns-resize z-20 shadow-md hover:scale-110 transition-transform"
                                     onMouseDown={(e) => handleResizeStart(e, field, "s")}
                                   />
                                   <div
-                                    className="absolute -left-1 top-1/2 -translate-y-1/2 w-3 h-3 bg-blue-500 border-2 border-white rounded-full cursor-ew-resize z-10"
+                                    className="absolute -left-1.5 top-1/2 -translate-y-1/2 w-4 h-4 bg-blue-500 border-2 border-white rounded-full cursor-ew-resize z-20 shadow-md hover:scale-110 transition-transform"
                                     onMouseDown={(e) => handleResizeStart(e, field, "w")}
                                   />
                                   <div
-                                    className="absolute -right-1 top-1/2 -translate-y-1/2 w-3 h-3 bg-blue-500 border-2 border-white rounded-full cursor-ew-resize z-10"
+                                    className="absolute -right-1.5 top-1/2 -translate-y-1/2 w-4 h-4 bg-blue-500 border-2 border-white rounded-full cursor-ew-resize z-20 shadow-md hover:scale-110 transition-transform"
                                     onMouseDown={(e) => handleResizeStart(e, field, "e")}
                                   />
                                 </>
@@ -941,64 +1001,91 @@ export const TemplateFieldEditor = ({
             )}
           </div>
 
-          {/* Fields Panel */}
+          {/* Fields Panel - Improved UI */}
           <div className="w-80 border-l border-gray-200 bg-white overflow-y-auto flex flex-col">
-            <div className="p-4 border-b border-gray-200">
-              <h3 className="font-semibold text-gray-900 mb-2">Fields ({fields.length})</h3>
+            <div className="p-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-blue-50/30">
+              <h3 className="font-semibold text-gray-900 mb-1 flex items-center justify-between">
+                <span>Fields on Page {currentPage}</span>
+                <span className="text-sm font-normal text-gray-500">({fields.filter(f => f.page_number === currentPage).length})</span>
+              </h3>
               {isPlacingField && (
-                <p className="text-xs text-green-600 mb-2">
+                <p className="text-xs text-green-600 mb-0 flex items-center gap-1 mt-2">
+                  <span className="inline-block w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
                   Click on the PDF to place a new field
+                </p>
+              )}
+              {snapToGrid && (
+                <p className="text-xs text-blue-600 mt-2 flex items-center gap-1">
+                  <Grid className="w-3 h-3" />
+                  Snap to grid: {gridSize}px
                 </p>
               )}
             </div>
 
-            <div className="flex-1 p-4 space-y-2">
-              {fields
-                .filter((f) => f.page_number === currentPage)
-                .map((field) => (
-                  <div
-                    key={field.id}
-                    onClick={() => {
-                      setSelectedField(field);
-                      setEditingField(field);
-                    }}
-                    className={`p-3 border rounded-lg cursor-pointer transition-colors ${
-                      selectedField?.id === field.id
-                        ? "border-blue-500 bg-blue-50"
-                        : "border-gray-200 hover:border-gray-300"
-                    }`}
-                  >
+            <div className="flex-1 p-4 space-y-2 overflow-y-auto">
+              {fields.filter((f) => f.page_number === currentPage).length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-8 text-center">
+                  <FileText className="w-12 h-12 text-gray-300 mb-2" />
+                  <p className="text-sm text-gray-500">No fields on this page</p>
+                  <p className="text-xs text-gray-400 mt-1">Click "Add Field" to start</p>
+                </div>
+              ) : (
+                fields
+                  .filter((f) => f.page_number === currentPage)
+                  .map((field) => (
+                    <div
+                      key={field.id}
+                      onClick={() => {
+                        setSelectedField(field);
+                        setEditingField(field);
+                      }}
+                      className={`p-3 border rounded-lg cursor-pointer transition-all ${
+                        selectedField?.id === field.id
+                          ? "border-blue-500 bg-blue-50 shadow-md"
+                          : "border-gray-200 hover:border-blue-300 hover:bg-gray-50 hover:shadow-sm"
+                      }`}
+                    >
                     <div className="flex items-start justify-between mb-1">
                       <div className="flex-1 min-w-0">
-                        <div className="font-medium text-sm text-gray-900 truncate">
+                        <div className="font-medium text-sm text-gray-900 truncate flex items-center gap-1">
+                          {field.field_type === "text" && <Type className="w-3.5 h-3.5 text-blue-500" />}
+                          {field.field_type === "number" && <Hash className="w-3.5 h-3.5 text-green-500" />}
+                          {field.field_type === "date" && <Calendar className="w-3.5 h-3.5 text-purple-500" />}
+                          {field.field_type === "checkbox" && <CheckSquare className="w-3.5 h-3.5 text-orange-500" />}
+                          {field.field_type === "signature" && <PenTool className="w-3.5 h-3.5 text-red-500" />}
                           {field.field_name}
                         </div>
-                        <div className="text-xs text-gray-500">{field.field_key}</div>
+                        <div className="text-xs text-gray-500 font-mono truncate">{field.field_key}</div>
                       </div>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           if (field.id) handleDeleteField(field.id);
                         }}
-                        className="p-1 text-red-600 hover:bg-red-50 rounded"
+                        className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors"
+                        title="Delete field"
                       >
-                        <Trash2 className="w-3 h-3" />
+                        <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
-                    <div className="flex items-center gap-2 mt-2">
-                      {field.field_type === "text" && <Type className="w-3 h-3 text-gray-400" />}
-                      {field.field_type === "number" && <Hash className="w-3 h-3 text-gray-400" />}
-                      {field.field_type === "date" && <Calendar className="w-3 h-3 text-gray-400" />}
-                      {field.field_type === "checkbox" && (
-                        <CheckSquare className="w-3 h-3 text-gray-400" />
-                      )}
-                      {field.field_type === "signature" && (
-                        <PenTool className="w-3 h-3 text-gray-400" />
-                      )}
-                      <span className="text-xs text-gray-500 capitalize">{field.field_type}</span>
+                    <div className="flex items-center gap-3 mt-2 text-xs text-gray-500">
+                      <span className="flex items-center gap-1">
+                        <span className="font-medium">Pos:</span> ({Math.round(field.x_position)}, {Math.round(field.y_position)})
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <span className="font-medium">Size:</span> {Math.round(field.width || 200)}×{Math.round(field.height || 20)}
+                      </span>
                     </div>
+                    {field.is_required && (
+                      <div className="mt-1">
+                        <span className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 bg-red-100 text-red-700 rounded">
+                          <span>Required</span>
+                        </span>
+                      </div>
+                    )}
                   </div>
-                ))}
+                ))
+              )}
             </div>
 
             {/* Field Editor */}
