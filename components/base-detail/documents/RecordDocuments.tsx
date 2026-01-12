@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useRouter } from "next/navigation";
 import {
   Paperclip,
   Upload,
@@ -13,6 +14,7 @@ import {
   ExternalLink,
   X,
   FolderOpen,
+  FileEdit,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -61,6 +63,7 @@ export const RecordDocuments = ({
   tableId,
   recordName,
 }: RecordDocumentsProps) => {
+  const router = useRouter();
   const [documents, setDocuments] = useState<RecordDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -69,6 +72,11 @@ export const RecordDocuments = ({
   const [previewDoc, setPreviewDoc] = useState<RecordDocument | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
+
+  // Navigate to advanced documents page
+  const handleAdvancedDocuments = () => {
+    router.push(`/bases/${baseId}/records/${recordId}/documents${tableId ? `?tableId=${tableId}` : ""}`);
+  };
 
   // Load documents
   const loadDocuments = useCallback(async () => {
@@ -194,22 +202,32 @@ export const RecordDocuments = ({
           <h3 className="font-semibold text-gray-900">Attached Documents</h3>
           <span className="text-sm text-gray-500">({documents.length})</span>
         </div>
-        <label className="cursor-pointer px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1.5 disabled:opacity-50">
-          {uploading ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
-            <Upload className="w-4 h-4" />
-          )}
-          Attach Files
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            className="hidden"
-            onChange={(e) => handleUpload(e.target.files)}
-            disabled={uploading}
-          />
-        </label>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleAdvancedDocuments}
+            className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-1.5"
+            title="Advanced operations: templates, e-signatures, merge, etc."
+          >
+            <FileEdit className="w-4 h-4" />
+            Advanced
+          </button>
+          <label className="cursor-pointer px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1.5 disabled:opacity-50">
+            {uploading ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Upload className="w-4 h-4" />
+            )}
+            Attach Files
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              className="hidden"
+              onChange={(e) => handleUpload(e.target.files)}
+              disabled={uploading}
+            />
+          </label>
+        </div>
       </div>
 
       {/* Content */}
