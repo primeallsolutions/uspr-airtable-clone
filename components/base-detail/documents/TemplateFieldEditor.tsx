@@ -1027,7 +1027,7 @@ export const TemplateFieldEditor = ({
                 <div className="flex flex-col items-center justify-center py-8 text-center">
                   <FileText className="w-12 h-12 text-gray-300 mb-2" />
                   <p className="text-sm text-gray-500">No fields on this page</p>
-                  <p className="text-xs text-gray-400 mt-1">Click "Add Field" to start</p>
+                  <p className="text-xs text-gray-400 mt-1">Click &quot;Add Field&quot; to start</p>
                 </div>
               ) : (
                 fields
