@@ -132,23 +132,27 @@ export const PdfMergeWithReorderModal = ({
 
       setLoadedDocuments((prev) => [...prev, loadedDoc]);
 
-      // Add all pages from this document
+      // Add all pages from this document (validate totalPages)
       const newPages: PageItem[] = [];
-      for (let i = 1; i <= totalPages; i++) {
-        newPages.push({
-          id: `${doc.path}-${i}-${Date.now()}`,
-          documentPath: doc.path,
-          documentName: loadedDoc.name,
-          pageNumber: i,
-          totalPages,
-        });
+      if (totalPages > 0) {
+        for (let i = 1; i <= totalPages; i++) {
+          newPages.push({
+            id: `${doc.path}-${i}-${Date.now()}`,
+            documentPath: doc.path,
+            documentName: loadedDoc.name,
+            pageNumber: i,
+            totalPages,
+          });
+        }
       }
       setSelectedPages((prev) => [...prev, ...newPages]);
 
       toast.success(`Added ${totalPages} pages from ${loadedDoc.name}`);
     } catch (error) {
       console.error("Failed to load document:", error);
-      toast.error("Failed to load document");
+      toast.error("Failed to load document", {
+        description: error instanceof Error ? error.message : "Unknown error",
+      });
     } finally {
       setLoadingDocument(null);
     }
@@ -236,6 +240,12 @@ export const PdfMergeWithReorderModal = ({
     }
 
     try {
+      // Validate page number is within bounds
+      if (previewPage.pageNumber < 1 || previewPage.pageNumber > pdfDoc.numPages) {
+        console.error(`Invalid page number: ${previewPage.pageNumber}. PDF has ${pdfDoc.numPages} pages.`);
+        return;
+      }
+
       const page = await pdfDoc.getPage(previewPage.pageNumber);
       const viewport = page.getViewport({ scale: 1.0 });
 
