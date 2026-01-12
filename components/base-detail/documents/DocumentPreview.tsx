@@ -1,15 +1,22 @@
-import { Eye, Hash, CalendarClock, Pencil, Trash2 } from "lucide-react";
+"use client";
+
+import { Eye, Hash, CalendarClock, Pencil, Trash2, Scissors, History } from "lucide-react";
+import { useState } from "react";
 import type { StoredDocument } from "@/lib/services/documents-service";
 import { PdfViewer } from "../PdfViewer";
 import { isPdf, isImage, isFolder } from "./utils";
 import { PreviewSkeleton } from "./DocumentsSkeleton";
+import { DocumentVersionHistory } from "./DocumentVersionHistory";
 
 type DocumentPreviewProps = {
   selectedDoc: StoredDocument | null;
   signedUrl: string | null;
   viewerError: string | null;
+  baseId?: string;
+  tableId?: string | null;
   onRename: () => void;
   onDelete: () => void;
+  onSplit?: () => void;
   loading?: boolean;
 };
 
@@ -17,10 +24,15 @@ export const DocumentPreview = ({
   selectedDoc,
   signedUrl,
   viewerError,
+  baseId,
+  tableId,
   onRename,
   onDelete,
+  onSplit,
   loading = false,
 }: DocumentPreviewProps) => {
+  const [showVersionHistory, setShowVersionHistory] = useState(false);
+
   return (
     <div className="min-h-0 overflow-hidden flex flex-col">
       <div className="px-4 py-3 flex items-center justify-between border-b border-gray-200">
@@ -34,6 +46,28 @@ export const DocumentPreview = ({
               <Hash className="w-4 h-4" />
               <span>{selectedDoc.path.slice(-8)}</span>
             </div>
+            {baseId && (
+              <button
+                onClick={() => setShowVersionHistory(!showVersionHistory)}
+                className={`p-1.5 rounded-lg transition-colors ${
+                  showVersionHistory
+                    ? "bg-purple-100 text-purple-600"
+                    : "hover:bg-purple-100 text-gray-600 hover:text-purple-600"
+                }`}
+                title="Version History"
+              >
+                <History className="w-4 h-4" />
+              </button>
+            )}
+            {isPdf(selectedDoc.mimeType) && onSplit && (
+              <button
+                onClick={onSplit}
+                className="p-1.5 hover:bg-blue-100 rounded-lg transition-colors"
+                title="Split PDF - Extract pages to a new document"
+              >
+                <Scissors className="w-4 h-4 text-blue-600" />
+              </button>
+            )}
             <button
               onClick={onRename}
               className="p-1.5 hover:bg-gray-200 rounded-lg transition-colors"
@@ -114,6 +148,20 @@ export const DocumentPreview = ({
                 </div>
               )}
             </div>
+
+            {/* Version History Panel */}
+            {showVersionHistory && baseId && selectedDoc && (
+              <div className="border-t border-gray-200 p-4">
+                <DocumentVersionHistory
+                  documentPath={selectedDoc.path}
+                  baseId={baseId}
+                  tableId={tableId}
+                  onVersionRestored={() => {
+                    // Could trigger a refresh here
+                  }}
+                />
+              </div>
+            )}
           </div>
         ) : selectedDoc && isFolder(selectedDoc) ? (
           <div className="h-full flex items-center justify-center text-sm text-gray-500">
@@ -128,4 +176,3 @@ export const DocumentPreview = ({
     </div>
   );
 };
-

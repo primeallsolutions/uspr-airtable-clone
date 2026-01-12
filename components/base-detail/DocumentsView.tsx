@@ -3,10 +3,12 @@ import { toast } from "sonner";
 import { supabase } from "@/lib/supabaseClient";
 import type { TableRow } from "@/lib/types/base-detail";
 import { DocumentsService, type StoredDocument } from "@/lib/services/documents-service";
+import { DocumentActivityService } from "@/lib/services/document-activity-service";
 import { DocumentsHeader } from "./documents/DocumentsHeader";
 import { DocumentsSidebar } from "./documents/DocumentsSidebar";
 import { DocumentsList } from "./documents/DocumentsList";
 import { DocumentPreview } from "./documents/DocumentPreview";
+import { ActivityFeed } from "./documents/ActivityFeed";
 import { PdfEditor } from "./documents/PdfEditor";
 import { TemplateManagementModal } from "./documents/TemplateManagementModal";
 import { SignatureRequestModal } from "./documents/SignatureRequestModal";
@@ -18,6 +20,8 @@ import { FolderNameModal } from "./documents/FolderNameModal";
 import { RenameDocumentModal } from "./documents/RenameDocumentModal";
 import { RenameFolderModal } from "./documents/RenameFolderModal";
 import { DeleteFolderModal } from "./documents/DeleteFolderModal";
+import { PdfSplitModal } from "./documents/PdfSplitModal";
+import { PhotoGallery } from "./documents/PhotoGallery";
 import { isFolder, isPdf } from "./documents/utils";
 import type { DocumentTemplate } from "@/lib/services/template-service";
 
@@ -71,6 +75,11 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable }: Docu
   const [showSignatureRequestModal, setShowSignatureRequestModal] = useState<boolean>(false);
   const [showSignatureStatus, setShowSignatureStatus] = useState<boolean>(false);
   const [showMergePackModal, setShowMergePackModal] = useState<boolean>(false);
+  const [showActivityFeed, setShowActivityFeed] = useState<boolean>(true);
+  const [showPdfSplitModal, setShowPdfSplitModal] = useState<boolean>(false);
+  const [splitDoc, setSplitDoc] = useState<StoredDocument | null>(null);
+  const [splitSignedUrl, setSplitSignedUrl] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"documents" | "photos">("documents");
 
   const currentPrefix = useMemo(
     () => (folderPath && !folderPath.endsWith("/") ? `${folderPath}/` : folderPath),
@@ -142,6 +151,16 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable }: Docu
       await DocumentsService.createFolder(baseId, selectedTable?.id ?? null, currentPrefix, name);
       await refresh();
       setFolderPath(currentPrefix + name + "/");
+      
+      // Log activity
+      await DocumentActivityService.logActivity({
+        baseId,
+        tableId: selectedTable?.id,
+        action: 'folder_create',
+        folderPath: currentPrefix + name + "/",
+        documentName: name,
+      });
+      
       toast.success("Folder created successfully", {
         description: `Folder "${name}" has been created.`,
       });
@@ -239,6 +258,18 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable }: Docu
       const results = await uploadBatch(validFiles, UPLOAD_CONCURRENCY);
       
       await refresh();
+      
+      // Log upload activities
+      for (const file of validFiles) {
+        await DocumentActivityService.logActivity({
+          baseId,
+          tableId: selectedTable?.id,
+          action: 'upload',
+          documentPath: currentPrefix + file.name,
+          documentName: file.name,
+          metadata: { size: file.size, type: file.type },
+        });
+      }
       
       if (results.failed === 0) {
         toast.success(`Successfully uploaded ${results.success} file${results.success > 1 ? "s" : ""}`, {
@@ -494,6 +525,16 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable }: Docu
     
     try {
       await DocumentsService.deleteDocument(baseId, selectedTable?.id ?? null, selectedDoc.path);
+      
+      // Log activity
+      await DocumentActivityService.logActivity({
+        baseId,
+        tableId: selectedTable?.id,
+        action: 'delete',
+        documentPath: selectedDoc.path,
+        documentName: fileName,
+      });
+      
       setSelectedDocPath(null);
       await refresh();
       toast.success("Document deleted", {
@@ -532,6 +573,16 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable }: Docu
         newRelative
       );
       setSelectedDocPath(newRelative);
+      // Log activity
+      await DocumentActivityService.logActivity({
+        baseId,
+        tableId: selectedTable?.id,
+        action: 'rename',
+        documentPath: newRelative,
+        documentName: newName,
+        metadata: { oldName: currentName },
+      });
+      
       await refresh();
       toast.success("Document renamed", {
         description: `"${currentName}" has been renamed to "${newName}".`,
@@ -576,6 +627,16 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable }: Docu
         setFolderPath(newPath);
       }
       
+      // Log activity
+      await DocumentActivityService.logActivity({
+        baseId,
+        tableId: selectedTable?.id,
+        action: 'folder_rename',
+        folderPath: selectedFolder.path,
+        documentName: newName,
+        metadata: { oldName: selectedFolder.name },
+      });
+      
       await refresh();
       toast.success("Folder renamed", {
         id: toastId,
@@ -614,6 +675,15 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable }: Docu
         setFolderPath("");
         setSelectedDocPath(null);
       }
+      
+      // Log activity
+      await DocumentActivityService.logActivity({
+        baseId,
+        tableId: selectedTable?.id,
+        action: 'folder_delete',
+        folderPath: selectedFolder.path,
+        documentName: selectedFolder.name,
+      });
       
       await refresh();
       toast.success("Folder deleted", {
@@ -699,6 +769,32 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable }: Docu
     }
   };
 
+  // Handle PDF Split
+  const handleDocumentSplit = async (doc: StoredDocument) => {
+    if (!isPdf(doc.mimeType)) {
+      toast.error("Split not available", {
+        description: "Only PDF documents can be split.",
+      });
+      return;
+    }
+
+    try {
+      const url = await DocumentsService.getSignedUrl(
+        baseId,
+        selectedTable?.id ?? null,
+        doc.path
+      );
+      setSplitDoc(doc);
+      setSplitSignedUrl(url);
+      setShowPdfSplitModal(true);
+    } catch (err) {
+      console.error("Failed to open document for splitting", err);
+      toast.error("Failed to open split tool", {
+        description: err instanceof Error ? err.message : "Please try again.",
+      });
+    }
+  };
+
   return (
     <div
       className={`flex-1 min-h-0 flex flex-col bg-white border border-gray-200 rounded-xl shadow-sm mx-6 my-4 overflow-hidden ${
@@ -771,26 +867,92 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable }: Docu
           loading={loading && isInitialLoad}
         />
 
-        {/* Documents list and viewer */}
-        <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-2">
-          <DocumentsList
-            documents={visibleDocs}
-            selectedDocPath={selectedDocPath}
-            loading={loading && isInitialLoad}
-            error={error}
-            folderPath={folderPath}
-            onDocumentSelect={setSelectedDocPath}
-            onDocumentEdit={handleDocumentEdit}
-          />
+        {/* Tab Navigation */}
+        <div className="flex-1 min-h-0 flex flex-col">
+          <div className="flex items-center border-b border-gray-200 px-4">
+            <button
+              onClick={() => setActiveTab("documents")}
+              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === "documents"
+                  ? "border-blue-600 text-blue-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+              }`}
+            >
+              Documents
+            </button>
+            <button
+              onClick={() => setActiveTab("photos")}
+              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === "photos"
+                  ? "border-blue-600 text-blue-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+              }`}
+            >
+              Photos
+            </button>
+            
+            {/* Activity Feed Toggle */}
+            <div className="ml-auto">
+              <button
+                onClick={() => setShowActivityFeed(!showActivityFeed)}
+                className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                  showActivityFeed
+                    ? "bg-blue-100 text-blue-700"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                }`}
+              >
+                {showActivityFeed ? "Hide Activity" : "Show Activity"}
+              </button>
+            </div>
+          </div>
 
-          <DocumentPreview
-            selectedDoc={selectedDoc}
-            signedUrl={signedUrl}
-            viewerError={viewerError}
-            onRename={handleRenameSelected}
-            onDelete={handleDeleteSelected}
-            loading={loading && isInitialLoad && !selectedDoc}
-          />
+          {/* Content Area */}
+          <div className={`flex-1 min-h-0 grid grid-cols-1 ${activeTab === "documents" && showActivityFeed ? 'lg:grid-cols-[1fr_1fr_280px]' : activeTab === "documents" ? 'lg:grid-cols-2' : ''}`}>
+            {activeTab === "documents" ? (
+              <>
+                <DocumentsList
+                  documents={visibleDocs}
+                  selectedDocPath={selectedDocPath}
+                  loading={loading && isInitialLoad}
+                  error={error}
+                  folderPath={folderPath}
+                  onDocumentSelect={setSelectedDocPath}
+                  onDocumentEdit={handleDocumentEdit}
+                />
+
+                <DocumentPreview
+                  selectedDoc={selectedDoc}
+                  signedUrl={signedUrl}
+                  viewerError={viewerError}
+                  baseId={baseId}
+                  tableId={selectedTable?.id}
+                  onRename={handleRenameSelected}
+                  onDelete={handleDeleteSelected}
+                  onSplit={selectedDoc && isPdf(selectedDoc.mimeType) ? () => handleDocumentSplit(selectedDoc) : undefined}
+                  loading={loading && isInitialLoad && !selectedDoc}
+                />
+              
+                {/* Activity Feed Sidebar */}
+                {showActivityFeed && (
+                  <div className="hidden lg:flex flex-col border-l border-gray-200 bg-white">
+                    <ActivityFeed
+                      baseId={baseId}
+                      tableId={selectedTable?.id}
+                    />
+                  </div>
+                )}
+              </>
+            ) : (
+              <PhotoGallery
+                baseId={baseId}
+                tableId={selectedTable?.id}
+                documents={allDocs}
+                onUpload={handleUpload}
+                onRefresh={refresh}
+                loading={loading && isInitialLoad}
+              />
+            )}
+          </div>
         </div>
       </div>
 
@@ -939,6 +1101,28 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable }: Docu
         />
           </div>
         </div>
+      )}
+
+      {/* PDF Split Modal */}
+      {splitDoc && splitSignedUrl && (
+        <PdfSplitModal
+          isOpen={showPdfSplitModal}
+          onClose={() => {
+            setShowPdfSplitModal(false);
+            setSplitDoc(null);
+            setSplitSignedUrl(null);
+          }}
+          baseId={baseId}
+          tableId={selectedTable?.id}
+          document={{
+            path: splitDoc.path,
+            name: splitDoc.path.split("/").pop() || "document.pdf",
+          }}
+          signedUrl={splitSignedUrl}
+          onSplitComplete={() => {
+            refresh();
+          }}
+        />
       )}
     </div>
   );

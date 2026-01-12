@@ -12,6 +12,7 @@ interface GridViewProps {
   allFields?: FieldRow[]; // All fields from all tables (for masterlist matching)
   tables: TableRowType[];
   selectedTableId: string | null;
+  baseId: string;
   sortFieldId: string | null;
   sortDirection: 'asc' | 'desc';
   savingCell: SavingCell;
@@ -34,6 +35,7 @@ export const GridView = ({
   allFields,
   tables,
   selectedTableId,
+  baseId,
   sortFieldId,
   sortDirection,
   savingCell,
@@ -514,6 +516,7 @@ export const GridView = ({
         fields={allFields || fields}
         tables={tables}
         selectedTableId={selectedTableId}
+        baseId={baseId}
         savingCell={savingCell}
         onUpdateCell={onUpdateCell}
         onClose={handleCloseDetails}

@@ -1027,6 +1027,7 @@ export default function BaseDetailPage() {
                   allFields={fields}
                   tables={tables}
                   selectedTableId={selectedTableId}
+                  baseId={baseId || ''}
                   sortFieldId={primarySortFieldId}
                   sortDirection={primarySortDirection}
                   savingCell={savingCell}

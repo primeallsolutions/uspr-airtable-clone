@@ -1,10 +1,12 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef } from "react";
-import { X, Save, Edit2, Loader2, Calendar, Hash, Mail, Phone, Link as LinkIcon, CheckSquare, FileText, Clock, Info } from "lucide-react";
+import { X, Save, Edit2, Loader2, Calendar, Hash, Mail, Phone, Link as LinkIcon, CheckSquare, FileText, Clock, Info, Paperclip } from "lucide-react";
 import type { RecordRow, FieldRow, SavingCell, TableRow } from "@/lib/types/base-detail";
 import { formatInTimezone } from "@/lib/utils/date-helpers";
 import { useTimezone } from "@/lib/hooks/useTimezone";
+import { RecordDocuments } from "./documents/RecordDocuments";
+import { RecordDocumentsService } from "@/lib/services/record-documents-service";
 
 interface RecordDetailsModalProps {
   isOpen: boolean;
@@ -12,6 +14,7 @@ interface RecordDetailsModalProps {
   fields: FieldRow[];
   tables: TableRow[];
   selectedTableId: string | null;
+  baseId: string;
   savingCell: SavingCell;
   onUpdateCell: (recordId: string, fieldId: string, value: unknown) => void;
   onClose: () => void;
@@ -23,6 +26,7 @@ export const RecordDetailsModal = ({
   fields,
   tables,
   selectedTableId,
+  baseId,
   savingCell,
   onUpdateCell,
   onClose,
@@ -32,6 +36,8 @@ export const RecordDetailsModal = ({
   const [editValue, setEditValue] = useState<unknown>("");
   const [localNameValue, setLocalNameValue] = useState<string>("");
   const nameFieldRef = useRef<HTMLInputElement>(null);
+  const [activeTab, setActiveTab] = useState<"fields" | "documents">("fields");
+  const [documentCount, setDocumentCount] = useState<number>(0);
 
   // Find the "Name" field
   const nameField = useMemo(() => {
@@ -205,8 +211,16 @@ export const RecordDetailsModal = ({
       setEditingFieldId(null);
       setEditValue("");
       setLocalNameValue("");
+      setActiveTab("fields");
     }
   }, [isOpen]);
+
+  // Load document count
+  useEffect(() => {
+    if (record?.id) {
+      RecordDocumentsService.getDocumentCount(record.id).then(setDocumentCount).catch(() => {});
+    }
+  }, [record?.id]);
 
   if (!isOpen || !record) return null;
 
@@ -319,12 +333,51 @@ export const RecordDetailsModal = ({
           </div>
         </div>
 
+        {/* Tab Navigation */}
+        <div className="px-8 border-b border-gray-200 bg-white">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => setActiveTab("fields")}
+              className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === "fields"
+                  ? "border-blue-600 text-blue-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+              }`}
+            >
+              <span className="flex items-center gap-2">
+                <Info className="w-4 h-4" />
+                Field Details
+              </span>
+            </button>
+            <button
+              onClick={() => setActiveTab("documents")}
+              className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === "documents"
+                  ? "border-blue-600 text-blue-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+              }`}
+            >
+              <span className="flex items-center gap-2">
+                <Paperclip className="w-4 h-4" />
+                Documents
+                {documentCount > 0 && (
+                  <span className="px-1.5 py-0.5 text-xs bg-blue-100 text-blue-600 rounded-full">
+                    {documentCount}
+                  </span>
+                )}
+              </span>
+            </button>
+          </div>
+        </div>
+
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-8 bg-gray-50/50">
-          <div className="mb-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Field Details</h3>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          {activeTab === "fields" ? (
+            <>
+              <div className="mb-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Field Details</h3>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             {displayFields.map((field) => {
               const value = record.values[field.id];
               const isEditing = editingFieldId === field.id;
@@ -438,11 +491,20 @@ export const RecordDetailsModal = ({
                 </div>
               );
             })}
-          </div>
-          {displayFields.length === 0 && (
-            <div className="text-center py-12">
-              <p className="text-gray-400 text-lg">No additional fields to display</p>
-            </div>
+              </div>
+              {displayFields.length === 0 && (
+                <div className="text-center py-12">
+                  <p className="text-gray-400 text-lg">No additional fields to display</p>
+                </div>
+              )}
+            </>
+          ) : (
+            <RecordDocuments
+              recordId={record.id}
+              baseId={baseId}
+              tableId={record.table_id}
+              recordName={nameValue || "Record"}
+            />
           )}
         </div>
 
