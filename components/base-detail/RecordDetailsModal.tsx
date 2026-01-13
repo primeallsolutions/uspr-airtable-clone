@@ -142,14 +142,63 @@ export const RecordDetailsModal = ({
     }
   };
 
-  // Get field options for select fields
-  const getFieldOptions = (field: FieldRow): string[] => {
-    if (field.options && typeof field.options === "object" && "options" in field.options) {
-      const opts = (field.options as any).options;
-      if (Array.isArray(opts)) {
-        return opts.map((o: any) => (typeof o === "string" ? o : o?.label || o?.value || String(o)));
+  // Get option label for select fields (converts option ID to display label)
+  const getOptionLabel = (field: FieldRow, value: unknown): string => {
+    if (!value || typeof value !== "string") return String(value || "");
+    
+    if (!field.options || typeof field.options !== "object") {
+      return String(value);
+    }
+    
+    // Check if value is an option ID (like "option_1")
+    if (value in field.options) {
+      const optionData = field.options[value];
+      if (optionData && typeof optionData === "object") {
+        const opt = optionData as { name?: string; label?: string };
+        return opt.name || opt.label || String(value);
+      }
+      if (typeof optionData === "string") {
+        return optionData;
       }
     }
+    
+    // Value might already be the label itself
+    return String(value);
+  };
+
+  // Get field options for select fields (returns { id, label } objects)
+  const getFieldOptions = (field: FieldRow): Array<{ id: string; label: string }> => {
+    if (!field.options || typeof field.options !== "object") {
+      return [];
+    }
+    
+    // Format 1: { "choices": ["Option1", "Option2"] }
+    if ("choices" in field.options && Array.isArray(field.options.choices)) {
+      return (field.options.choices as string[]).map(choice => ({
+        id: choice,
+        label: choice
+      }));
+    }
+    
+    // Format 2: { "option_1": { "name": "Active", "color": "#..." }, ... }
+    // Extract option IDs and labels from object entries
+    const entries = Object.entries(field.options);
+    if (entries.length > 0) {
+      return entries.map(([key, value]) => {
+        if (typeof value === "string") {
+          return { id: key, label: value };
+        }
+        if (value && typeof value === "object") {
+          const opt = value as { name?: string; label?: string; value?: string };
+          return { 
+            id: key, 
+            label: opt.name || opt.label || opt.value || key 
+          };
+        }
+        return { id: key, label: key };
+      });
+    }
+    
     return [];
   };
 
@@ -157,16 +206,44 @@ export const RecordDetailsModal = ({
   const handleFieldClick = (field: FieldRow) => {
     if (!record) return;
     setEditingFieldId(field.id);
-    setEditValue(record.values[field.id] || "");
+    
+    // Initialize edit value based on field type
+    const currentValue = record.values[field.id];
+    
+    if (field.type === "checkbox") {
+      setEditValue(!!currentValue); // Convert to boolean
+    } else if (field.type === "date" && currentValue) {
+      // Convert date to YYYY-MM-DD format
+      const date = new Date(currentValue as string);
+      setEditValue(date.toISOString().split('T')[0]);
+    } else if (field.type === "datetime" && currentValue) {
+      // Convert datetime to YYYY-MM-DDTHH:mm format
+      const date = new Date(currentValue as string);
+      setEditValue(date.toISOString().slice(0, 16));
+    } else if (field.type === "multi_select" && currentValue) {
+      // Convert to array if it's a string
+      if (typeof currentValue === "string") {
+        setEditValue(currentValue.split(",").map(v => v.trim()).filter(Boolean));
+      } else if (Array.isArray(currentValue)) {
+        setEditValue(currentValue);
+      } else {
+        setEditValue([]);
+      }
+    } else {
+      setEditValue(currentValue || "");
+    }
   };
 
-  const handleFieldBlur = async (field: FieldRow) => {
+  const handleFieldBlur = async (field: FieldRow, newValue?: unknown) => {
     if (!record || editingFieldId !== field.id) return;
+    
+    // Use passed value if provided, otherwise use editValue state
+    const valueToSave = newValue !== undefined ? newValue : editValue;
     
     // Only update if value changed
     const currentValue = record.values[field.id];
-    if (currentValue !== editValue) {
-      await onUpdateCell(record.id, field.id, editValue);
+    if (currentValue !== valueToSave) {
+      await onUpdateCell(record.id, field.id, valueToSave);
     }
     
     setEditingFieldId(null);
@@ -410,17 +487,162 @@ export const RecordDetailsModal = ({
                   </div>
                   {isEditing ? (
                     <div className="space-y-2">
-                      <input
-                        type="text"
-                        value={editValue as string}
-                        onChange={(e) => setEditValue(e.target.value)}
-                        onBlur={() => handleFieldBlur(field)}
-                        onKeyDown={(e) => handleKeyDown(e, field)}
-                        className="w-full px-4 py-3 border-2 border-blue-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 text-gray-900 font-medium transition-all"
-                        autoFocus
-                      />
+                      {/* Type-specific input controls */}
+                      {field.type === "number" ? (
+                        <input
+                          type="number"
+                          value={editValue as string}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          onBlur={() => handleFieldBlur(field)}
+                          onKeyDown={(e) => handleKeyDown(e, field)}
+                          className="w-full px-4 py-3 border-2 border-blue-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 text-gray-900 font-medium transition-all"
+                          autoFocus
+                        />
+                      ) : field.type === "date" ? (
+                        <input
+                          type="date"
+                          value={editValue as string}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          onBlur={() => handleFieldBlur(field)}
+                          onKeyDown={(e) => handleKeyDown(e, field)}
+                          className="w-full px-4 py-3 border-2 border-blue-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 text-gray-900 font-medium transition-all"
+                          autoFocus
+                        />
+                      ) : field.type === "datetime" ? (
+                        <input
+                          type="datetime-local"
+                          value={editValue as string}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          onBlur={() => handleFieldBlur(field)}
+                          onKeyDown={(e) => handleKeyDown(e, field)}
+                          className="w-full px-4 py-3 border-2 border-blue-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 text-gray-900 font-medium transition-all"
+                          autoFocus
+                        />
+                      ) : field.type === "email" ? (
+                        <input
+                          type="email"
+                          value={editValue as string}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          onBlur={() => handleFieldBlur(field)}
+                          onKeyDown={(e) => handleKeyDown(e, field)}
+                          className="w-full px-4 py-3 border-2 border-blue-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 text-gray-900 font-medium transition-all"
+                          autoFocus
+                          placeholder="example@email.com"
+                        />
+                      ) : field.type === "phone" ? (
+                        <input
+                          type="tel"
+                          value={editValue as string}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          onBlur={() => handleFieldBlur(field)}
+                          onKeyDown={(e) => handleKeyDown(e, field)}
+                          className="w-full px-4 py-3 border-2 border-blue-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 text-gray-900 font-medium transition-all"
+                          autoFocus
+                          placeholder="+1 (555) 000-0000"
+                        />
+                      ) : field.type === "link" ? (
+                        <input
+                          type="url"
+                          value={editValue as string}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          onBlur={() => handleFieldBlur(field)}
+                          onKeyDown={(e) => handleKeyDown(e, field)}
+                          className="w-full px-4 py-3 border-2 border-blue-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 text-gray-900 font-medium transition-all"
+                          autoFocus
+                          placeholder="https://example.com"
+                        />
+                      ) : field.type === "checkbox" ? (
+                        <div className="flex items-center gap-3 p-3">
+                          <button
+                            onClick={() => {
+                              const newVal = !editValue;
+                              setEditValue(newVal);
+                              // Pass value directly to avoid stale closure
+                              handleFieldBlur(field, newVal);
+                            }}
+                            className={`w-12 h-12 rounded-lg border-2 flex items-center justify-center transition-all ${
+                              editValue ? "bg-blue-600 border-blue-600" : "border-gray-300 hover:border-blue-400"
+                            }`}
+                          >
+                            {(editValue as boolean) && <CheckSquare className="w-6 h-6 text-white" />}
+                          </button>
+                          <span className="text-sm text-gray-600">
+                            {editValue ? "Checked" : "Unchecked"} - Click to toggle
+                          </span>
+                        </div>
+                      ) : field.type === "single_select" && getFieldOptions(field).length > 0 ? (
+                        <select
+                          value={editValue as string}
+                          onChange={(e) => {
+                            const newVal = e.target.value;
+                            setEditValue(newVal);
+                            // Pass value directly to avoid stale closure
+                            handleFieldBlur(field, newVal);
+                          }}
+                          className="w-full px-4 py-3 border-2 border-blue-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 text-gray-900 font-medium transition-all"
+                          autoFocus
+                        >
+                          <option value="">-- Select option --</option>
+                          {getFieldOptions(field).map((option) => (
+                            <option key={option.id} value={option.id}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      ) : field.type === "multi_select" && getFieldOptions(field).length > 0 ? (
+                        <div className="space-y-2">
+                          <div className="max-h-48 overflow-y-auto border-2 border-blue-500 rounded-lg p-3 space-y-1">
+                            {getFieldOptions(field).map((option) => {
+                              const currentValues = Array.isArray(editValue) 
+                                ? editValue 
+                                : (editValue as string)?.split(",").map(v => v.trim()).filter(Boolean) || [];
+                              const isSelected = currentValues.includes(option.id) || currentValues.includes(option.label);
+                              
+                              return (
+                                <label
+                                  key={option.id}
+                                  className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded cursor-pointer"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    onChange={(e) => {
+                                      const newValues = e.target.checked
+                                        ? [...currentValues, option.id]
+                                        : currentValues.filter(v => v !== option.id && v !== option.label);
+                                      setEditValue(newValues);
+                                    }}
+                                    className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                                  />
+                                  <span className="text-sm text-gray-700">{option.label}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                          <button
+                            onClick={() => handleFieldBlur(field)}
+                            className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+                          >
+                            Save Selection
+                          </button>
+                        </div>
+                      ) : (
+                        <input
+                          type="text"
+                          value={editValue as string}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          onBlur={() => handleFieldBlur(field)}
+                          onKeyDown={(e) => handleKeyDown(e, field)}
+                          className="w-full px-4 py-3 border-2 border-blue-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 text-gray-900 font-medium transition-all"
+                          autoFocus
+                        />
+                      )}
                       <div className="flex items-center gap-2 text-xs text-gray-500">
-                        <span>Press Enter to save, Esc to cancel</span>
+                        <span>
+                          {field.type === "checkbox" || field.type === "single_select" 
+                            ? "Changes save automatically" 
+                            : "Press Enter to save, Esc to cancel"}
+                        </span>
                       </div>
                     </div>
                   ) : (
@@ -432,6 +654,7 @@ export const RecordDetailsModal = ({
                         </div>
                       ) : value !== null && value !== undefined && String(value).trim() !== "" ? (
                         <div className="w-full">
+                          {/* Type-specific display */}
                           {field.type === "link" && typeof value === "string" ? (
                             <a
                               href={value}
@@ -469,6 +692,35 @@ export const RecordDetailsModal = ({
                                 {value && <CheckSquare className="w-3 h-3 text-white" />}
                               </div>
                               <span className="text-base font-medium">{value ? "Yes" : "No"}</span>
+                            </div>
+                          ) : field.type === "date" || field.type === "datetime" ? (
+                            <div className="flex items-center gap-2">
+                              <Calendar className="w-4 h-4 text-gray-400" />
+                              <span className="text-base font-medium">
+                                {formatFieldValue(field, value)}
+                              </span>
+                            </div>
+                          ) : field.type === "number" ? (
+                            <div className="flex items-center gap-2">
+                              <Hash className="w-4 h-4 text-gray-400" />
+                              <span className="text-base font-medium">
+                                {formatFieldValue(field, value)}
+                              </span>
+                            </div>
+                          ) : field.type === "single_select" ? (
+                            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-100 text-blue-700 rounded-full text-sm font-medium">
+                              <span>{getOptionLabel(field, value)}</span>
+                            </div>
+                          ) : field.type === "multi_select" ? (
+                            <div className="flex flex-wrap gap-2">
+                              {(Array.isArray(value) ? value : String(value).split(",").map(v => v.trim())).map((item, idx) => (
+                                <span
+                                  key={idx}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-purple-100 text-purple-700 rounded-full text-sm font-medium"
+                                >
+                                  {getOptionLabel(field, item)}
+                                </span>
+                              ))}
                             </div>
                           ) : (
                             <span className="text-base font-medium break-words">
