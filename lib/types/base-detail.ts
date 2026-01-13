@@ -54,6 +54,7 @@ export type RecordRow = {
   table_id: string;
   values: Record<string, unknown>;
   created_at: string;
+  updated_at?: string;
 };
 
 export type AutomationTrigger = {

@@ -14,10 +14,25 @@ import type {
   AnalyticsCardLayout,
   WorkspaceAnalyticsAggregation,
   WorkspaceAnalyticsCard,
-  WorkspaceAnalyticsChartType
+  WorkspaceAnalyticsChartType,
+  WorkspaceAnalyticsFilter,
+  WorkspaceAnalyticsFilterMatch,
+  WorkspaceAnalyticsFilterOperator,
+  WorkspaceAnalyticsFilterTarget
 } from "@/lib/types/analytics";
 
 type TableMeta = { id: string; name: string; base_id: string };
+type AnalyticsFormState = {
+  title: string;
+  chart_type: WorkspaceAnalyticsChartType;
+  base_id: string;
+  table_id: string;
+  group_field_id: string;
+  value_field_id: string;
+  aggregation: WorkspaceAnalyticsAggregation;
+  filters: WorkspaceAnalyticsFilter[];
+  filter_match: WorkspaceAnalyticsFilterMatch;
+};
 
 const GridLayout = WidthProvider(GridLayoutBase);
 
@@ -34,6 +49,8 @@ const CHART_COLORS = [
 
 const NUMBER_AGGREGATIONS: WorkspaceAnalyticsAggregation[] = ['count', 'sum', 'avg', 'min', 'max'];
 const GROUP_AGGREGATIONS: WorkspaceAnalyticsAggregation[] = ['count', 'sum'];
+const DEFAULT_FILTER_MATCH: WorkspaceAnalyticsFilterMatch = "all";
+const RECORD_UPDATED_TARGET: WorkspaceAnalyticsFilterTarget = "record_updated_at";
 
 const DEFAULT_NUMBER_LAYOUT = { w: 3, h: 3 };
 const DEFAULT_CHART_LAYOUT = { w: 4, h: 5 };
@@ -54,6 +71,15 @@ const toNumber = (value: unknown): number | null => {
   }
   return null;
 };
+
+const toDateValue = (value: unknown): number | null => {
+  if (value === null || value === undefined || value === "") return null;
+  const date = new Date(String(value));
+  if (Number.isNaN(date.getTime())) return null;
+  return date.getTime();
+};
+
+const normalizeString = (value: unknown) => String(value ?? "").trim().toLowerCase();
 
 const resolveOptionLabel = (field: FieldRow | undefined, value: unknown): string => {
   if (!field || !field.options || typeof value !== "string") return String(value);
@@ -100,6 +126,210 @@ const sortChartData = (data: { name: string; value: number }[], fieldType?: Fiel
   return [...data].sort((a, b) => a.name.localeCompare(b.name));
 };
 
+const createFilterId = () => {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+};
+
+const createEmptyFilter = (): WorkspaceAnalyticsFilter => ({
+  id: createFilterId(),
+  target: "field",
+  field_id: null,
+  operator: "equals",
+  value: ""
+});
+
+const filterOperatorRequiresValue = (operator: WorkspaceAnalyticsFilterOperator) =>
+  operator !== "is_empty" && operator !== "is_not_empty";
+
+const isValidFilter = (filter: WorkspaceAnalyticsFilter) => {
+  if (filter.target === "field" && !filter.field_id) return false;
+  if (filter.operator === "within_last_days") {
+    return Number(filter.value) > 0;
+  }
+  if (filterOperatorRequiresValue(filter.operator)) {
+    return filter.value.trim() !== "";
+  }
+  return true;
+};
+
+const TEXT_FILTER_OPERATORS: Array<{ value: WorkspaceAnalyticsFilterOperator; label: string }> = [
+  { value: "equals", label: "is exactly" },
+  { value: "not_equals", label: "is not" },
+  { value: "contains", label: "contains" },
+  { value: "is_empty", label: "is empty" },
+  { value: "is_not_empty", label: "is not empty" }
+];
+
+const NUMBER_FILTER_OPERATORS: Array<{ value: WorkspaceAnalyticsFilterOperator; label: string }> = [
+  { value: "equals", label: "is exactly" },
+  { value: "not_equals", label: "is not" },
+  { value: "greater_than", label: "greater than" },
+  { value: "greater_than_or_equal", label: "greater than or equal" },
+  { value: "less_than", label: "less than" },
+  { value: "less_than_or_equal", label: "less than or equal" },
+  { value: "is_empty", label: "is empty" },
+  { value: "is_not_empty", label: "is not empty" }
+];
+
+const DATE_FILTER_OPERATORS: Array<{ value: WorkspaceAnalyticsFilterOperator; label: string }> = [
+  { value: "equals", label: "is on" },
+  { value: "greater_than", label: "is after" },
+  { value: "greater_than_or_equal", label: "is on or after" },
+  { value: "less_than", label: "is before" },
+  { value: "less_than_or_equal", label: "is on or before" },
+  { value: "within_last_days", label: "within last (days)" },
+  { value: "is_empty", label: "is empty" },
+  { value: "is_not_empty", label: "is not empty" }
+];
+
+const getFilterOperatorOptions = (
+  target: WorkspaceAnalyticsFilterTarget,
+  fieldType?: FieldType
+) => {
+  if (target === "record_updated_at" || fieldType === "date" || fieldType === "datetime") {
+    return DATE_FILTER_OPERATORS;
+  }
+  if (fieldType === "number" || fieldType === "monetary") {
+    return NUMBER_FILTER_OPERATORS;
+  }
+  return TEXT_FILTER_OPERATORS;
+};
+
+const getFilterValueInputType = (
+  operator: WorkspaceAnalyticsFilterOperator,
+  target: WorkspaceAnalyticsFilterTarget,
+  fieldType?: FieldType
+) => {
+  if (operator === "within_last_days") return "number";
+  if (target === "record_updated_at") return "date";
+  if (fieldType === "date") return "date";
+  if (fieldType === "datetime") return "datetime-local";
+  if (fieldType === "number" || fieldType === "monetary") return "number";
+  return "text";
+};
+
+const isEmptyValue = (value: unknown) => {
+  if (value === null || value === undefined) return true;
+  if (typeof value === "string") return value.trim() === "";
+  if (Array.isArray(value)) return value.length === 0;
+  return false;
+};
+
+type AnalyticsRecordRow = {
+  values?: Record<string, unknown>;
+  created_at?: string;
+  updated_at?: string | null;
+};
+
+const matchesFilter = (
+  row: AnalyticsRecordRow,
+  filter: WorkspaceAnalyticsFilter,
+  fieldType?: FieldType
+) => {
+  const rawValue =
+    filter.target === "record_updated_at"
+      ? row.updated_at ?? row.created_at ?? null
+      : row.values?.[filter.field_id ?? ""];
+
+  if (filter.operator === "is_empty") {
+    return isEmptyValue(rawValue);
+  }
+  if (filter.operator === "is_not_empty") {
+    return !isEmptyValue(rawValue);
+  }
+  if (filter.operator === "within_last_days") {
+    const days = Number(filter.value);
+    const timestamp = toDateValue(rawValue);
+    if (!Number.isFinite(days) || days <= 0 || timestamp === null) return false;
+    const windowStart = Date.now() - days * 24 * 60 * 60 * 1000;
+    return timestamp >= windowStart;
+  }
+
+  if (filter.operator === "contains") {
+    const needle = normalizeString(filter.value);
+    if (Array.isArray(rawValue)) {
+      return rawValue.some((item) => normalizeString(item).includes(needle));
+    }
+    return normalizeString(rawValue).includes(needle);
+  }
+
+  const isDateField = filter.target === "record_updated_at" || fieldType === "date" || fieldType === "datetime";
+  if (isDateField) {
+    const left = toDateValue(rawValue);
+    const right = toDateValue(filter.value);
+    if (left === null || right === null) return false;
+    if (filter.operator === "equals") {
+      if (fieldType === "date") {
+        return new Date(left).toISOString().slice(0, 10) === new Date(right).toISOString().slice(0, 10);
+      }
+      return left === right;
+    }
+    if (filter.operator === "not_equals") {
+      if (fieldType === "date") {
+        return new Date(left).toISOString().slice(0, 10) !== new Date(right).toISOString().slice(0, 10);
+      }
+      return left !== right;
+    }
+    if (filter.operator === "greater_than") return left > right;
+    if (filter.operator === "greater_than_or_equal") return left >= right;
+    if (filter.operator === "less_than") return left < right;
+    if (filter.operator === "less_than_or_equal") return left <= right;
+  }
+
+  const leftNumber = toNumber(rawValue);
+  const rightNumber = toNumber(filter.value);
+  if (leftNumber !== null && rightNumber !== null) {
+    if (filter.operator === "equals") return leftNumber === rightNumber;
+    if (filter.operator === "not_equals") return leftNumber !== rightNumber;
+    if (filter.operator === "greater_than") return leftNumber > rightNumber;
+    if (filter.operator === "greater_than_or_equal") return leftNumber >= rightNumber;
+    if (filter.operator === "less_than") return leftNumber < rightNumber;
+    if (filter.operator === "less_than_or_equal") return leftNumber <= rightNumber;
+  }
+
+  if (typeof rawValue === "boolean") {
+    const normalized = normalizeString(filter.value);
+    const desired = normalized === "true";
+    if (filter.operator === "equals") return rawValue === desired;
+    if (filter.operator === "not_equals") return rawValue !== desired;
+  }
+
+  if (Array.isArray(rawValue)) {
+    const normalized = normalizeString(filter.value);
+    const matches = rawValue.some((item) => normalizeString(item) === normalized);
+    return filter.operator === "not_equals" ? !matches : matches;
+  }
+
+  const left = normalizeString(rawValue);
+  const right = normalizeString(filter.value);
+  if (filter.operator === "equals") return left === right;
+  if (filter.operator === "not_equals") return left !== right;
+
+  return true;
+};
+
+const applyAnalyticsFilters = (
+  rows: AnalyticsRecordRow[],
+  filters: WorkspaceAnalyticsFilter[],
+  match: WorkspaceAnalyticsFilterMatch,
+  fieldsMap: Map<string, FieldRow>
+) => {
+  const activeFilters = filters.filter(isValidFilter);
+  if (activeFilters.length === 0) return rows;
+  return rows.filter((row) => {
+    const results = activeFilters.map((filter) => {
+      const fieldType = filter.target === "field"
+        ? fieldsMap.get(filter.field_id ?? "")?.type
+        : undefined;
+      return matchesFilter(row, filter, fieldType);
+    });
+    return match === "any" ? results.some(Boolean) : results.every(Boolean);
+  });
+};
+
 const getDefaultLayout = (type: WorkspaceAnalyticsChartType, index: number): AnalyticsCardLayout => {
   const size = type === "number" ? DEFAULT_NUMBER_LAYOUT : DEFAULT_CHART_LAYOUT;
   const x = (index * size.w) % 12;
@@ -130,14 +360,16 @@ export const WorkspaceAnalyticsDashboard = ({ workspaceId }: { workspaceId: stri
   const [editingCard, setEditingCard] = useState<WorkspaceAnalyticsCard | null>(null);
   const [detailCardId, setDetailCardId] = useState<string | null>(null);
   const [savingCard, setSavingCard] = useState(false);
-  const [formState, setFormState] = useState({
+  const [formState, setFormState] = useState<AnalyticsFormState>({
     title: "",
-    chart_type: "number" as WorkspaceAnalyticsChartType,
+    chart_type: "number",
     base_id: "",
     table_id: "",
     group_field_id: "",
     value_field_id: "",
-    aggregation: "count" as WorkspaceAnalyticsAggregation
+    aggregation: "count",
+    filters: [],
+    filter_match: DEFAULT_FILTER_MATCH
   });
 
   const loadCards = useCallback(async () => {
@@ -267,12 +499,22 @@ export const WorkspaceAnalyticsDashboard = ({ workspaceId }: { workspaceId: stri
       table_id: "",
       group_field_id: "",
       value_field_id: "",
-      aggregation: "count"
+      aggregation: "count",
+      filters: [],
+      filter_match: DEFAULT_FILTER_MATCH
     });
     setEditorOpen(true);
   };
 
   const openEdit = (card: WorkspaceAnalyticsCard) => {
+    const safeFilters = (card.filters ?? []).map((filter) => ({
+      ...filter,
+      id: filter.id || createFilterId(),
+      target: filter.target ?? "field",
+      field_id: filter.field_id ?? null,
+      operator: filter.operator ?? "equals",
+      value: filter.value ?? ""
+    }));
     setEditingCard(card);
     setFormState({
       title: card.title,
@@ -280,8 +522,10 @@ export const WorkspaceAnalyticsDashboard = ({ workspaceId }: { workspaceId: stri
       base_id: card.base_id,
       table_id: card.table_id,
       group_field_id: card.group_field_id ?? "",
-      value_field_id: card.value_field_id ?? "",
-      aggregation: card.aggregation
+      value_field_id: card.aggregation === "count" ? "" : (card.value_field_id ?? ""),
+      aggregation: card.aggregation,
+      filters: safeFilters,
+      filter_match: card.filter_match ?? DEFAULT_FILTER_MATCH
     });
     void ensureTables(card.base_id);
     void ensureFields(card.table_id);
@@ -292,8 +536,39 @@ export const WorkspaceAnalyticsDashboard = ({ workspaceId }: { workspaceId: stri
     setEditorOpen(false);
   };
 
-  const handleFormChange = (key: keyof typeof formState, value: string) => {
+  const handleFormChange = (key: keyof AnalyticsFormState, value: string) => {
     setFormState((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const setAggregation = (nextAggregation: WorkspaceAnalyticsAggregation) => {
+    setFormState((prev) => ({
+      ...prev,
+      aggregation: nextAggregation,
+      value_field_id: nextAggregation === "count" ? "" : prev.value_field_id
+    }));
+  };
+
+  const addFilter = () => {
+    setFormState((prev) => ({
+      ...prev,
+      filters: [...prev.filters, createEmptyFilter()]
+    }));
+  };
+
+  const updateFilter = (filterId: string, updates: Partial<WorkspaceAnalyticsFilter>) => {
+    setFormState((prev) => ({
+      ...prev,
+      filters: prev.filters.map((filter) =>
+        filter.id === filterId ? { ...filter, ...updates } : filter
+      )
+    }));
+  };
+
+  const removeFilter = (filterId: string) => {
+    setFormState((prev) => ({
+      ...prev,
+      filters: prev.filters.filter((filter) => filter.id !== filterId)
+    }));
   };
 
   const handleSaveCard = async () => {
@@ -323,6 +598,13 @@ export const WorkspaceAnalyticsDashboard = ({ workspaceId }: { workspaceId: stri
       formState.chart_type === "number"
         ? formState.aggregation
         : (GROUP_AGGREGATIONS.includes(formState.aggregation) ? formState.aggregation : "count");
+    const sanitizedFilters = formState.filters
+      .map((filter) => ({
+        ...filter,
+        field_id: filter.target === "field" ? (filter.field_id || null) : null,
+        value: filter.value.trim()
+      }))
+      .filter(isValidFilter);
 
     try {
       setSavingCard(true);
@@ -336,8 +618,10 @@ export const WorkspaceAnalyticsDashboard = ({ workspaceId }: { workspaceId: stri
           base_id: formState.base_id,
           table_id: formState.table_id,
           group_field_id: formState.group_field_id || null,
-          value_field_id: formState.value_field_id || null,
-          aggregation
+          value_field_id: aggregation === "count" ? null : (formState.value_field_id || null),
+          aggregation,
+          filters: sanitizedFilters,
+          filter_match: formState.filter_match
         });
         setCards((prev) => prev.map((card) => (card.id === updated.id ? updated : card)));
         toast.success("Analytics card updated");
@@ -348,10 +632,12 @@ export const WorkspaceAnalyticsDashboard = ({ workspaceId }: { workspaceId: stri
           base_id: formState.base_id,
           table_id: formState.table_id,
           group_field_id: formState.group_field_id || null,
-          value_field_id: formState.value_field_id || null,
+          value_field_id: aggregation === "count" ? null : (formState.value_field_id || null),
           title: formState.title.trim(),
           chart_type: formState.chart_type,
           aggregation,
+          filters: sanitizedFilters,
+          filter_match: formState.filter_match,
           layout,
           created_by: createdBy
         } as Omit<WorkspaceAnalyticsCard, "id" | "created_at" | "updated_at">);
@@ -419,7 +705,22 @@ export const WorkspaceAnalyticsDashboard = ({ workspaceId }: { workspaceId: stri
     [bases]
   );
   const tableOptions = formState.base_id ? (tablesByBase[formState.base_id] ?? []) : [];
-  const fieldOptions = formState.table_id ? (fieldsByTable[formState.table_id] ?? []) : [];
+  const fieldOptions = useMemo(
+    () => (formState.table_id ? (fieldsByTable[formState.table_id] ?? []) : []),
+    [formState.table_id, fieldsByTable]
+  );
+  const filterFieldsMap = useMemo(
+    () => new Map(fieldOptions.map((field) => [field.id, field])),
+    [fieldOptions]
+  );
+  const filterFieldOptions = useMemo(() => {
+    const options = fieldOptions.map((field) => ({ value: field.id, label: field.name }));
+    return [
+      { value: "", label: "Select field" },
+      { value: RECORD_UPDATED_TARGET, label: "Record last updated" },
+      ...options
+    ];
+  }, [fieldOptions]);
 
   const groupFieldOptions = fieldOptions;
   const valueFieldOptions = fieldOptions;
@@ -532,7 +833,7 @@ export const WorkspaceAnalyticsDashboard = ({ workspaceId }: { workspaceId: stri
                     value={formState.chart_type}
                     onChange={(e) => {
                       handleFormChange("chart_type", e.target.value);
-                      handleFormChange("aggregation", "count");
+                      setAggregation("count");
                     }}
                     className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
@@ -546,7 +847,7 @@ export const WorkspaceAnalyticsDashboard = ({ workspaceId }: { workspaceId: stri
                   <label className="text-sm font-medium text-gray-700">Aggregation</label>
                   <select
                     value={formState.aggregation}
-                    onChange={(e) => handleFormChange("aggregation", e.target.value)}
+                    onChange={(e) => setAggregation(e.target.value as WorkspaceAnalyticsAggregation)}
                     className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     {(formState.chart_type === "number" ? NUMBER_AGGREGATIONS : GROUP_AGGREGATIONS).map((option) => (
@@ -565,10 +866,15 @@ export const WorkspaceAnalyticsDashboard = ({ workspaceId }: { workspaceId: stri
                     value={formState.base_id}
                     onChange={(e) => {
                       const value = e.target.value;
-                      handleFormChange("base_id", value);
-                      handleFormChange("table_id", "");
-                      handleFormChange("group_field_id", "");
-                      handleFormChange("value_field_id", "");
+                      setFormState((prev) => ({
+                        ...prev,
+                        base_id: value,
+                        table_id: "",
+                        group_field_id: "",
+                        value_field_id: "",
+                        filters: [],
+                        filter_match: DEFAULT_FILTER_MATCH
+                      }));
                       void ensureTables(value);
                     }}
                     className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -585,9 +891,14 @@ export const WorkspaceAnalyticsDashboard = ({ workspaceId }: { workspaceId: stri
                     value={formState.table_id}
                     onChange={(e) => {
                       const value = e.target.value;
-                      handleFormChange("table_id", value);
-                      handleFormChange("group_field_id", "");
-                      handleFormChange("value_field_id", "");
+                      setFormState((prev) => ({
+                        ...prev,
+                        table_id: value,
+                        group_field_id: "",
+                        value_field_id: "",
+                        filters: [],
+                        filter_match: DEFAULT_FILTER_MATCH
+                      }));
                       void ensureFields(value);
                     }}
                     className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -616,23 +927,167 @@ export const WorkspaceAnalyticsDashboard = ({ workspaceId }: { workspaceId: stri
                 </div>
               )}
 
-              <div>
-                <label className="text-sm font-medium text-gray-700">
-                  {formState.chart_type === "number" ? "Value field (optional)" : "Value field (optional for sum)"}
-                </label>
-                <select
-                  value={formState.value_field_id}
-                  onChange={(e) => handleFormChange("value_field_id", e.target.value)}
-                  className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">None</option>
-                  {valueFieldOptions.map((field) => (
-                    <option key={field.id} value={field.id}>{field.name}</option>
-                  ))}
-                </select>
-                <p className="mt-1 text-xs text-gray-500">
-                  Leave empty to count records. Sum/avg need a numeric field.
-                </p>
+              {formState.aggregation !== "count" && (
+                <div>
+                  <label className="text-sm font-medium text-gray-700">Value field</label>
+                  <select
+                    value={formState.value_field_id}
+                    onChange={(e) => {
+                      const nextValue = e.target.value;
+                      setFormState((prev) => ({
+                        ...prev,
+                        value_field_id: nextValue,
+                        aggregation: prev.aggregation === "count" && nextValue ? "sum" : prev.aggregation
+                      }));
+                    }}
+                    className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Select field</option>
+                    {valueFieldOptions.map((field) => (
+                      <option key={field.id} value={field.id}>{field.name}</option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-gray-500">
+                    {formState.chart_type === "number"
+                      ? "Required for sum, avg, min, or max."
+                      : "Required for sum aggregation."}
+                  </p>
+                </div>
+              )}
+
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h4 className="text-sm font-medium text-gray-700">Filters</h4>
+                    <p className="text-xs text-gray-500">Only include records that match these conditions.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={addFilter}
+                    className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-100"
+                  >
+                    <Plus size={14} />
+                    Add filter
+                  </button>
+                </div>
+
+                {formState.filters.length > 0 && (
+                  <div className="mt-3 flex items-center gap-3">
+                    <span className="text-xs text-gray-500">Match</span>
+                    <div className="flex rounded-full border border-gray-200 bg-white p-1">
+                      <button
+                        type="button"
+                        onClick={() => handleFormChange("filter_match", "all")}
+                        className={`px-3 py-1 text-xs font-medium rounded-full ${
+                          formState.filter_match === "all" ? "bg-gray-900 text-white" : "text-gray-500"
+                        }`}
+                      >
+                        All
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleFormChange("filter_match", "any")}
+                        className={`px-3 py-1 text-xs font-medium rounded-full ${
+                          formState.filter_match === "any" ? "bg-gray-900 text-white" : "text-gray-500"
+                        }`}
+                      >
+                        Any
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {formState.filters.length === 0 ? (
+                  <div className="mt-3 text-xs text-gray-500">No filters applied.</div>
+                ) : (
+                  <div className="mt-3 space-y-3">
+                    {formState.filters.map((filter) => {
+                      const fieldType = filter.target === "field"
+                        ? filterFieldsMap.get(filter.field_id ?? "")?.type
+                        : undefined;
+                      const operatorOptions = getFilterOperatorOptions(filter.target, fieldType);
+                      const selectedFieldValue =
+                        filter.target === "record_updated_at" ? RECORD_UPDATED_TARGET : (filter.field_id ?? "");
+                      const requiresValue = filterOperatorRequiresValue(filter.operator);
+                      const inputType = getFilterValueInputType(filter.operator, filter.target, fieldType);
+
+                      return (
+                        <div key={filter.id} className="flex flex-wrap items-center gap-3 rounded-lg border border-gray-200 bg-white p-3">
+                          <div className="min-w-[200px] flex-1">
+                            <select
+                              value={selectedFieldValue}
+                              onChange={(e) => {
+                                const nextValue = e.target.value;
+                                const nextTarget =
+                                  nextValue === RECORD_UPDATED_TARGET ? RECORD_UPDATED_TARGET : "field";
+                                const nextFieldId = nextTarget === "field" ? (nextValue || null) : null;
+                                const nextFieldType = nextTarget === "field"
+                                  ? filterFieldsMap.get(nextFieldId ?? "")?.type
+                                  : undefined;
+                                const nextOperatorOptions = getFilterOperatorOptions(nextTarget, nextFieldType);
+                                const nextOperator = nextOperatorOptions.some((option) => option.value === filter.operator)
+                                  ? filter.operator
+                                  : nextOperatorOptions[0].value;
+                                updateFilter(filter.id, {
+                                  target: nextTarget,
+                                  field_id: nextFieldId,
+                                  operator: nextOperator,
+                                  value: filterOperatorRequiresValue(nextOperator) ? filter.value : ""
+                                });
+                              }}
+                              className="w-full rounded-md border border-gray-300 px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                              {filterFieldOptions.map((option) => (
+                                <option key={option.value} value={option.value}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div className="min-w-[180px] flex-1">
+                            <select
+                              value={filter.operator}
+                              onChange={(e) => {
+                                const nextOperator = e.target.value as WorkspaceAnalyticsFilterOperator;
+                                updateFilter(filter.id, {
+                                  operator: nextOperator,
+                                  value: filterOperatorRequiresValue(nextOperator) ? filter.value : ""
+                                });
+                              }}
+                              className="w-full rounded-md border border-gray-300 px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                              {operatorOptions.map((option) => (
+                                <option key={option.value} value={option.value}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div className="min-w-[160px] flex-1">
+                            <input
+                              type={inputType}
+                              value={filter.value}
+                              onChange={(e) => updateFilter(filter.id, { value: e.target.value })}
+                              disabled={!requiresValue}
+                              placeholder={filter.operator === "within_last_days" ? "Days" : "Value"}
+                              className="w-full rounded-md border border-gray-300 px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                            />
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => removeFilter(filter.id)}
+                            className="rounded-md border border-gray-200 px-2 py-1 text-xs text-gray-500 hover:border-red-200 hover:text-red-600"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -696,41 +1151,43 @@ const useAnalyticsCardData = ({
     try {
       const { data: records, error: recordError } = await supabase
         .from("records")
-        .select("values")
+        .select("values, created_at, updated_at")
         .eq("table_id", card.table_id);
 
       if (recordError) {
         throw recordError;
       }
 
-      const rows = records ?? [];
+      const rows = (records ?? []) as AnalyticsRecordRow[];
+      const filteredRows = applyAnalyticsFilters(
+        rows,
+        card.filters ?? [],
+        card.filter_match ?? DEFAULT_FILTER_MATCH,
+        fieldsMap
+      );
       setLastUpdated(new Date().toLocaleTimeString());
 
       if (card.chart_type === "number") {
-        if (card.aggregation === "count" || !card.value_field_id) {
-          if (card.value_field_id) {
-            const count = rows.filter((row) => row.values?.[card.value_field_id!] != null).length;
-            setNumberValue(count);
-          } else {
-            setNumberValue(rows.length);
-          }
-        } else {
-          const values = rows
-            .map((row) => row.values?.[card.value_field_id ?? ""])
-            .map((val) => toNumber(val))
-            .filter((val): val is number => val !== null);
+        if (card.aggregation === "count") {
+          setNumberValue(filteredRows.length);
+          return;
+        }
 
-          if (values.length === 0) {
-            setNumberValue(0);
-          } else if (card.aggregation === "sum") {
-            setNumberValue(values.reduce((sum, val) => sum + val, 0));
-          } else if (card.aggregation === "avg") {
-            setNumberValue(values.reduce((sum, val) => sum + val, 0) / values.length);
-          } else if (card.aggregation === "min") {
-            setNumberValue(Math.min(...values));
-          } else if (card.aggregation === "max") {
-            setNumberValue(Math.max(...values));
-          }
+        const values = filteredRows
+          .map((row) => row.values?.[card.value_field_id ?? ""])
+          .map((val) => toNumber(val))
+          .filter((val): val is number => val !== null);
+
+        if (values.length === 0) {
+          setNumberValue(0);
+        } else if (card.aggregation === "sum") {
+          setNumberValue(values.reduce((sum, val) => sum + val, 0));
+        } else if (card.aggregation === "avg") {
+          setNumberValue(values.reduce((sum, val) => sum + val, 0) / values.length);
+        } else if (card.aggregation === "min") {
+          setNumberValue(Math.min(...values));
+        } else if (card.aggregation === "max") {
+          setNumberValue(Math.max(...values));
         }
         return;
       }
@@ -739,7 +1196,7 @@ const useAnalyticsCardData = ({
       const metric = card.aggregation;
       const grouped = new Map<string, number>();
 
-      rows.forEach((row) => {
+      filteredRows.forEach((row) => {
         const rawGroup = card.group_field_id ? row.values?.[card.group_field_id] : null;
         const groupValues = formatGroupValue(rawGroup, groupField);
         let metricValue = 1;
@@ -986,6 +1443,10 @@ const AnalyticsCardDetailModal = ({
   const valueField = card.value_field_id ? fieldsMap.get(card.value_field_id) : undefined;
   const groupLabel = groupField?.name || "Record";
   const valueLabel = valueField?.name || "Records";
+  const activeFilters = (card.filters ?? []).filter(isValidFilter);
+  const filtersLabel = activeFilters.length
+    ? `${activeFilters.length} filter${activeFilters.length === 1 ? "" : "s"}`
+    : "None";
   const totalValue = card.chart_type === "number"
     ? (numberValue ?? 0)
     : chartData.reduce((sum, item) => sum + item.value, 0);
@@ -1204,6 +1665,7 @@ const AnalyticsCardDetailModal = ({
                     <div>Value field: {valueLabel}</div>
                   )}
                   <div>Data points: {dataPointCount}</div>
+                  <div>Filters: {filtersLabel}</div>
                   <div>Table: {tableName || "Table"}</div>
                   <div>Base: {baseName || "Base"}</div>
                 </div>
