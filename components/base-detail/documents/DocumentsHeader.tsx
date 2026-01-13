@@ -1,4 +1,4 @@
-import { FolderPlus, FileUp, Hash, Loader2, FileText, Sparkles, PenTool, CheckCircle2, Layers } from "lucide-react";
+import { FolderPlus, FileUp, Hash, Loader2, FileText, PenTool, CheckCircle2, Layers } from "lucide-react";
 
 type DocumentsHeaderProps = {
   prefixLabel: string;
@@ -7,7 +7,6 @@ type DocumentsHeaderProps = {
   onAddFolder: () => void;
   onUpload: (files: FileList | null) => void;
   onManageTemplates?: () => void;
-  onGenerateDocument?: () => void;
   onRequestSignature?: () => void;
   onViewSignatures?: () => void;
   onMergeDocuments?: () => void;
@@ -20,7 +19,6 @@ export const DocumentsHeader = ({
   onAddFolder,
   onUpload,
   onManageTemplates,
-  onGenerateDocument,
   onRequestSignature,
   onViewSignatures,
   onMergeDocuments,
@@ -40,16 +38,6 @@ export const DocumentsHeader = ({
           >
             <FileText className="w-4 h-4" />
             Templates
-          </button>
-        )}
-        {onGenerateDocument && (
-          <button
-            onClick={onGenerateDocument}
-            className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-white bg-purple-600 border border-purple-600 rounded-lg hover:bg-purple-700 transition-colors"
-            title="Generate document from template"
-          >
-            <Sparkles className="w-4 h-4" />
-            Generate
           </button>
         )}
         {onRequestSignature && (

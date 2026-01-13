@@ -839,48 +839,6 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
         onRequestSignature={() => setShowSignatureRequestModal(true)}
         onViewSignatures={() => setShowSignatureStatus(true)}
         onMergeDocuments={() => setShowMergeWithReorderModal(true)}
-        onGenerateDocument={async () => {
-          // Load templates and show selection
-          try {
-            // Get auth token from Supabase session
-            const { data: { session } } = await supabase.auth.getSession();
-            const headers: HeadersInit = {};
-            if (session?.access_token) {
-              headers.Authorization = `Bearer ${session.access_token}`;
-            }
-
-            const response = await fetch(
-              `/api/templates?baseId=${baseId}${selectedTable?.id ? `&tableId=${selectedTable.id}` : ""}`,
-              { headers }
-            );
-            if (!response.ok) {
-              const errorData = await response.json().catch(() => ({}));
-              throw new Error(errorData.error || "Failed to load templates");
-            }
-            const data = await response.json();
-            const templates = data.templates || [];
-            
-            if (templates.length === 0) {
-              toast.info("No templates found", {
-                description: "Please create a template first.",
-              });
-              setShowTemplateManagement(true);
-              return;
-            }
-
-            // Show template selection
-            if (templates.length === 1) {
-              setSelectedTemplate(templates[0]);
-              setShowDocumentGenerator(true);
-            } else {
-              // For multiple templates, show management modal with selection
-              setShowTemplateManagement(true);
-            }
-          } catch (err) {
-            console.error("Failed to load templates", err);
-            setShowTemplateManagement(true);
-          }
-        }}
       />
 
       <div className="flex flex-1 min-h-0">
