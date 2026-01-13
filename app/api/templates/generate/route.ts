@@ -62,7 +62,7 @@ const basePrefix = (baseId: string, tableId?: string | null) =>
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { templateId, baseId, tableId, fieldValues, fieldOverrides, addedElements, outputFileName, skipSignatureRequest } = body;
+    const { templateId, baseId, tableId, recordId, fieldValues, fieldOverrides, addedElements, outputFileName, skipSignatureRequest } = body;
 
     if (!templateId || !baseId || !fieldValues) {
       return NextResponse.json(
@@ -554,6 +554,45 @@ export async function POST(request: NextRequest) {
     // Return PDF as base64 or binary
     // For API route, we'll return base64 encoded
     const base64 = Buffer.from(pdfBytes).toString("base64");
+
+    // If recordId is provided, attach the generated document to the record
+    if (recordId) {
+      try {
+        // Get current user for uploaded_by
+        const { data: { user } } = await supabase.auth.getUser();
+        let uploadedBy: string | null = null;
+        if (user) {
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("id")
+            .eq("id", user.id)
+            .single();
+          uploadedBy = profile?.id || null;
+        }
+
+        // Create record_documents entry to bind this document to the record
+        const { error: attachError } = await supabase
+          .from("record_documents")
+          .insert({
+            record_id: recordId,
+            base_id: baseId,
+            table_id: tableId || null,
+            document_path: storagePath,
+            document_name: finalFileName,
+            mime_type: "application/pdf",
+            size_bytes: pdfBytes.byteLength,
+            uploaded_by: uploadedBy,
+          });
+
+        if (attachError) {
+          console.error("Failed to attach document to record:", attachError);
+          // Don't fail the generation if attachment fails
+        }
+      } catch (attachErr) {
+        console.error("Error attaching document to record:", attachErr);
+        // Don't fail the generation if attachment fails
+      }
+    }
 
     return NextResponse.json({
       success: true,

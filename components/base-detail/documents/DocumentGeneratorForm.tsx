@@ -11,6 +11,8 @@ import { applyInputMask } from "@/lib/utils/field-formatters";
 import { FolderSelector } from "./FolderSelector";
 import { toast } from "sonner";
 
+import type { FieldRow } from "@/lib/types/base-detail";
+
 type DocumentGeneratorFormProps = {
   isOpen: boolean;
   onClose: () => void;
@@ -18,6 +20,9 @@ type DocumentGeneratorFormProps = {
   baseId: string;
   tableId?: string | null;
   onDocumentGenerated?: () => void;
+  recordId?: string;
+  recordValues?: Record<string, unknown>;
+  recordFields?: FieldRow[];
 };
 
 export const DocumentGeneratorForm = ({
@@ -27,6 +32,9 @@ export const DocumentGeneratorForm = ({
   baseId,
   tableId,
   onDocumentGenerated,
+  recordId,
+  recordValues,
+  recordFields,
 }: DocumentGeneratorFormProps) => {
   const [fieldValues, setFieldValues] = useState<Record<string, any>>({});
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -133,11 +141,44 @@ export const DocumentGeneratorForm = ({
 
   useEffect(() => {
     if (isOpen && template) {
-      // Initialize field values with defaults
+      // Initialize field values with defaults or auto-fill from record
       const initialValues: Record<string, any> = {};
       if (template.fields) {
         template.fields.forEach((field) => {
-          if (field.default_value) {
+          // Try to auto-fill from record values first
+          let autoFilledValue: any = null;
+          
+          if (recordValues && recordFields) {
+            // Try exact field_key match first
+            if (recordValues[field.field_key]) {
+              autoFilledValue = recordValues[field.field_key];
+            } else {
+              // Try to match by field name (case-insensitive)
+              const matchingRecordField = recordFields.find(
+                (rf) => rf.name.toLowerCase() === field.field_name.toLowerCase() ||
+                        rf.name.toLowerCase() === field.field_key.toLowerCase()
+              );
+              
+              if (matchingRecordField && recordValues[matchingRecordField.id]) {
+                autoFilledValue = recordValues[matchingRecordField.id];
+                
+                // Format dates for display
+                if (matchingRecordField.type === 'date' || matchingRecordField.type === 'datetime') {
+                  const date = new Date(autoFilledValue as string);
+                  if (!isNaN(date.getTime())) {
+                    autoFilledValue = matchingRecordField.type === 'date' 
+                      ? date.toISOString().split('T')[0]
+                      : date.toISOString().slice(0, 16);
+                  }
+                }
+              }
+            }
+          }
+          
+          // Priority: auto-filled value > default value > empty string
+          if (autoFilledValue !== null && autoFilledValue !== undefined) {
+            initialValues[field.field_key] = autoFilledValue;
+          } else if (field.default_value) {
             initialValues[field.field_key] = field.default_value;
           } else {
             initialValues[field.field_key] = "";
@@ -145,10 +186,21 @@ export const DocumentGeneratorForm = ({
         });
       }
       setFieldValues(initialValues);
-      setOutputFileName(template.name.replace(/\s+/g, "_") + "_filled.pdf");
+      
+      // Set output filename with record name if available
+      let fileName = template.name.replace(/\s+/g, "_");
+      if (recordValues && recordFields) {
+        // Try to find "Name" field
+        const nameField = recordFields.find((f) => f.name.toLowerCase() === "name");
+        if (nameField && recordValues[nameField.id]) {
+          const recordName = String(recordValues[nameField.id]).replace(/[^a-zA-Z0-9_-]/g, "_");
+          fileName = `${fileName}_${recordName}`;
+        }
+      }
+      setOutputFileName(`${fileName}_filled.pdf`);
       setError(null);
     }
-  }, [isOpen, template]);
+  }, [isOpen, template, recordValues, recordFields]);
 
   // Get effective field position (from override or original)
   const getEffectiveFieldPosition = useCallback((field: any) => {
@@ -667,6 +719,7 @@ export const DocumentGeneratorForm = ({
           templateId: template.id,
           baseId,
           tableId: tableId || null,
+          recordId: recordId || null,
           fieldValues,
           fieldOverrides: Object.keys(fieldOverridesObj).length > 0 ? fieldOverridesObj : undefined,
           outputFileName: outputFileName || undefined,

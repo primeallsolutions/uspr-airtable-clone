@@ -22,11 +22,18 @@ import {
   type RecordDocument,
 } from "@/lib/services/record-documents-service";
 
+import { DocumentGeneratorForm } from "./DocumentGeneratorForm";
+import { TemplateManagementModal } from "./TemplateManagementModal";
+import type { DocumentTemplate } from "@/lib/services/template-service";
+import type { FieldRow } from "@/lib/types/base-detail";
+
 type RecordDocumentsProps = {
   recordId: string;
   baseId: string;
   tableId?: string | null;
   recordName?: string;
+  recordValues?: Record<string, unknown>;
+  fields?: FieldRow[];
 };
 
 // Helper to get file icon based on mime type
@@ -62,6 +69,8 @@ export const RecordDocuments = ({
   baseId,
   tableId,
   recordName,
+  recordValues,
+  fields,
 }: RecordDocumentsProps) => {
   const router = useRouter();
   const [documents, setDocuments] = useState<RecordDocument[]>([]);
@@ -72,6 +81,9 @@ export const RecordDocuments = ({
   const [previewDoc, setPreviewDoc] = useState<RecordDocument | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [showGeneratorForm, setShowGeneratorForm] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState<DocumentTemplate | null>(null);
 
   // Navigate to advanced documents page
   const handleAdvancedDocuments = () => {
@@ -203,6 +215,14 @@ export const RecordDocuments = ({
           <span className="text-sm text-gray-500">({documents.length})</span>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowTemplateModal(true)}
+            className="px-3 py-1.5 text-sm font-medium text-white bg-green-600 border border-green-700 rounded-lg hover:bg-green-700 transition-colors flex items-center gap-1.5"
+            title="Generate document from template with auto-filled record data"
+          >
+            <FileText className="w-4 h-4" />
+            Generate
+          </button>
           <button
             onClick={handleAdvancedDocuments}
             className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-1.5"
@@ -380,6 +400,45 @@ export const RecordDocuments = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Template Selection Modal */}
+      <TemplateManagementModal
+        isOpen={showTemplateModal}
+        onClose={() => setShowTemplateModal(false)}
+        baseId={baseId}
+        tableId={tableId}
+        onTemplateSelect={(template) => {
+          setSelectedTemplate(template);
+          setShowTemplateModal(false);
+          setShowGeneratorForm(true);
+        }}
+        onEditFields={() => {
+          // Not needed in this context
+          setShowTemplateModal(false);
+        }}
+      />
+
+      {/* Document Generator Form with Record Auto-Fill */}
+      {selectedTemplate && (
+        <DocumentGeneratorForm
+          isOpen={showGeneratorForm}
+          onClose={() => {
+            setShowGeneratorForm(false);
+            setSelectedTemplate(null);
+          }}
+          template={selectedTemplate}
+          baseId={baseId}
+          tableId={tableId}
+          recordId={recordId}
+          recordValues={recordValues}
+          recordFields={fields}
+          onDocumentGenerated={() => {
+            loadDocuments();
+            setShowGeneratorForm(false);
+            setSelectedTemplate(null);
+          }}
+        />
       )}
     </div>
   );

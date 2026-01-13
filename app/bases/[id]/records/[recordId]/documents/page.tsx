@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, Loader2, FileText, File } from "lucide-react";
+import { ArrowLeft, Loader2, FileText, File, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { BaseDetailService } from "@/lib/services/base-detail-service";
 import type { RecordRow, TableRow } from "@/lib/types/base-detail";
@@ -22,6 +22,8 @@ export default function RecordDocumentsPage() {
   const [table, setTable] = useState<TableRow | null>(null);
   const [baseName, setBaseName] = useState<string>("");
   const [loading, setLoading] = useState(true);
+  const [fields, setFields] = useState<any[]>([]);
+  const [selectedTitleFieldId, setSelectedTitleFieldId] = useState<string | null>(null);
 
   // Load record and table data
   useEffect(() => {
@@ -42,11 +44,20 @@ export default function RecordDocumentsPage() {
           if (foundTable) {
             setTable(foundTable);
 
+            // Load fields for this table
+            const tableFields = await BaseDetailService.getFields(tableId);
+            const sortedFields = tableFields.sort((a, b) => a.order_index - b.order_index);
+            setFields(sortedFields);
+
             // Load records from table to find our specific record
             const records = await BaseDetailService.getRecords(tableId);
             const foundRecord = records.find((r) => r.id === recordId);
             if (foundRecord) {
               setRecord(foundRecord);
+              // Default to first field if not already set
+              if (!selectedTitleFieldId && sortedFields.length > 0) {
+                setSelectedTitleFieldId(sortedFields[0].id);
+              }
             } else {
               toast.error("Record not found in table");
             }
@@ -62,6 +73,16 @@ export default function RecordDocumentsPage() {
             if (foundRecord) {
               setRecord(foundRecord);
               setTable(tbl);
+              
+              // Load fields for this table
+              const tableFields = await BaseDetailService.getFields(tbl.id);
+              const sortedFields = tableFields.sort((a, b) => a.order_index - b.order_index);
+              setFields(sortedFields);
+              
+              // Default to first field if not already set
+              if (!selectedTitleFieldId && sortedFields.length > 0) {
+                setSelectedTitleFieldId(sortedFields[0].id);
+              }
               break;
             }
           }
@@ -81,17 +102,25 @@ export default function RecordDocumentsPage() {
     loadData();
   }, [baseId, recordId, tableId]);
 
-  // Get record name (look for "Name" field)
+  // Get record name based on selected field (defaults to 1st column)
   const recordName = useMemo(() => {
-    if (!record) return "Record";
+    if (!record || fields.length === 0) return "Record";
     
-    // Try to find a value that looks like a name
-    const nameValue = Object.values(record.values).find((value) => {
-      return typeof value === "string" && value.trim().length > 0;
-    });
-
-    return (nameValue as string) || `Record ${recordId.slice(0, 8)}`;
-  }, [record, recordId]);
+    // Use selected field, or default to first field (by order_index)
+    const fieldToUse = selectedTitleFieldId 
+      ? fields.find(f => f.id === selectedTitleFieldId)
+      : fields[0]; // Already sorted by order_index
+    
+    if (!fieldToUse) return `Record ${recordId.slice(0, 8)}`;
+    
+    const value = record.values[fieldToUse.id];
+    if (value && String(value).trim().length > 0) {
+      return String(value);
+    }
+    
+    // Fallback to record ID if field is empty
+    return `Record ${recordId.slice(0, 8)}`;
+  }, [record, recordId, fields, selectedTitleFieldId]);
 
   if (loading) {
     return (
@@ -137,22 +166,62 @@ export default function RecordDocumentsPage() {
               <ArrowLeft size={20} className="text-gray-600" />
             </button>
 
-            {/* Title */}
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">
-                {recordName}
-              </h1>
-              <div className="flex items-center gap-2 text-sm text-gray-500 mt-1">
-                <span>{baseName}</span>
-                {table && (
-                  <>
-                    <span>•</span>
-                    <span>{table.name}</span>
-                  </>
-                )}
-                <span>•</span>
-                <span>Documents & Files</span>
+            {/* Title with Column Selector */}
+            <div className="flex items-center gap-3">
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">
+                  {recordName}
+                </h1>
+                <div className="flex items-center gap-2 text-sm text-gray-500 mt-1">
+                  <span>{baseName}</span>
+                  {table && (
+                    <>
+                      <span>•</span>
+                      <span>{table.name}</span>
+                    </>
+                  )}
+                  <span>•</span>
+                  <span>Documents & Files</span>
+                </div>
               </div>
+
+              {/* Column Selector Dropdown */}
+              {fields.length > 0 && (
+                <div className="relative group">
+                  <button
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors border border-gray-300"
+                    onClick={(e) => {
+                      e.currentTarget.nextElementSibling?.classList.toggle('hidden');
+                    }}
+                    title="Change which field is displayed as the title"
+                  >
+                    <span>Title: {fields.find(f => f.id === selectedTitleFieldId)?.name || fields[0]?.name}</span>
+                    <ChevronDown className="w-3 h-3" />
+                  </button>
+                  <div className="hidden absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[200px] z-10">
+                    {fields.map((field, index) => (
+                      <button
+                        key={field.id}
+                        onClick={() => {
+                          setSelectedTitleFieldId(field.id);
+                          // Close dropdown
+                          document.querySelector('.group > div:not(.hidden)')?.classList.add('hidden');
+                        }}
+                        className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 transition-colors flex items-center justify-between ${
+                          selectedTitleFieldId === field.id ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-700'
+                        }`}
+                      >
+                        <span>
+                          {index === 0 && '(Default) '}{field.name}
+                        </span>
+                        {selectedTitleFieldId === field.id && (
+                          <span className="text-blue-600">✓</span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

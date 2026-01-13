@@ -510,6 +510,8 @@ export const RecordDetailsModal = ({
               baseId={baseId}
               tableId={record.table_id}
               recordName={nameValue || "Record"}
+              recordValues={record.values}
+              fields={fields}
             />
           )}
         </div>
