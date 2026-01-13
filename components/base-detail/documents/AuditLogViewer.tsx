@@ -30,6 +30,7 @@ import { toast } from "sonner";
 type AuditLogViewerProps = {
   baseId: string;
   tableId?: string | null;
+  recordId?: string | null; // Filter to record-specific activities
   onClose?: () => void;
 };
 
@@ -75,6 +76,7 @@ const ACTION_ICONS: Record<string, React.FC<{ className?: string }>> = {
 export const AuditLogViewer = ({
   baseId,
   tableId,
+  recordId,
   onClose,
 }: AuditLogViewerProps) => {
   const [logs, setLogs] = useState<DocumentActivityLog[]>([]);
@@ -106,6 +108,7 @@ export const AuditLogViewer = ({
             limit: 50,
             before,
             actions: selectedActions.length > 0 ? selectedActions : undefined,
+            recordId, // Pass recordId for filtering
           }
         );
 
@@ -139,7 +142,7 @@ export const AuditLogViewer = ({
         setLoadingMore(false);
       }
     },
-    [baseId, tableId, selectedActions]
+    [baseId, tableId, recordId, selectedActions]
   );
 
   useEffect(() => {

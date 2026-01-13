@@ -229,11 +229,13 @@ export default function RecordDocumentsPage() {
 
       {/* Content - Full Width */}
       <div className="flex-1 flex flex-col">
-        {/* Use DocumentsView with table context - takes full height */}
+        {/* Use DocumentsView with record context - scoped to this specific record */}
         <DocumentsView
           baseId={baseId}
           baseName={baseName}
           selectedTable={table}
+          recordId={recordId}
+          recordName={recordName}
         />
       </div>
     </div>

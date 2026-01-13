@@ -38,6 +38,7 @@ import {
 type ActivityFeedProps = {
   baseId: string;
   tableId?: string | null;
+  recordId?: string | null; // Filter to record-specific activities
   className?: string;
 };
 
@@ -67,7 +68,7 @@ const ICON_MAP: Record<string, React.FC<{ className?: string }>> = {
   activity: Activity,
 };
 
-export const ActivityFeed = ({ baseId, tableId, className = "" }: ActivityFeedProps) => {
+export const ActivityFeed = ({ baseId, tableId, recordId, className = "" }: ActivityFeedProps) => {
   const [activities, setActivities] = useState<DocumentActivityLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -82,6 +83,7 @@ export const ActivityFeed = ({ baseId, tableId, className = "" }: ActivityFeedPr
       setError(null);
       const logs = await DocumentActivityService.getActivityLogs(baseId, tableId, {
         limit: 30,
+        recordId, // Pass recordId for filtering
       });
       setActivities(logs);
       setHasMore(logs.length >= 30);
@@ -91,7 +93,7 @@ export const ActivityFeed = ({ baseId, tableId, className = "" }: ActivityFeedPr
     } finally {
       setLoading(false);
     }
-  }, [baseId, tableId]);
+  }, [baseId, tableId, recordId]);
 
   // Load more activities (pagination)
   const loadMore = useCallback(async () => {
@@ -103,6 +105,7 @@ export const ActivityFeed = ({ baseId, tableId, className = "" }: ActivityFeedPr
       const moreLogs = await DocumentActivityService.getActivityLogs(baseId, tableId, {
         limit: 30,
         before: lastActivity.created_at,
+        recordId, // Pass recordId for filtering
       });
       
       if (moreLogs.length < 30) {
@@ -115,7 +118,7 @@ export const ActivityFeed = ({ baseId, tableId, className = "" }: ActivityFeedPr
     } finally {
       setLoadingMore(false);
     }
-  }, [baseId, tableId, activities, loadingMore, hasMore]);
+  }, [baseId, tableId, recordId, activities, loadingMore, hasMore]);
 
   // Subscribe to real-time updates
   useEffect(() => {
@@ -127,7 +130,8 @@ export const ActivityFeed = ({ baseId, tableId, className = "" }: ActivityFeedPr
       tableId || null,
       (newActivity) => {
         setActivities((prev) => [newActivity, ...prev]);
-      }
+      },
+      recordId // Subscribe to record-specific activities
     );
 
     unsubscribeRef.current = unsubscribe;

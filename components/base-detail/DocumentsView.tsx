@@ -40,12 +40,18 @@ type DocumentsViewProps = {
   baseId: string;
   baseName?: string;
   selectedTable?: TableRow | null;
+  recordId?: string | null; // When provided, scopes documents to this specific record
+  recordName?: string; // Display name for the record
 };
 
-export const DocumentsView = ({ baseId, baseName = "Base", selectedTable }: DocumentsViewProps) => {
+export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, recordId, recordName }: DocumentsViewProps) => {
+  // If recordId is provided, show record context in prefix
   const prefixLabel = useMemo(() => {
+    if (recordId && recordName) {
+      return `${baseName}${selectedTable ? ` / ${selectedTable.name}` : ""} / ${recordName}`;
+    }
     return selectedTable ? `${baseName} / ${selectedTable.name}` : baseName;
-  }, [baseName, selectedTable]);
+  }, [baseName, selectedTable, recordId, recordName]);
 
   const [allDocs, setAllDocs] = useState<StoredDocument[]>([]);
   const [rawDocs, setRawDocs] = useState<StoredDocument[]>([]);
@@ -98,9 +104,12 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable }: Docu
       setError(null);
 
       // Load documents and folders in parallel
+      // When recordId is provided, use record-scoped methods
       const [docs, folders] = await Promise.all([
-        DocumentsService.listDocuments(baseId, selectedTable?.id),
-        DocumentsService.listFolders(baseId, selectedTable?.id ?? null, null, true).catch(() => []), // Include all folders for tree building
+        DocumentsService.listDocuments(baseId, selectedTable?.id, recordId),
+        recordId 
+          ? DocumentsService.listRecordFolders(baseId, recordId).catch(() => [])
+          : DocumentsService.listFolders(baseId, selectedTable?.id ?? null, null, true).catch(() => []), // Include all folders for tree building
       ]);
 
       setRawDocs(docs);
@@ -136,7 +145,7 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable }: Docu
         return prev;
       });
     }
-  }, [baseId, selectedTable?.id, selectedDocPath]);
+  }, [baseId, selectedTable?.id, selectedDocPath, recordId]);
 
   useEffect(() => {
     refresh();
@@ -145,8 +154,8 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable }: Docu
   useEffect(() => {
     setFolderPath("");
     setSelectedDocPath(null);
-    setIsInitialLoad(true); // Reset initial load state when base/table changes
-  }, [baseId, selectedTable?.id]);
+    setIsInitialLoad(true); // Reset initial load state when base/table/record changes
+  }, [baseId, selectedTable?.id, recordId]);
 
   const handleAddFolder = () => {
     setShowFolderModal(true);
@@ -154,7 +163,7 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable }: Docu
 
   const handleCreateFolder = async (name: string) => {
     try {
-      await DocumentsService.createFolder(baseId, selectedTable?.id ?? null, currentPrefix, name);
+      await DocumentsService.createFolder(baseId, selectedTable?.id ?? null, currentPrefix, name, recordId);
       await refresh();
       setFolderPath(currentPrefix + name + "/");
       
@@ -165,6 +174,7 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable }: Docu
         action: 'folder_create',
         folderPath: currentPrefix + name + "/",
         documentName: name,
+        ...(recordId && { metadata: { recordId } }),
       });
       
       toast.success("Folder created successfully", {
@@ -205,6 +215,7 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable }: Docu
         await DocumentsService.uploadDocument({
           baseId,
           tableId: selectedTable?.id,
+          recordId, // Pass recordId for record-scoped uploads
           folderPath: currentPrefix,
           file,
         });
@@ -433,10 +444,10 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable }: Docu
         return;
       }
       try {
-        // Create all default folders
+        // Create all default folders (pass recordId if provided for record-scoped folders)
         for (const folderName of defaultFolders) {
           try {
-            await DocumentsService.createFolder(baseId, selectedTable?.id ?? null, "", folderName);
+            await DocumentsService.createFolder(baseId, selectedTable?.id ?? null, "", folderName, recordId);
           } catch (err) {
             console.error(`Failed to create default folder "${folderName}"`, err);
             // Continue creating other folders even if one fails
@@ -450,7 +461,7 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable }: Docu
       }
     };
     ensureDefaultFolders();
-  }, [baseId, selectedTable?.id, rootFolders.length, defaultFolderEnsured, refresh, defaultFolders]);
+  }, [baseId, selectedTable?.id, recordId, rootFolders.length, defaultFolderEnsured, refresh, defaultFolders]);
 
   // Auto-select the first folder when none selected
   useEffect(() => {
@@ -492,7 +503,9 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable }: Docu
         const url = await DocumentsService.getSignedUrl(
           baseId,
           selectedTable?.id ?? null,
-          selectedDoc.path
+          selectedDoc.path,
+          600,
+          recordId
         );
         if (active) {
           setSignedUrl(url);
@@ -515,7 +528,7 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable }: Docu
     return () => {
       active = false;
     };
-  }, [selectedDoc, baseId, selectedTable?.id]);
+  }, [selectedDoc, baseId, selectedTable?.id, recordId]);
 
   const handleDeleteSelected = async () => {
     if (!selectedDoc || isFolder(selectedDoc)) return;
@@ -530,7 +543,7 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable }: Docu
     const toastId = toast.loading(`Deleting "${fileName}"...`);
     
     try {
-      await DocumentsService.deleteDocument(baseId, selectedTable?.id ?? null, selectedDoc.path);
+      await DocumentsService.deleteDocument(baseId, selectedTable?.id ?? null, selectedDoc.path, recordId);
       
       // Log activity
       await DocumentActivityService.logActivity({
@@ -576,7 +589,8 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable }: Docu
         baseId,
         selectedTable?.id ?? null,
         selectedDoc.path,
-        newRelative
+        newRelative,
+        recordId
       );
       setSelectedDocPath(newRelative);
       // Log activity
@@ -721,7 +735,9 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable }: Docu
       const url = await DocumentsService.getSignedUrl(
         baseId,
         selectedTable?.id ?? null,
-        doc.path
+        doc.path,
+        600,
+        recordId
       );
       setEditorDoc(doc);
       setEditorSignedUrl(url);
@@ -748,7 +764,7 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable }: Docu
       const originalFileName = originalPath.split("/").pop() || file.name;
       
       // Delete the old file first
-      await DocumentsService.deleteDocument(baseId, selectedTable?.id ?? null, originalPath);
+      await DocumentsService.deleteDocument(baseId, selectedTable?.id ?? null, originalPath, recordId);
       
       // Upload the edited file with the SAME name (preserving original filename)
       const editedFile = new File([file], originalFileName, { type: file.type });
@@ -756,6 +772,7 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable }: Docu
       const newPath = await DocumentsService.uploadDocument({
         baseId,
         tableId: selectedTable?.id,
+        recordId, // Pass recordId for record-scoped uploads
         folderPath: currentPrefix,
         file: editedFile,
         preserveName: true, // Keep the original filename
@@ -788,7 +805,9 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable }: Docu
       const url = await DocumentsService.getSignedUrl(
         baseId,
         selectedTable?.id ?? null,
-        doc.path
+        doc.path,
+        600,
+        recordId
       );
       setSplitDoc(doc);
       setSplitSignedUrl(url);
@@ -939,6 +958,7 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable }: Docu
                   onDocumentEdit={handleDocumentEdit}
                   baseId={baseId}
                   tableId={selectedTable?.id}
+                  recordId={recordId}
                 />
 
                 <DocumentPreview
@@ -947,6 +967,7 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable }: Docu
                   viewerError={viewerError}
                   baseId={baseId}
                   tableId={selectedTable?.id}
+                  recordId={recordId}
                   onRename={handleRenameSelected}
                   onDelete={handleDeleteSelected}
                   onSplit={selectedDoc && isPdf(selectedDoc.mimeType) ? () => handleDocumentSplit(selectedDoc) : undefined}
@@ -959,6 +980,7 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable }: Docu
                     <ActivityFeed
                       baseId={baseId}
                       tableId={selectedTable?.id}
+                      recordId={recordId}
                     />
                   </div>
                 )}
@@ -1164,6 +1186,7 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable }: Docu
             <AuditLogViewer
               baseId={baseId}
               tableId={selectedTable?.id}
+              recordId={recordId}
               onClose={() => setShowAuditLog(false)}
             />
           </div>

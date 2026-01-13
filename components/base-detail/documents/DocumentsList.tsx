@@ -16,6 +16,7 @@ type DocumentsListProps = {
   onDocumentEdit?: (doc: StoredDocument & { relative: string }) => void;
   baseId: string;
   tableId?: string | null;
+  recordId?: string | null;
 };
 
 const renderDocIcon = (mimeType: string) => {
@@ -34,6 +35,7 @@ export const DocumentsList = ({
   onDocumentEdit,
   baseId,
   tableId,
+  recordId,
 }: DocumentsListProps) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
@@ -53,12 +55,12 @@ export const DocumentsList = ({
   const loadSignedUrl = useCallback(async (doc: StoredDocument & { relative: string }) => {
     if (signedUrls[doc.path]) return;
     try {
-      const url = await DocumentsService.getSignedUrl(baseId, tableId ?? null, doc.path);
+      const url = await DocumentsService.getSignedUrl(baseId, tableId ?? null, doc.path, 600, recordId);
       setSignedUrls(prev => ({ ...prev, [doc.path]: url }));
     } catch (err) {
       console.error("Failed to get signed URL for thumbnail:", err);
     }
-  }, [baseId, tableId, signedUrls]);
+  }, [baseId, tableId, recordId, signedUrls]);
 
   // Load signed URLs when grid view is active
   useEffect(() => {

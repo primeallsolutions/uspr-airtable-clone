@@ -170,7 +170,7 @@ export class DocumentActivityService {
   }
 
   /**
-   * Get activity logs for a base/table
+   * Get activity logs for a base/table/record
    */
   static async getActivityLogs(
     baseId: string,
@@ -179,9 +179,10 @@ export class DocumentActivityService {
       limit?: number;
       before?: string;
       actions?: DocumentActivityAction[];
+      recordId?: string | null; // Filter by specific record
     } = {}
   ): Promise<DocumentActivityLog[]> {
-    const { limit = 50, before, actions } = options;
+    const { limit = 50, before, actions, recordId } = options;
 
     let query = supabase
       .from('document_activity_log')
@@ -206,6 +207,11 @@ export class DocumentActivityService {
 
     if (tableId) {
       query = query.eq('table_id', tableId);
+    }
+
+    // Filter by record if provided
+    if (recordId) {
+      query = query.eq('record_id', recordId);
     }
 
     if (before) {
@@ -255,19 +261,27 @@ export class DocumentActivityService {
   static subscribeToActivity(
     baseId: string,
     tableId: string | null,
-    onNewActivity: (activity: DocumentActivityLog) => void
+    onNewActivity: (activity: DocumentActivityLog) => void,
+    recordId?: string | null // Subscribe to record-specific activities
   ) {
+    // Build filter string for realtime subscription
+    let filterString = `base_id=eq.${baseId}`;
+    if (tableId) {
+      filterString += `&table_id=eq.${tableId}`;
+    }
+    if (recordId) {
+      filterString += `&record_id=eq.${recordId}`;
+    }
+
     const channel = supabase
-      .channel(`document_activity:${baseId}:${tableId || 'all'}`)
+      .channel(`document_activity:${baseId}:${tableId || 'all'}:${recordId || 'all'}`)
       .on(
         'postgres_changes',
         {
           event: 'INSERT',
           schema: 'public',
           table: 'document_activity_log',
-          filter: tableId 
-            ? `base_id=eq.${baseId}&table_id=eq.${tableId}`
-            : `base_id=eq.${baseId}`,
+          filter: filterString,
         },
         async (payload) => {
           const newActivity = payload.new as DocumentActivityLog;
