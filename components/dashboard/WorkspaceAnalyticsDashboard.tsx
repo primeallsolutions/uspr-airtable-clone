@@ -323,7 +323,7 @@ const applyAnalyticsFilters = (
     const results = activeFilters.map((filter) => {
       const fieldType = filter.target === "field"
         ? fieldsMap.get(filter.field_id ?? "")?.type
-        : undefined;
+        : (filter.target === "record_updated_at" ? "date" : undefined);
       return matchesFilter(row, filter, fieldType);
     });
     return match === "any" ? results.some(Boolean) : results.every(Boolean);
