@@ -489,5 +489,27 @@ export class GHLService {
 
     return (data || []) as GHLSyncLog[];
   }
+
+  /**
+   * Update auto-sync settings for a GHL integration
+   */
+  static async updateAutoSyncSettings(
+    baseId: string,
+    settings: {
+      auto_sync_enabled: boolean;
+      auto_sync_interval_minutes: number;
+    }
+  ): Promise<void> {
+    const response = await fetch('/api/ghl/autosync-settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ baseId, ...settings })
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Unknown error' }));
+      throw new Error(error.error || 'Failed to update auto-sync settings');
+    }
+  }
 }
 

@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState, useEffect, useRef } from "react";
+import { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { ContextMenu, useContextMenu } from "@/components/ui/context-menu";
 import { RenameModal } from "@/components/ui/rename-modal";
@@ -32,7 +32,8 @@ import { DeleteFieldModal } from "@/components/base-detail/DeleteFieldModal";
 import { DeleteAllFieldsModal } from "@/components/base-detail/DeleteAllFieldsModal";
 import { ExportBaseModal } from "@/components/base-detail/ExportBaseModal";
 import { ConnectGHLModal } from "@/components/base-detail/ConnectGHLModal";
-import { GHLSyncStatus } from "@/components/base-detail/GHLSyncStatus";
+import { IntegrationsModal } from "@/components/base-detail/IntegrationsModal";
+import { ManageWebhooksModal } from "@/components/base-detail/ManageWebhooksModal";
 import {
   HideFieldsPanel,
   FilterPanel,
@@ -67,6 +68,11 @@ import type { FieldRow, RecordRow, FieldType } from "@/lib/types/base-detail";
 
 // Services
 import { BaseDetailService } from "@/lib/services/base-detail-service";
+import { GHLService } from "@/lib/services/ghl-service";
+
+// GHL Auto-Sync
+import { useGHLAutoSync } from "@/lib/hooks/useGHLAutoSync";
+import type { GHLIntegration } from "@/lib/types/ghl-integration";
 
 export default function BaseDetailPage() {
   const params = useParams<{ id: string }>();
@@ -173,8 +179,42 @@ export default function BaseDetailPage() {
   const openGHLModal = () => setIsGHLModalOpen(true);
   const closeGHLModal = () => {
     setIsGHLModalOpen(false);
-    setGHLCheckStatus(true)
-  }
+    setGHLCheckStatus(true);
+    // Reload integration after modal closes (settings may have changed)
+    void loadGHLIntegration();
+  };
+
+  // Add state for Integrations catalog modal
+  const [isIntegrationsModalOpen, setIsIntegrationsModalOpen] = useState(false);
+  const openIntegrationsModal = () => setIsIntegrationsModalOpen(true);
+  const closeIntegrationsModal = () => setIsIntegrationsModalOpen(false);
+
+  // Add state for Webhooks management modal
+  const [isWebhooksModalOpen, setIsWebhooksModalOpen] = useState(false);
+  const openWebhooksModal = () => setIsWebhooksModalOpen(true);
+  const closeWebhooksModal = () => setIsWebhooksModalOpen(false);
+
+  // GHL Integration state for auto-sync
+  const [ghlIntegration, setGhlIntegration] = useState<GHLIntegration | null>(null);
+
+  // Load GHL integration on mount and when base changes
+  const loadGHLIntegration = useCallback(async () => {
+    if (!baseId) return;
+    try {
+      const integration = await GHLService.getIntegrationByBaseId(baseId);
+      setGhlIntegration(integration);
+    } catch (error) {
+      console.error('Failed to load GHL integration:', error);
+      setGhlIntegration(null);
+    }
+  }, [baseId]);
+
+  useEffect(() => {
+    void loadGHLIntegration();
+  }, [loadGHLIntegration]);
+
+  // Enable auto-sync when base is open
+  useGHLAutoSync(baseId || '', ghlIntegration);
   
   const { contextMenu, setContextMenu, showContextMenu, hideContextMenu } = useContextMenu();
   const { role, can } = useRole({ baseId });
@@ -915,6 +955,8 @@ export default function BaseDetailPage() {
           showFormsTab={false}
           baseId={baseId}
           onConnectGHL={openGHLModal}
+          onManageWebhooks={openWebhooksModal}
+          onOpenIntegrationsCatalog={openIntegrationsModal}
           GHLCheckStatus={GHLCheckStatus}
           setGHLCheckStatus={setGHLCheckStatus}
         />
@@ -1246,6 +1288,27 @@ export default function BaseDetailPage() {
           baseId={baseId}
           tableId={selectedTableId}
           onConnected={closeGHLModal}
+        />
+      )}
+
+      {/* Integrations Catalog Modal */}
+      {baseId && (
+        <IntegrationsModal
+          isOpen={isIntegrationsModalOpen}
+          onClose={closeIntegrationsModal}
+          baseId={baseId}
+          onConnectGHL={openGHLModal}
+          onManageWebhooks={openWebhooksModal}
+        />
+      )}
+
+      {/* Webhooks Management Modal */}
+      {baseId && (
+        <ManageWebhooksModal
+          isOpen={isWebhooksModalOpen}
+          onClose={closeWebhooksModal}
+          baseId={baseId}
+          tables={tables}
         />
       )}
     </div>

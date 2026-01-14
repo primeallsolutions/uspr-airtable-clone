@@ -24,7 +24,6 @@ import { CreateBaseModal } from "@/components/dashboard/modals/CreateBaseModal";
 import { CreateWorkspaceModal } from "@/components/dashboard/modals/CreateWorkspaceModal";
 import { DeleteWorkspaceModal } from "@/components/dashboard/modals/DeleteWorkspaceModal";
 import { DeleteBaseModal } from "@/components/dashboard/modals/DeleteBaseModal";
-import { ManageWorkspaceMembersModal } from "@/components/dashboard/modals/ManageWorkspaceMembersModal";
 import { ImportBaseModal } from "@/components/dashboard/modals/ImportBaseModal";
 import { TemplatePreviewModal } from "@/components/dashboard/modals/TemplatePreviewModal";
 import { CreateTemplateModal } from "@/components/dashboard/modals/CreateTemplateModal";
@@ -53,6 +52,7 @@ function DashboardContent() {
     starredBases,
     sharedBases,
     loading: basesLoading,
+    initialLoad: initialBasesLoad,
     loadRecentBases,
     loadWorkspaceBases,
     loadStarredBases,
@@ -71,6 +71,7 @@ function DashboardContent() {
     createWorkspace,
     updateWorkspace,
     deleteWorkspace,
+    leaveWorkspace,
   } = useWorkspaces();
   
   const {
@@ -122,7 +123,6 @@ function DashboardContent() {
   
   // Only show manage members button if role is definitively owner/admin (not while loading)
   const canManageMembers = !roleLoading && (role === 'owner' || role === 'admin');
-  const [isManageWorkspaceMembersOpen, setIsManageWorkspaceMembersOpen] = useState(false);
   const [isImportBaseModalOpen, setIsImportBaseModalOpen] = useState(false);
   
   // Template modal states
@@ -240,6 +240,24 @@ function DashboardContent() {
       closeDeleteWorkspaceModal();
     }
   }, [workspaceToDelete, deleteWorkspace, selectedWorkspaceId, switchToHomeView, setSelectedWorkspaceId, closeDeleteWorkspaceModal]);
+
+  const handleLeaveWorkspace = useCallback(async () => {
+    if (!selectedWorkspaceId) return;
+    
+    const confirmed = window.confirm('Are you sure you want to leave this workspace? You will lose access to all bases in this workspace.');
+    if (!confirmed) return;
+    
+    try {
+      await leaveWorkspace(selectedWorkspaceId);
+      // After leaving, switch to home view
+      switchToHomeView();
+      setSelectedWorkspaceId(null);
+      toast.success('You have left the workspace');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to leave workspace';
+      toast.error(message);
+    }
+  }, [selectedWorkspaceId, leaveWorkspace, switchToHomeView, setSelectedWorkspaceId]);
 
   const handleWorkspaceSelect = useCallback((workspaceId: string) => {
     switchToWorkspaceView(workspaceId);
@@ -420,6 +438,7 @@ function DashboardContent() {
                 sortOption={sortOption}
                 isSortOpen={isSortOpen}
                 loading={basesLoading}
+                initialLoad={initialBasesLoad}
                 onCollectionViewChange={setCollectionView}
                 onSortOptionChange={setSortOption}
                 onSortToggle={setIsSortOpen}
@@ -437,15 +456,16 @@ function DashboardContent() {
                 sortOption={sortOption}
                 isSortOpen={isSortOpen}
                 loading={basesLoading}
+                initialLoad={initialBasesLoad}
                 onCollectionViewChange={setCollectionView}
                 onSortOptionChange={setSortOption}
                 onSortToggle={setIsSortOpen}
                 onCreateBase={openCreateModal}
                 onBaseStarToggle={toggleStar}
                 onBaseContextMenu={handleBaseContextMenu}
-                onManageMembers={() => setIsManageWorkspaceMembersOpen(true)}
                 canManageMembers={canManageMembers}
-                onDeleteBaseClick={handleDeleteBaseShortcut}
+                onLeaveWorkspace={handleLeaveWorkspace}
+                canLeaveWorkspace={role === 'member' || role === 'admin'}
               />
             )}
             
@@ -456,6 +476,7 @@ function DashboardContent() {
                 sortOption={sortOption}
                 isSortOpen={isSortOpen}
                 loading={basesLoading}
+                initialLoad={initialBasesLoad}
                 onCollectionViewChange={setCollectionView}
                 onSortOptionChange={setSortOption}
                 onSortToggle={setIsSortOpen}
@@ -470,6 +491,8 @@ function DashboardContent() {
                 collectionView={collectionView}
                 sortOption={sortOption}
                 isSortOpen={isSortOpen}
+                loading={basesLoading}
+                initialLoad={initialBasesLoad}
                 onCollectionViewChange={setCollectionView}
                 onSortOptionChange={setSortOption}
                 onSortToggle={setIsSortOpen}
@@ -483,6 +506,8 @@ function DashboardContent() {
                 onUseTemplate={handleUseTemplate}
                 onPreviewTemplate={handlePreviewTemplate}
                 userId={user?.id}
+                collectionView={collectionView}
+                onCollectionViewChange={setCollectionView}
               />
             )}
 
@@ -535,15 +560,6 @@ function DashboardContent() {
             onDelete={handleDeleteWorkspace}
             deleting={false}
           />
-
-          {/* Manage Workspace Members */}
-          {selectedWorkspaceId && (
-            <ManageWorkspaceMembersModal
-              isOpen={isManageWorkspaceMembersOpen}
-              onClose={() => setIsManageWorkspaceMembersOpen(false)}
-              workspaceId={selectedWorkspaceId}
-            />
-          )}
 
           {/* Context Menu */}
           {selectedBase && (
