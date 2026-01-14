@@ -15,6 +15,8 @@ import {
   X,
   FolderOpen,
   FileEdit,
+  PenTool,
+  CheckSquare,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -25,6 +27,8 @@ import {
 import { DocumentGeneratorForm } from "./DocumentGeneratorForm";
 import { TemplateManagementModal } from "./TemplateManagementModal";
 import { TemplateFieldEditor } from "./TemplateFieldEditor";
+import { SignatureRequestModal } from "./SignatureRequestModal";
+import { SignatureRequestStatus } from "./SignatureRequestStatus";
 import type { DocumentTemplate } from "@/lib/services/template-service";
 import type { FieldRow } from "@/lib/types/base-detail";
 
@@ -84,7 +88,7 @@ export const RecordDocuments = ({
   const [isDragging, setIsDragging] = useState(false);
   
   // Modal stack management - only one modal visible at a time
-  type ModalType = 'none' | 'template-management' | 'document-generator' | 'field-editor';
+  type ModalType = 'none' | 'template-management' | 'document-generator' | 'field-editor' | 'signature-request' | 'signature-status';
   const [activeModal, setActiveModal] = useState<ModalType>('none');
   const [selectedTemplate, setSelectedTemplate] = useState<DocumentTemplate | null>(null);
   const [templateToEdit, setTemplateToEdit] = useState<DocumentTemplate | null>(null);
@@ -219,6 +223,22 @@ export const RecordDocuments = ({
           <span className="text-sm text-gray-500">({documents.length})</span>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setActiveModal('signature-request')}
+            className="px-3 py-1.5 text-sm font-medium text-white bg-purple-600 border border-purple-700 rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-1.5"
+            title="Request e-signature for documents"
+          >
+            <PenTool className="w-4 h-4" />
+            Request Signature
+          </button>
+          <button
+            onClick={() => setActiveModal('signature-status')}
+            className="px-3 py-1.5 text-sm font-medium text-purple-700 bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100 transition-colors flex items-center gap-1.5"
+            title="View signature request status"
+          >
+            <CheckSquare className="w-4 h-4" />
+            View Requests
+          </button>
           <button
             onClick={() => setActiveModal('template-management')}
             className="px-3 py-1.5 text-sm font-medium text-white bg-green-600 border border-green-700 rounded-lg hover:bg-green-700 transition-colors flex items-center gap-1.5"
@@ -458,6 +478,49 @@ export const RecordDocuments = ({
           baseId={baseId}
           tableId={tableId}
         />
+      )}
+
+      {/* Signature Request Modal */}
+      <SignatureRequestModal
+        isOpen={activeModal === 'signature-request'}
+        onClose={() => setActiveModal('none')}
+        baseId={baseId}
+        tableId={tableId}
+        recordId={recordId}
+        availableFields={fields?.map(f => ({
+          id: f.id,
+          name: f.name,
+          type: f.type,
+          options: f.options as Record<string, { name?: string; label?: string }> | undefined
+        }))}
+        recordValues={recordValues}
+        onRequestCreated={() => {
+          toast.success("Signature request created successfully");
+          setActiveModal('none');
+        }}
+      />
+
+      {/* Signature Request Status Modal */}
+      {activeModal === 'signature-status' && (
+        <div className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+              <h2 className="text-xl font-semibold text-gray-900">Signature Requests</h2>
+              <button
+                onClick={() => setActiveModal('none')}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-600" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-auto p-6">
+              <SignatureRequestStatus
+                baseId={baseId}
+                tableId={tableId}
+              />
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

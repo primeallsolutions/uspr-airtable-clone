@@ -308,23 +308,21 @@ export const TemplateService = {
   },
 
   /**
-   * Check if a template has active signature fields (requires_esignature = true with valid email)
+   * Check if a template has signature fields (any field with field_type === "signature")
    */
   async hasActiveSignatureFields(templateId: string): Promise<boolean> {
     const { data: fields, error } = await supabase
       .from("template_fields")
-      .select("id, requires_esignature, esignature_signer_email")
+      .select("id")
       .eq("template_id", templateId)
-      .eq("field_type", "signature")
-      .eq("requires_esignature", true)
-      .not("esignature_signer_email", "is", null);
+      .eq("field_type", "signature");
 
     if (error) throw error;
     return (fields?.length || 0) > 0;
   },
 
   /**
-   * Get active signature fields for a template (requires_esignature = true with valid email)
+   * Get signature fields for a template (any field with field_type === "signature")
    */
   async getActiveSignatureFields(templateId: string): Promise<TemplateField[]> {
     const { data: fields, error } = await supabase
@@ -332,8 +330,6 @@ export const TemplateService = {
       .select("*")
       .eq("template_id", templateId)
       .eq("field_type", "signature")
-      .eq("requires_esignature", true)
-      .not("esignature_signer_email", "is", null)
       .order("order_index", { ascending: true });
 
     if (error) throw error;

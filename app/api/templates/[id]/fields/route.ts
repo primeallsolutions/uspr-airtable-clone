@@ -123,38 +123,14 @@ export async function POST(
     fieldData.formatting_options = (field.formatting_options && typeof field.formatting_options === 'object') ? field.formatting_options : (field.formatting_options || {});
 
     // E-signature configuration (only for signature fields)
+    // Note: With the unified e-signature workflow, signer info is collected at request time, not template creation
     if (field.field_type === "signature") {
+      // Keep requires_esignature for backward compatibility but don't require email
       fieldData.requires_esignature = field.requires_esignature || false;
-      
-      // Validate: if e-signature is required, signer email must be provided
-      if (field.requires_esignature) {
-        if (!field.esignature_signer_email || field.esignature_signer_email.trim() === "") {
-          return NextResponse.json(
-            { error: "Signer email is required when e-signature is enabled" },
-            { status: 400 }
-          );
-        }
-        
-        // Basic email validation
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(field.esignature_signer_email.trim())) {
-          return NextResponse.json(
-            { error: "Please provide a valid email address" },
-            { status: 400 }
-          );
-        }
-        
-        fieldData.esignature_signer_email = field.esignature_signer_email.trim();
-        fieldData.esignature_signer_name = field.esignature_signer_name || null;
-        fieldData.esignature_signer_role = field.esignature_signer_role || "signer";
-        fieldData.esignature_sign_order = field.esignature_sign_order || 0;
-      } else {
-        // Clear e-signature fields if e-signature is disabled
-        fieldData.esignature_signer_email = null;
-        fieldData.esignature_signer_name = null;
-        fieldData.esignature_signer_role = null;
-        fieldData.esignature_sign_order = null;
-      }
+      fieldData.esignature_signer_email = field.esignature_signer_email || null;
+      fieldData.esignature_signer_name = field.esignature_signer_name || null;
+      fieldData.esignature_signer_role = field.esignature_signer_role || null;
+      fieldData.esignature_sign_order = field.esignature_sign_order || null;
     } else {
       // Clear e-signature fields if not a signature field
       fieldData.requires_esignature = false;

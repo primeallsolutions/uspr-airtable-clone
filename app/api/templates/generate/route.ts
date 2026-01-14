@@ -128,29 +128,12 @@ export async function POST(request: NextRequest) {
     const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const helveticaBoldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-    // Collect signature fields that require e-signature
-    const esignatureFields: typeof fullTemplate.fields = [];
-    
-    console.log("Template fields loaded:", {
-      totalFields: fullTemplate.fields?.length || 0,
-      signatureFields: fullTemplate.fields?.filter((f: TemplateField) => f.field_type === "signature").length || 0,
-      esignatureFieldsCount: fullTemplate.fields?.filter((f: TemplateField) => f.field_type === "signature" && f.requires_esignature).length || 0
-    });
-    
-    // Fill fields (skip signature fields that require e-signature - they'll be signed later)
+    // Fill fields - signature fields are treated as regular fields for positioning
+    // With the unified workflow, e-signatures are requested separately via SignatureRequestModal
     if (fullTemplate.fields && fullTemplate.fields.length > 0) {
       for (const field of fullTemplate.fields) {
-        // If this is a signature field that requires e-signature, skip filling it
-        if (field.field_type === "signature" && field.requires_esignature) {
-          console.log("Found e-signature field:", {
-            fieldName: field.field_name,
-            signerEmail: field.esignature_signer_email,
-            signerName: field.esignature_signer_name,
-            page: field.page_number,
-            x: field.x_position,
-            y: field.y_position
-          });
-          esignatureFields.push(field);
+        // For signature fields, just leave them blank - they'll be filled during e-signature process
+        if (field.field_type === "signature") {
           continue; // Leave signature field blank for now - will be filled after signing
         }
 
@@ -409,147 +392,9 @@ export async function POST(request: NextRequest) {
       // Still return the PDF even if upload fails
     }
 
-    // Validate and filter e-signature fields: only include those with valid email addresses
-    const validESignatureFields = esignatureFields.filter(
-      (f: TemplateField) => f.requires_esignature && f.esignature_signer_email && f.esignature_signer_email.trim() !== ""
-    );
-
-    // If there are valid e-signature fields, automatically create signature request (unless skipped)
-    let signatureRequestId: string | null = null;
-    console.log("Checking e-signature fields:", {
-      totalESignatureFields: esignatureFields.length,
-      validESignatureFieldsCount: validESignatureFields.length,
-      skipSignatureRequest,
-      fields: validESignatureFields.map((f: TemplateField) => ({
-        name: f.field_name,
-        email: f.esignature_signer_email,
-        requires: f.requires_esignature
-      }))
-    });
-    
-    if (validESignatureFields.length > 0 && !skipSignatureRequest) {
-      try {
-        const { ESignatureService } = await import("@/lib/services/esign-service");
-        
-        // Get current user for created_by
-        const { data: { user } } = await supabase.auth.getUser();
-        
-        // Check if user profile exists in profiles table
-        let createdBy: string | null = null;
-        if (user) {
-          const { data: profile } = await supabase
-            .from("profiles")
-            .select("id")
-            .eq("id", user.id)
-            .single();
-          createdBy = profile?.id || null;
-        }
-        
-        // Collect unique signers from signature fields
-        const signerMap = new Map<string, {
-          email: string;
-          name?: string;
-          role: "signer" | "viewer" | "approver";
-          sign_order: number;
-          fields: typeof fullTemplate.fields;
-        }>();
-
-        // Use only valid e-signature fields (already filtered above)
-        validESignatureFields.forEach((field: TemplateField) => {
-          if (!field.requires_esignature || !field.esignature_signer_email) return;
-          
-          const email = field.esignature_signer_email.trim();
-          if (!signerMap.has(email)) {
-            signerMap.set(email, {
-              email,
-              name: field.esignature_signer_name || undefined,
-              role: (field.esignature_signer_role as "signer" | "viewer" | "approver") || "signer",
-              sign_order: field.esignature_sign_order || 0,
-              fields: [],
-            });
-          }
-          signerMap.get(email)!.fields.push(field);
-        });
-
-        const signers = Array.from(signerMap.values()).map(({ fields, ...signer }) => ({
-          email: signer.email,
-          name: signer.name,
-          role: signer.role,
-          sign_order: signer.sign_order,
-        }));
-
-        if (signers.length > 0) {
-          // Create signature request (using existing authenticated supabase client)
-          const signatureRequest = await ESignatureService.createSignatureRequest({
-            base_id: baseId,
-            table_id: tableId || null,
-            title: `Signature Request: ${fullTemplate.name}`,
-            message: `Please sign the following document: ${fullTemplate.name}`,
-            document_path: storagePath,
-            created_by: createdBy || undefined,
-          }, supabase);
-
-          signatureRequestId = signatureRequest.id!;
-
-          // Add signers
-          const createdSigners = await ESignatureService.addSigners(signatureRequest.id!, signers, supabase);
-
-          // Create signature fields for each signer's fields
-          for (const signer of createdSigners) {
-            const signerFields = signerMap.get(signer.email)?.fields || [];
-            console.log(`Creating fields for signer ${signer.email}:`, {
-              signerId: signer.id,
-              fieldsCount: signerFields.length,
-              fields: signerFields.map((f: TemplateField) => ({
-                page: f.page_number,
-                x: f.x_position,
-                y: f.y_position,
-                width: f.width,
-                height: f.height,
-                name: f.field_name
-              }))
-            });
-            
-            if (signerFields.length > 0) {
-              const fieldsToAdd = signerFields.map((templateField: TemplateField) => ({
-                signer_id: signer.id!,
-                page_number: templateField.page_number,
-                x_position: Number(templateField.x_position),
-                y_position: Number(templateField.y_position),
-                width: templateField.width ? Number(templateField.width) : undefined,
-                height: templateField.height ? Number(templateField.height) : undefined,
-                field_type: "signature" as const,
-                label: templateField.field_name,
-                is_required: templateField.is_required !== false,
-              }));
-              
-              const createdFields = await ESignatureService.addSignatureFields(signatureRequest.id!, fieldsToAdd, supabase);
-              console.log(`Created ${createdFields.length} signature fields for signer ${signer.email}`);
-            }
-          }
-
-          // Send emails to all signers
-          const signatureRequestWithSigners = await ESignatureService.getSignatureRequest(signatureRequest.id!, supabase);
-          if (signatureRequestWithSigners) {
-            for (const signer of createdSigners) {
-              try {
-                await ESignatureService.sendSignatureRequestEmail(
-                  { ...signer, signature_request_id: signatureRequest.id! },
-                  signatureRequestWithSigners
-                );
-                await ESignatureService.updateSignerStatus(signer.id!, "sent");
-              } catch (emailError) {
-                console.error(`Failed to send email to ${signer.email}:`, emailError);
-              }
-            }
-            await ESignatureService.updateRequestStatus(signatureRequest.id!, "sent");
-          }
-        }
-      } catch (sigError) {
-        console.error("Failed to create signature request:", sigError);
-        // Don't fail document generation if signature request creation fails
-      }
-    }
+    // Note: With the unified e-signature workflow, signature requests are created separately
+    // via SignatureRequestModal, not automatically here. The skipSignatureRequest flag is kept
+    // for backward compatibility but auto-creation is disabled.
 
     // Return PDF as base64 or binary
     // For API route, we'll return base64 encoded
@@ -599,8 +444,10 @@ export async function POST(request: NextRequest) {
       pdf: base64,
       fileName: finalFileName,
       documentPath: storagePath,
-      signatureRequestId: signatureRequestId,
-      requiresSignatures: validESignatureFields.length > 0,
+      // Note: signatureRequestId is no longer auto-generated - use SignatureRequestModal instead
+      signatureRequestId: null,
+      // Check if template has signature fields (for UI to show signature request option)
+      hasSignatureFields: fullTemplate.fields?.some((f: TemplateField) => f.field_type === "signature") || false,
     });
   } catch (error: any) {
     console.error("Failed to generate document:", error);

@@ -397,21 +397,6 @@ export const TemplateFieldEditor = ({
   const handleSaveField = async () => {
     if (!editingField || !template) return;
 
-    // Validate e-signature configuration
-    if (editingField.field_type === "signature" && editingField.requires_esignature) {
-      if (!editingField.esignature_signer_email || editingField.esignature_signer_email.trim() === "") {
-        setError("Signer email is required when e-signature is enabled");
-        return;
-      }
-      
-      // Basic email validation
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(editingField.esignature_signer_email.trim())) {
-        setError("Please enter a valid email address");
-        return;
-      }
-    }
-
     try {
       setSaving(true);
       setError(null);
@@ -1228,86 +1213,14 @@ export const TemplateFieldEditor = ({
                     <label className="text-xs text-gray-700">Required</label>
                   </div>
 
-                  {/* E-Signature Configuration (only for signature fields) */}
+                  {/* Signature Field Info */}
                   {editingField.field_type === "signature" && (
                     <div className="border-t border-gray-200 pt-3 mt-3">
-                      <div className="flex items-center gap-2 mb-3">
-                        <input
-                          type="checkbox"
-                          checked={editingField.requires_esignature || false}
-                          onChange={(e) =>
-                            setEditingField({ ...editingField, requires_esignature: e.target.checked })
-                          }
-                          className="rounded"
-                        />
-                        <label className="text-xs font-medium text-gray-700">Require E-Signature</label>
+                      <div className="p-3 bg-blue-50/50 rounded border border-blue-200">
+                        <p className="text-xs text-gray-600">
+                          <strong>Signature Field:</strong> This field marks where a signature will be placed. When requesting an e-signature, you will add signers and they will sign at this location.
+                        </p>
                       </div>
-                      
-                      {editingField.requires_esignature && (
-                        <div className="space-y-2 pl-6 border-l-2 border-blue-200 bg-blue-50/50 p-3 rounded">
-                          <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">
-                              Signer Email <span className="text-red-500">*</span>
-                            </label>
-                            <input
-                              type="email"
-                              value={editingField.esignature_signer_email || ""}
-                              onChange={(e) =>
-                                setEditingField({ ...editingField, esignature_signer_email: e.target.value })
-                              }
-                              placeholder="signer@example.com"
-                              className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">
-                              Signer Name
-                            </label>
-                            <input
-                              type="text"
-                              value={editingField.esignature_signer_name || ""}
-                              onChange={(e) =>
-                                setEditingField({ ...editingField, esignature_signer_name: e.target.value })
-                              }
-                              placeholder="Full Name"
-                              className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">
-                              Signer Role
-                            </label>
-                            <select
-                              value={editingField.esignature_signer_role || "signer"}
-                              onChange={(e) =>
-                                setEditingField({ ...editingField, esignature_signer_role: e.target.value as "signer" | "viewer" | "approver" })
-                              }
-                              className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
-                            >
-                              <option value="signer">Signer</option>
-                              <option value="viewer">Viewer</option>
-                              <option value="approver">Approver</option>
-                            </select>
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">
-                              Sign Order (0 = parallel)
-                            </label>
-                            <input
-                              type="number"
-                              value={editingField.esignature_sign_order || 0}
-                              onChange={(e) =>
-                                setEditingField({ ...editingField, esignature_sign_order: parseInt(e.target.value) || 0 })
-                              }
-                              min="0"
-                              className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
-                            />
-                          </div>
-                          <p className="text-xs text-gray-500 mt-2">
-                            When a document is generated from this template, a signature request will be automatically sent to the signer via email.
-                          </p>
-                        </div>
-                      )}
                     </div>
                   )}
 
@@ -1519,10 +1432,7 @@ export const TemplateFieldEditor = ({
                     disabled={
                       saving || 
                       !editingField.field_name || 
-                      !editingField.field_key ||
-                      (editingField.field_type === "signature" && 
-                       editingField.requires_esignature && 
-                       (!editingField.esignature_signer_email || editingField.esignature_signer_email.trim() === ""))
+                      !editingField.field_key
                     }
                     className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
                   >

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { X, Plus, Trash2, Mail, User, FileText, Loader2, Save, Send, ChevronDown, ChevronUp, Database } from "lucide-react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { X, Plus, Trash2, Mail, User, FileText, Loader2, Save, Send, ChevronDown, ChevronUp, Database, ZoomIn, ZoomOut, ChevronLeft, ChevronRight } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { StoredDocument } from "@/lib/services/documents-service";
 import { ESignatureService, SignatureRequestSigner, SignatureField } from "@/lib/services/esign-service";
@@ -18,6 +18,8 @@ type SignatureRequestModalProps = {
   recordId?: string | null;
   // Optional: Fields available for status column selection
   availableFields?: Array<{ id: string; name: string; type: string; options?: Record<string, { name?: string; label?: string }> }>;
+  // Optional: Record values for auto-populating signer info
+  recordValues?: Record<string, any>;
 };
 
 export const SignatureRequestModal = ({
@@ -29,6 +31,7 @@ export const SignatureRequestModal = ({
   onRequestCreated,
   recordId,
   availableFields = [],
+  recordValues,
 }: SignatureRequestModalProps) => {
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
@@ -41,12 +44,28 @@ export const SignatureRequestModal = ({
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState(false);
   
   // Status column update state
   const [showStatusUpdate, setShowStatusUpdate] = useState(false);
   const [selectedStatusFieldId, setSelectedStatusFieldId] = useState<string>("");
   const [statusValueOnComplete, setStatusValueOnComplete] = useState("Signed");
   const [statusValueOnDecline, setStatusValueOnDecline] = useState("Declined");
+  
+  // PDF Preview state
+  const [pdfDoc, setPdfDoc] = useState<any>(null);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [numPages, setNumPages] = useState(0);
+  const [zoom, setZoom] = useState(1.2);
+  const [templateFields, setTemplateFields] = useState<any[]>([]);
+  const [fieldBounds, setFieldBounds] = useState<Map<string, { x: number; y: number; width: number; height: number }>>(new Map());
+  const [fieldSignerAssignments, setFieldSignerAssignments] = useState<Record<string, string>>({}); // fieldId -> signerEmail
+  const [canvasDisplaySize, setCanvasDisplaySize] = useState<{ width: number; height: number } | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const renderTaskRef = useRef<any>(null);
+  const isRenderingRef = useRef(false);
 
   // Load available templates with valid signature fields
   const loadTemplates = useCallback(async () => {
@@ -68,24 +87,12 @@ export const SignatureRequestModal = ({
       const data = await response.json();
       const templates = data.templates || [];
 
-      // Filter templates that have active signature fields (already included in API response)
-      // Also log for debugging
+      // Filter templates that have signature fields (any field_type === "signature")
       const templatesWithSignatures = templates
         .filter((template: any) => {
-          const hasActive = template.hasActiveSignatureFields === true;
-          if (!hasActive && template.fields?.some((f: any) => f.field_type === "signature")) {
-            // Log templates with signature fields but not marked as active (for debugging)
-            console.log("Template has signature fields but not active:", {
-              templateId: template.id,
-              templateName: template.name,
-              signatureFields: template.fields?.filter((f: any) => f.field_type === "signature").map((f: any) => ({
-                id: f.id,
-                requires_esignature: f.requires_esignature,
-                esignature_signer_email: f.esignature_signer_email
-              }))
-            });
-          }
-          return hasActive;
+          // Show templates that have ANY signature fields
+          const hasSignatureFields = template.fields?.some((f: any) => f.field_type === "signature");
+          return hasSignatureFields;
         })
         .map((template: any) => ({
           id: template.id,
@@ -93,7 +100,7 @@ export const SignatureRequestModal = ({
           description: template.description
         }));
 
-      console.log(`Found ${templatesWithSignatures.length} templates with active signature fields out of ${templates.length} total templates`);
+      console.log(`Found ${templatesWithSignatures.length} templates with signature fields out of ${templates.length} total templates`);
       setAvailableTemplates(templatesWithSignatures);
     } catch (error) {
       console.error("Failed to load templates:", error);
@@ -102,6 +109,293 @@ export const SignatureRequestModal = ({
       setLoading(false);
     }
   }, [baseId, tableId]);
+
+  // Track if templates have been loaded to prevent duplicate loads
+  const templatesLoadedRef = useRef(false);
+  const signerAutoPopulatedRef = useRef(false);
+
+  // Load templates when modal opens (only once)
+  useEffect(() => {
+    if (isOpen && !templatesLoadedRef.current) {
+      templatesLoadedRef.current = true;
+      loadTemplates();
+    } else if (!isOpen) {
+      // Reset loaded flag when modal closes
+      templatesLoadedRef.current = false;
+      signerAutoPopulatedRef.current = false;
+    }
+  }, [isOpen, loadTemplates]);
+  
+  // Auto-populate signer from record data (only once when modal opens)
+  useEffect(() => {
+    if (isOpen && !signerAutoPopulatedRef.current && recordValues && availableFields.length > 0) {
+      signerAutoPopulatedRef.current = true;
+      
+      // Find email field (common patterns)
+      const emailField = availableFields.find(f => 
+        f.name.toLowerCase().includes('email') ||
+        f.name.toLowerCase().includes('e-mail') ||
+        f.name.toLowerCase().includes('contact')
+      );
+      
+      // Find name field (common patterns)
+      const nameField = availableFields.find(f => 
+        f.name.toLowerCase().includes('name') ||
+        f.name.toLowerCase().includes('client') ||
+        f.name.toLowerCase().includes('contact')
+      );
+      
+      const autoEmail = emailField && recordValues[emailField.id] ? String(recordValues[emailField.id]) : "";
+      const autoName = nameField && recordValues[nameField.id] ? String(recordValues[nameField.id]) : "";
+      
+      // Only auto-populate if we found at least one value
+      if (autoEmail || autoName) {
+        setSigners([{
+          email: autoEmail,
+          name: autoName,
+          role: "signer",
+          sign_order: 0,
+        }]);
+      }
+    }
+  }, [isOpen, recordValues, availableFields]);
+
+  // Cleanup when modal closes
+  useEffect(() => {
+    if (!isOpen) {
+      // Cancel any pending render
+      if (renderTaskRef.current) {
+        try {
+          renderTaskRef.current.cancel();
+        } catch {
+          // Ignore
+        }
+        renderTaskRef.current = null;
+      }
+      
+      // Reset all state
+      setPdfDoc(null);
+      setPdfUrl(null);
+      setTemplateFields([]);
+      setFieldSignerAssignments({});
+      setFieldBounds(new Map());
+      setCanvasDisplaySize(null);
+      isRenderingRef.current = false;
+      setPdfLoading(false);
+      setSelectedTemplateId("");
+    }
+  }, [isOpen]);
+
+  // Load template PDF and fields when template is selected
+  const loadTemplatePDF = useCallback(async (templateId: string) => {
+    if (!templateId) return;
+    
+    try {
+      setPdfLoading(true);
+      console.log('Loading template PDF:', templateId);
+      
+      const { data: { session } } = await supabase.auth.getSession();
+      const headers: HeadersInit = {};
+      if (session?.access_token) {
+        headers.Authorization = `Bearer ${session.access_token}`;
+      }
+
+      // Get template details with fields
+      const response = await fetch(`/api/templates/${templateId}`, { headers });
+      if (!response.ok) {
+        throw new Error("Failed to load template");
+      }
+      const data = await response.json();
+      const template = data.template;
+      
+      // Get signed URL
+      const urlResponse = await fetch(
+        `/api/templates/${templateId}/signed-url?baseId=${baseId}${tableId ? `&tableId=${tableId}` : ""}`,
+        { headers }
+      );
+      if (!urlResponse.ok) {
+        throw new Error("Failed to get template URL");
+      }
+      const urlData = await urlResponse.json();
+      setPdfUrl(urlData.url);
+
+      // Load signature fields
+      const signatureFields = (template.fields || []).filter((f: any) => f.field_type === "signature");
+      setTemplateFields(signatureFields);
+      
+      // Initialize field-signer assignments (default to empty - user will assign)
+      const assignments: Record<string, string> = {};
+      signatureFields.forEach((field: any) => {
+        assignments[field.id || field.field_key] = ""; // Don't use signers here
+      });
+      setFieldSignerAssignments(assignments);
+
+      // Load PDF with pdfjs-dist
+      const pdfjs = await import("pdfjs-dist");
+      if (typeof window !== "undefined") {
+        pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
+      }
+
+      const loadingTask = pdfjs.getDocument({ url: urlData.url });
+      const pdf = await loadingTask.promise;
+      console.log('PDF loaded successfully:', { numPages: pdf.numPages });
+      
+      setPdfDoc(pdf);
+      setNumPages(pdf.numPages);
+      setCurrentPage(1);
+      setPdfLoading(false);
+      isRenderingRef.current = false; // Ensure rendering is allowed
+    } catch (error) {
+      console.error("Failed to load template PDF:", error);
+      toast.error("Failed to load template preview");
+      setPdfLoading(false);
+    }
+  }, [baseId, tableId]); // Removed signers and pdfLoading from deps
+
+  // Track if we've loaded for this template to prevent duplicate loads
+  const loadedTemplateRef = useRef<string | null>(null);
+
+  // Load PDF when template is selected
+  useEffect(() => {
+    if (selectedTemplateId && isOpen && loadedTemplateRef.current !== selectedTemplateId) {
+      loadedTemplateRef.current = selectedTemplateId;
+      loadTemplatePDF(selectedTemplateId);
+    } else if (!selectedTemplateId || !isOpen) {
+      // Reset preview state
+      loadedTemplateRef.current = null;
+      setPdfDoc(null);
+      setPdfUrl(null);
+      setTemplateFields([]);
+      setFieldSignerAssignments({});
+      setFieldBounds(new Map());
+      setCanvasDisplaySize(null);
+      isRenderingRef.current = false; // Reset rendering flag
+    }
+  }, [selectedTemplateId, isOpen, loadTemplatePDF]);
+
+  // Render PDF page - realtime, no debouncing
+  const renderPage = useCallback(async () => {
+    if (!pdfDoc || !canvasRef.current) {
+      console.log('Render skipped - no pdfDoc or canvas');
+      return;
+    }
+    
+    if (isRenderingRef.current) {
+      console.log('Render skipped - already rendering');
+      return;
+    }
+
+    // Set rendering flag to prevent concurrent renders
+    isRenderingRef.current = true;
+    console.log('Starting PDF render...');
+
+    // Cancel any existing render task
+    if (renderTaskRef.current) {
+      try {
+        renderTaskRef.current.cancel();
+      } catch (err) {
+        // Ignore cancellation errors
+      }
+      renderTaskRef.current = null;
+    }
+
+    try {
+      const page = await pdfDoc.getPage(currentPage);
+      const viewport = page.getViewport({ scale: zoom });
+      const canvas = canvasRef.current;
+      
+      if (!canvas) {
+        console.error('Canvas disappeared during render');
+        isRenderingRef.current = false;
+        return;
+      }
+      
+      const context = canvas.getContext("2d");
+
+      if (!context) {
+        console.error('No 2D context available');
+        isRenderingRef.current = false;
+        return;
+      }
+
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      console.log('Canvas size set:', { width: canvas.width, height: canvas.height });
+
+      const renderContext = {
+        canvasContext: context,
+        viewport: viewport,
+      };
+
+      const renderTask = page.render(renderContext);
+      renderTaskRef.current = renderTask;
+      await renderTask.promise;
+      console.log('PDF rendered successfully');
+
+      // Get canvas display size (accounting for CSS scaling)
+      const displayWidth = canvas.offsetWidth;
+      const displayHeight = canvas.offsetHeight;
+      setCanvasDisplaySize({ width: displayWidth, height: displayHeight });
+      
+      // Calculate scale ratio between actual canvas size and displayed size
+      const scaleX = displayWidth / viewport.width;
+      const scaleY = displayHeight / viewport.height;
+
+      // Update field bounds for overlay positioning
+      const pageFields = templateFields.filter((f: any) => f.page_number === currentPage);
+      const bounds = new Map<string, { x: number; y: number; width: number; height: number }>();
+
+      pageFields.forEach((field: any) => {
+        const scale = viewport.scale;
+        const x = field.x_position * scale * scaleX; // Apply display scale
+        const y = (viewport.height - field.y_position * scale) * scaleY; // PDF Y is from bottom, apply display scale
+        const width = (field.width || 150) * scale * scaleX;
+        const height = (field.height || 50) * scale * scaleY;
+
+        bounds.set(field.id || field.field_key, {
+          x,
+          y: y - height,
+          width,
+          height,
+        });
+      });
+
+      setFieldBounds(bounds);
+      console.log('Field bounds updated:', { count: bounds.size, pageFields: pageFields.length });
+      
+      renderTaskRef.current = null;
+      isRenderingRef.current = false; // Clear rendering flag
+    } catch (err: any) {
+      // Silently ignore cancellation errors - this is expected behavior
+      if (err?.name === "RenderingCancelledException") {
+        console.log('Render cancelled (expected)');
+      } else {
+        console.error('Render error:', err);
+        console.error("Failed to render PDF page:", err);
+      }
+      renderTaskRef.current = null;
+      isRenderingRef.current = false; // Clear rendering flag on error
+    }
+  }, [pdfDoc, currentPage, zoom, templateFields]); // Removed pdfLoading
+
+  // Render page when dependencies change
+  useEffect(() => {
+    if (pdfDoc && canvasRef.current) {
+      renderPage();
+    }
+
+    return () => {
+      if (renderTaskRef.current) {
+        try {
+          renderTaskRef.current.cancel();
+        } catch {
+          // Ignore
+        }
+        renderTaskRef.current = null;
+      }
+      isRenderingRef.current = false;
+    };
+  }, [pdfDoc, currentPage, zoom, renderPage]);
 
   const handleAddSigner = () => {
     setSigners([...signers, { email: "", name: "", role: "signer", sign_order: signers.length }]);
@@ -177,20 +471,20 @@ export const SignatureRequestModal = ({
         throw new Error("Failed to get generated document path");
       }
 
-      // Get template signature fields to include in signature request
+      // Get all signature fields from the template
       const templateResponse = await fetch(`/api/templates/${selectedTemplateId}`, { headers });
       if (!templateResponse.ok) {
         throw new Error("Failed to load template fields");
       }
       const templateData = await templateResponse.json();
       const templateFields = (templateData.template?.fields || []).filter(
-        (f: any) => f.field_type === "signature" && f.requires_esignature
+        (f: any) => f.field_type === "signature"
       );
 
       // Map template fields to signature request fields
-      // Assign all fields to the first signer (we can enhance this later to match by email)
+      // Use per-field signer assignments from the preview
       const signatureFields = templateFields.map((field: any) => ({
-        signer_email: validSigners[0]?.email || "", // Assign to first signer
+        signer_email: fieldSignerAssignments[field.id || field.field_key] || validSigners[0]?.email || "",
         page_number: field.page_number,
         x_position: Number(field.x_position),
         y_position: Number(field.y_position),
@@ -303,20 +597,20 @@ export const SignatureRequestModal = ({
         throw new Error("Failed to get generated document path");
       }
 
-      // Get template signature fields to include in signature request
+      // Get all signature fields from the template
       const templateResponse = await fetch(`/api/templates/${selectedTemplateId}`, { headers });
       if (!templateResponse.ok) {
         throw new Error("Failed to load template fields");
       }
       const templateData = await templateResponse.json();
       const templateFields = (templateData.template?.fields || []).filter(
-        (f: any) => f.field_type === "signature" && f.requires_esignature
+        (f: any) => f.field_type === "signature"
       );
 
       // Map template fields to signature request fields
-      // Assign all fields to the first signer (we can enhance this later to match by email)
+      // Use per-field signer assignments from the preview
       const signatureFields = templateFields.map((field: any) => ({
-        signer_email: validSigners[0]?.email || "", // Assign to first signer
+        signer_email: fieldSignerAssignments[field.id || field.field_key] || validSigners[0]?.email || "",
         page_number: field.page_number,
         x_position: Number(field.x_position),
         y_position: Number(field.y_position),
@@ -404,7 +698,7 @@ export const SignatureRequestModal = ({
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden border border-gray-100"
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-7xl max-h-[90vh] flex flex-col overflow-hidden border border-gray-100"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -423,8 +717,11 @@ export const SignatureRequestModal = ({
 
         {/* Content */}
         <div className="flex-1 min-h-0 overflow-y-auto p-6">
+          <div className="grid grid-cols-2 gap-6">
+            {/* Left Column - Form Fields */}
+            <div className="space-y-6">
           {/* Template Selection */}
-          <div className="mb-6">
+          <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Template with Signature Fields <span className="text-red-500">*</span>
             </label>
@@ -455,12 +752,12 @@ export const SignatureRequestModal = ({
                 </select>
                 {!selectedTemplateId && (
                   <p className="text-xs text-gray-500 mt-1">
-                    Only templates with configured signature fields are shown. Create a template with signature fields to use this feature.
+                    Select a template with signature fields to request e-signatures.
                   </p>
                 )}
                 {availableTemplates.length === 0 && !loading && (
                   <p className="text-xs text-yellow-600 mt-1">
-                    No templates with signature fields found. Please create a template with e-signature fields configured.
+                    No templates with signature fields found. Please create a template with signature fields first.
                   </p>
                 )}
               </>
@@ -468,7 +765,7 @@ export const SignatureRequestModal = ({
           </div>
 
           {/* Title */}
-          <div className="mb-6">
+          <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Request Title <span className="text-red-500">*</span>
             </label>
@@ -482,7 +779,7 @@ export const SignatureRequestModal = ({
           </div>
 
           {/* Message */}
-          <div className="mb-6">
+          <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Message to Signers (Optional)
             </label>
@@ -496,7 +793,7 @@ export const SignatureRequestModal = ({
           </div>
 
           {/* Signers */}
-          <div className="mb-6">
+          <div>
             <div className="flex items-center justify-between mb-3">
               <label className="block text-sm font-medium text-gray-700">
                 Signers <span className="text-red-500">*</span>
@@ -574,13 +871,96 @@ export const SignatureRequestModal = ({
                       </button>
                     )}
                   </div>
+                  
+                  {/* Field Assignment Section - Show if template has signature fields */}
+                  {templateFields.length > 0 && (
+                    <div className="mt-3 pt-3 border-t border-gray-300">
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="text-xs font-medium text-gray-700">
+                          Assigned Signature Fields
+                        </label>
+                        <span className="text-xs text-gray-500">
+                          {Object.entries(fieldSignerAssignments).filter(([_, email]) => email === signer.email).length} / {templateFields.length} assigned
+                        </span>
+                      </div>
+                      
+                      {/* Field Checkboxes */}
+                      <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                        {templateFields.map((field: any) => {
+                          const fieldKey = field.id || field.field_key;
+                          const isAssigned = fieldSignerAssignments[fieldKey] === signer.email;
+                          
+                          return (
+                            <label
+                              key={fieldKey}
+                              className="flex items-center gap-2 p-2 hover:bg-gray-100 rounded cursor-pointer transition-colors"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isAssigned}
+                                onChange={(e) => {
+                                  setFieldSignerAssignments({
+                                    ...fieldSignerAssignments,
+                                    [fieldKey]: e.target.checked ? signer.email : "",
+                                  });
+                                }}
+                                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                              />
+                              <div className="flex-1 flex items-center justify-between">
+                                <span className="text-xs text-gray-700">
+                                  {field.field_name || "Signature Field"}
+                                  {field.is_required && <span className="text-red-500 ml-1">*</span>}
+                                </span>
+                                <span className="text-xs text-gray-500">
+                                  Page {field.page_number}
+                                </span>
+                              </div>
+                            </label>
+                          );
+                        })}
+                      </div>
+                      
+                      {/* Quick Actions */}
+                      <div className="flex gap-2 mt-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const newAssignments = { ...fieldSignerAssignments };
+                            templateFields.forEach((field: any) => {
+                              newAssignments[field.id || field.field_key] = signer.email;
+                            });
+                            setFieldSignerAssignments(newAssignments);
+                          }}
+                          className="text-xs text-blue-600 hover:text-blue-700 hover:underline"
+                        >
+                          Select All
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const newAssignments = { ...fieldSignerAssignments };
+                            templateFields.forEach((field: any) => {
+                              const fieldKey = field.id || field.field_key;
+                              if (newAssignments[fieldKey] === signer.email) {
+                                newAssignments[fieldKey] = "";
+                              }
+                            });
+                            setFieldSignerAssignments(newAssignments);
+                          }}
+                          className="text-xs text-gray-600 hover:text-gray-700 hover:underline"
+                        >
+                          Deselect All
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
           </div>
 
           {/* Expiration */}
-          <div className="mb-6">
+          <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Expiration Date (Optional)
             </label>
@@ -594,7 +974,7 @@ export const SignatureRequestModal = ({
 
           {/* Status Column Update - Advanced Option */}
           {recordId && availableFields.length > 0 && (
-            <div className="mb-6 border border-gray-200 rounded-lg overflow-hidden">
+            <div className="border border-gray-200 rounded-lg overflow-hidden">
               <button
                 type="button"
                 onClick={() => setShowStatusUpdate(!showStatusUpdate)}
@@ -679,9 +1059,165 @@ export const SignatureRequestModal = ({
                     </p>
                   )}
                 </div>
-              )}
+              )}  
             </div>
           )}
+            </div>
+            
+            {/* Right Column - PDF Preview */}
+            <div className="space-y-4">
+              <h3 className="text-sm font-medium text-gray-700 mb-2">Document Preview</h3>
+              
+              {selectedTemplateId && pdfDoc ? (
+                <div className="border border-gray-200 rounded-lg overflow-hidden bg-gray-50">
+                  {/* Preview Controls */}
+                  <div className="bg-white border-b border-gray-200 px-3 py-2 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                        disabled={currentPage === 1}
+                        className="p-1 hover:bg-gray-100 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Previous Page"
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </button>
+                      <span className="text-xs text-gray-600">
+                        Page {currentPage} of {numPages}
+                      </span>
+                      <button
+                        onClick={() => setCurrentPage(Math.min(numPages, currentPage + 1))}
+                        disabled={currentPage === numPages}
+                        className="p-1 hover:bg-gray-100 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Next Page"
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setZoom(Math.max(0.5, zoom - 0.2))}
+                        className="p-1 hover:bg-gray-100 rounded"
+                        title="Zoom Out"
+                      >
+                        <ZoomOut className="w-4 h-4" />
+                      </button>
+                      <span className="text-xs text-gray-600">{Math.round(zoom * 100)}%</span>
+                      <button
+                        onClick={() => setZoom(Math.min(2, zoom + 0.2))}
+                        className="p-1 hover:bg-gray-100 rounded"
+                        title="Zoom In"
+                      >
+                        <ZoomIn className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                  
+                  {/* Canvas with signature field overlays */}
+                  <div className="p-4 overflow-auto max-h-[500px]">
+                    <div className="flex justify-center">
+                      <div className="relative inline-block">
+                        <canvas
+                          ref={canvasRef}
+                          className="border border-gray-300 rounded shadow-sm"
+                          style={{ maxWidth: "100%", height: "auto" }}
+                        />
+                        
+                        {/* Signature Field Overlays */}
+                        {canvasRef.current && fieldBounds.size > 0 && canvasDisplaySize && (
+                          <div
+                            ref={overlayRef}
+                            className="absolute top-0 left-0 pointer-events-none"
+                            style={{
+                              width: `${canvasDisplaySize.width}px`,
+                              height: `${canvasDisplaySize.height}px`,
+                            }}
+                          >
+                            {templateFields
+                              .filter((f: any) => f.page_number === currentPage)
+                              .map((field: any) => {
+                                const fieldKey = field.id || field.field_key;
+                                const bounds = fieldBounds.get(fieldKey);
+                                if (!bounds) return null;
+                                
+                                const assignedSignerEmail = fieldSignerAssignments[fieldKey];
+                                const assignedSigner = signers.find(s => s.email === assignedSignerEmail);
+                                
+                                return (
+                                  <div
+                                    key={fieldKey}
+                                    className="absolute pointer-events-auto"
+                                    style={{
+                                      left: `${bounds.x}px`,
+                                      top: `${bounds.y}px`,
+                                      width: `${bounds.width}px`,
+                                      height: `${bounds.height}px`,
+                                    }}
+                                  >
+                                    {/* Field border - color coded by assignment status */}
+                                    <div className={`absolute inset-0 border-3 border-dashed rounded ${
+                                      assignedSignerEmail 
+                                        ? 'border-blue-500 bg-blue-500/10' 
+                                        : 'border-red-500 bg-red-500/10'
+                                    }`} />
+                                    
+                                    {/* Field label and assignment indicator */}
+                                    <div className={`absolute -top-7 left-0 right-0 rounded shadow-sm px-2 py-1 text-xs ${
+                                      assignedSignerEmail 
+                                        ? 'bg-blue-100 border border-blue-300' 
+                                        : 'bg-red-100 border border-red-300'
+                                    }`}>
+                                      <div className="flex items-center justify-between gap-1">
+                                        <span className="font-medium text-gray-800 truncate">
+                                          {field.field_name || "Signature"}
+                                          {field.is_required && <span className="text-red-500 ml-1">*</span>}
+                                        </span>
+                                        {assignedSignerEmail ? (
+                                          <span className="text-blue-700 font-medium truncate" title={assignedSigner?.name || assignedSignerEmail}>
+                                            {assignedSigner?.name || assignedSignerEmail}
+                                          </span>
+                                        ) : (
+                                          <span className="text-red-700 font-medium">
+                                            Unassigned
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Field summary */}
+                  {templateFields.length > 0 && (
+                    <div className="bg-blue-50 border-t border-blue-200 px-3 py-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-blue-900">
+                          <strong>{templateFields.filter((f: any) => f.page_number === currentPage).length}</strong> signature field(s) on this page
+                        </span>
+                        <span className={Object.values(fieldSignerAssignments).filter(email => email !== "").length === templateFields.length ? 'text-green-700 font-medium' : 'text-amber-700 font-medium'}>
+                          {Object.values(fieldSignerAssignments).filter(email => email !== "").length} / {templateFields.length} assigned
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : selectedTemplateId ? (
+                <div className="border border-gray-200 rounded-lg p-8 text-center bg-gray-50">
+                  <Loader2 className="w-8 h-8 animate-spin text-gray-400 mx-auto mb-2" />
+                  <p className="text-sm text-gray-500">Loading preview...</p>
+                </div>
+              ) : (
+                <div className="border border-gray-200 rounded-lg p-8 text-center bg-gray-50">
+                  <FileText className="w-12 h-12 text-gray-300 mx-auto mb-2" />
+                  <p className="text-sm text-gray-500">Select a template to preview</p>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Footer */}

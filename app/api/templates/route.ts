@@ -187,20 +187,17 @@ export async function GET(request: NextRequest) {
           .eq("template_id", template.id)
           .order("order_index", { ascending: true });
         
-        // Check if template has active signature fields
-        // A field is active if: field_type is "signature", requires_esignature is true, and esignature_signer_email is not null/empty
-        const hasActiveSignatureFields = (fields || []).some(
-          (f) => 
-            f.field_type === "signature" && 
-            f.requires_esignature === true && 
-            f.esignature_signer_email && 
-            f.esignature_signer_email.trim() !== ""
+        // Check if template has signature fields (any field with field_type === "signature")
+        const hasSignatureFields = (fields || []).some(
+          (f) => f.field_type === "signature"
         );
         
         return {
           ...template,
           fields: fields || [],
-          hasActiveSignatureFields,
+          hasSignatureFields,
+          // Keep hasActiveSignatureFields for backward compatibility but mark all signature fields as active
+          hasActiveSignatureFields: hasSignatureFields,
         };
       })
     );
