@@ -517,6 +517,7 @@ export const RecordDocuments = ({
               <SignatureRequestStatus
                 baseId={baseId}
                 tableId={tableId}
+                recordId={recordId}
               />
             </div>
           </div>

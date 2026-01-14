@@ -43,12 +43,16 @@ export async function POST(request: NextRequest) {
       documentPath,
       pageRanges,
       outputFileName,
+      recordId, // Add recordId support
+      folderPath, // Add folder path support
     }: {
       baseId: string;
       tableId?: string | null;
       documentPath: string;
       pageRanges: { start: number; end: number }[]; // 1-based page numbers
       outputFileName: string;
+      recordId?: string | null; // Optional recordId for record-scoped documents
+      folderPath?: string; // Optional folder path for output
     } = body;
 
     if (!baseId || !documentPath || !pageRanges || pageRanges.length === 0) {
@@ -59,26 +63,72 @@ export async function POST(request: NextRequest) {
     }
 
     // Build the full storage path
-    const prefix = tableId
+    // Use record-scoped prefix if recordId is provided
+    const prefix = recordId
+      ? `bases/${baseId}/records/${recordId}/`
+      : tableId
       ? `bases/${baseId}/tables/${tableId}/`
       : `bases/${baseId}/`;
-    const fullPath = `${prefix}${documentPath}`;
+    
+    // Ensure documentPath doesn't already include the prefix
+    const cleanDocPath = documentPath.startsWith(prefix) 
+      ? documentPath.substring(prefix.length)
+      : documentPath;
+    
+    const fullPath = `${prefix}${cleanDocPath}`;
 
-    // Download the source PDF
-    const { data: fileData, error: downloadError } = await supabase.storage
+    console.log("[PDF Split] Attempting to download:", {
+      baseId,
+      tableId,
+      documentPath,
+      cleanDocPath,
+      fullPath,
+      prefix
+    });
+
+    // Download the source PDF using signed URL method (handles special characters better)
+    const { data: urlData, error: urlError } = await supabase.storage
       .from(BUCKET)
-      .download(fullPath);
+      .createSignedUrl(fullPath, 600);
 
-    if (downloadError || !fileData) {
-      console.error("Failed to download source PDF:", downloadError);
+    if (urlError || !urlData) {
+      console.error("[PDF Split] Failed to create signed URL:", {
+        error: urlError,
+        fullPath,
+        errorMessage: urlError?.message,
+      });
       return NextResponse.json(
-        { error: "Failed to download source document" },
+        { 
+          error: "Failed to get document URL",
+          details: urlError?.message || "Unknown error",
+          path: fullPath
+        },
         { status: 500 }
       );
     }
 
+    // Fetch the PDF using the signed URL
+    const pdfResponse = await fetch(urlData.signedUrl);
+    if (!pdfResponse.ok) {
+      console.error("[PDF Split] Failed to fetch PDF from signed URL:", {
+        status: pdfResponse.status,
+        statusText: pdfResponse.statusText,
+        url: urlData.signedUrl,
+      });
+      return NextResponse.json(
+        { 
+          error: "Failed to download source document",
+          details: `HTTP ${pdfResponse.status}: ${pdfResponse.statusText}`,
+          path: fullPath
+        },
+        { status: 500 }
+      );
+    }
+
+    const fileData = await pdfResponse.arrayBuffer();
+
     // Load the PDF
-    const pdfBytes = await fileData.arrayBuffer();
+    const pdfBytes = fileData;
     const sourcePdf = await PDFDocument.load(pdfBytes);
     const totalPages = sourcePdf.getPageCount();
 
@@ -120,12 +170,14 @@ export async function POST(request: NextRequest) {
       ? sanitizedFileName
       : `${sanitizedFileName}.pdf`;
 
-    // Get folder path from original document
-    const folderPath = documentPath.includes("/")
-      ? documentPath.substring(0, documentPath.lastIndexOf("/") + 1)
-      : "";
+    // Build output path with folder
+    const safeFolder = folderPath ? (folderPath.endsWith("/") ? folderPath : `${folderPath}/`) : "";
+    const outputPath = `${prefix}${safeFolder}${Date.now()}-${finalFileName}`;
 
-    const outputPath = `${prefix}${folderPath}${Date.now()}-${finalFileName}`;
+    // Calculate the relative path for database storage
+    const relativePath = safeFolder
+      ? `${safeFolder}${Date.now()}-${finalFileName}`
+      : `${Date.now()}-${finalFileName}`;
 
     // Upload the new PDF
     const { error: uploadError } = await supabase.storage
@@ -143,8 +195,39 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Return the new document path (relative to prefix)
-    const relativePath = `${folderPath}${Date.now()}-${finalFileName}`;
+    // Register the document in the database
+    if (recordId) {
+      // Get current user profile to satisfy foreign key constraint
+      let uploadedBy: string | null = null;
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("id", user.id)
+        .single();
+      
+      if (profile?.id) {
+        uploadedBy = profile.id;
+      }
+
+      // For record-scoped documents, insert into record_documents
+      const { error: recordDocError } = await supabase
+        .from('record_documents')
+        .insert([{
+          record_id: recordId,
+          base_id: baseId,
+          table_id: tableId,
+          document_path: relativePath,
+          document_name: finalFileName,
+          size_bytes: newPdfBytes.length,
+          mime_type: 'application/pdf',
+          uploaded_by: uploadedBy,
+        }]);
+
+      if (recordDocError) {
+        console.error("Failed to register record document:", recordDocError);
+        // Don't fail the operation, just log the error
+      }
+    }
 
     return NextResponse.json({
       success: true,

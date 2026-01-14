@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { CheckCircle2, Clock, XCircle, Mail, Eye, FileText, Download, Loader2, RefreshCw, X } from "lucide-react";
+import { CheckCircle2, Clock, XCircle, Mail, Eye, FileText, Loader2, RefreshCw, X, Trash2 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { ESignatureService, SignatureRequest } from "@/lib/services/esign-service";
 import { toast } from "sonner";
@@ -10,11 +10,13 @@ import { PdfViewer } from "../PdfViewer";
 type SignatureRequestStatusProps = {
   baseId: string;
   tableId?: string | null;
+  recordId?: string | null;
 };
 
 export const SignatureRequestStatus = ({
   baseId,
   tableId,
+  recordId,
 }: SignatureRequestStatusProps) => {
   const [requests, setRequests] = useState<SignatureRequest[]>([]);
   const [loading, setLoading] = useState(true);
@@ -40,21 +42,26 @@ export const SignatureRequestStatus = ({
       }
 
       const data = await response.json();
-      setRequests(data.requests || []);
+      // Filter by recordId if provided
+      const allRequests = data.requests || [];
+      const filteredRequests = recordId 
+        ? allRequests.filter((req: SignatureRequest) => req.record_id === recordId)
+        : allRequests;
+      setRequests(filteredRequests);
     } catch (error: any) {
       console.error("Failed to load signature requests:", error);
       toast.error("Failed to load signature requests");
     } finally {
       setLoading(false);
     }
-  }, [baseId, tableId]);
+  }, [baseId, tableId, recordId]);
 
   useEffect(() => {
     loadRequests();
     // Set up polling for real-time updates (poll every 5 seconds)
     const interval = setInterval(loadRequests, 5000);
     return () => clearInterval(interval);
-  }, [baseId, tableId, loadRequests]);
+  }, [baseId, tableId, recordId, loadRequests]);
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -103,48 +110,38 @@ export const SignatureRequestStatus = ({
     }
   };
 
-  const handleDownloadCertificate = async (request: SignatureRequest) => {
-    if (!request.completion_certificate_path) {
-      toast.error("Completion certificate not available");
+  const handleDeleteRequest = async (request: SignatureRequest) => {
+    if (!request.id) {
+      toast.error("Invalid request");
+      return;
+    }
+
+    if (!window.confirm(`Are you sure you want to delete the signature request "${request.title}"? This action cannot be undone.`)) {
       return;
     }
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      
-      // Check if the path looks like a placeholder (contains "_certificate_" with timestamp)
-      // This indicates the certificate hasn't been generated yet
-      if (request.completion_certificate_path.includes("_certificate_")) {
-        toast.info("Completion certificate generation is not yet implemented. The certificate will be available once this feature is completed.");
-        return;
+      const headers: HeadersInit = {};
+      if (session?.access_token) {
+        headers.Authorization = `Bearer ${session.access_token}`;
       }
 
-      // Try to get signed URL for certificate
-      const { data: urlData, error } = await supabase.storage
-        .from("documents")
-        .createSignedUrl(request.completion_certificate_path, 3600);
+      const response = await fetch(`/api/esignature/requests/${request.id}`, {
+        method: "DELETE",
+        headers,
+      });
 
-      if (error) {
-        // Check if it's a file not found error
-        if (error.message?.includes("not found") || error.message?.includes("does not exist")) {
-          toast.info("Completion certificate file not found. It may still be generating.");
-          return;
-        }
-        console.error("Certificate URL error:", error);
-        toast.error("Failed to get certificate URL. The certificate may not be available yet.");
-        return;
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to delete signature request");
       }
 
-      if (!urlData) {
-        toast.error("Failed to get certificate URL");
-        return;
-      }
-
-      // Download file
-      window.open(urlData.signedUrl, "_blank");
+      toast.success("Signature request deleted successfully");
+      await loadRequests();
     } catch (error: any) {
-      console.error("Failed to download certificate:", error);
-      toast.error(error.message || "Failed to download certificate");
+      console.error("Failed to delete signature request:", error);
+      toast.error(error.message || "Failed to delete signature request");
     }
   };
 
@@ -321,24 +318,17 @@ export const SignatureRequestStatus = ({
                       View Document
                     </button>
                   )}
-                  {request.status === "completed" && request.completion_certificate_path && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDownloadCertificate(request);
-                      }}
-                      disabled={request.completion_certificate_path.includes("_certificate_")}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      title={
-                        request.completion_certificate_path.includes("_certificate_")
-                          ? "Certificate generation not yet implemented"
-                          : "Download Completion Certificate"
-                      }
-                    >
-                      <Download className="w-4 h-4" />
-                      Certificate
-                    </button>
-                  )}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteRequest(request);
+                    }}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+                    title="Delete Signature Request"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Delete
+                  </button>
                 </div>
               </div>
 
@@ -354,12 +344,7 @@ export const SignatureRequestStatus = ({
                       <span className="font-medium text-gray-700">Request ID:</span>
                       <span className="ml-2 text-gray-600 font-mono text-xs">{request.id}</span>
                     </div>
-                    {request.completion_certificate_path && (
-                      <div className="col-span-2">
-                        <span className="font-medium text-gray-700">Completion Certificate:</span>
-                        <span className="ml-2 text-gray-600">{request.completion_certificate_path}</span>
-                      </div>
-                    )}
+
                   </div>
                 </div>
               )}

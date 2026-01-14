@@ -1115,6 +1115,7 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
           }}
           baseId={baseId}
           tableId={selectedTable?.id}
+          recordId={recordId} // Pass recordId for record-scoped documents
           document={{
             path: splitDoc.path,
             name: splitDoc.path.split("/").pop() || "document.pdf",

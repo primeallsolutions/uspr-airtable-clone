@@ -1,16 +1,18 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { X, Scissors, Check, Loader2, ChevronLeft, ChevronRight, File } from "lucide-react";
+import { X, Scissors, Check, Loader2, ChevronLeft, ChevronRight, File, Folder } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabaseClient";
 import { DocumentActivityService } from "@/lib/services/document-activity-service";
+import { DocumentsService } from "@/lib/services/documents-service";
 
 type PdfSplitModalProps = {
   isOpen: boolean;
   onClose: () => void;
   baseId: string;
   tableId?: string | null;
+  recordId?: string | null; // Add recordId support
   document: {
     path: string;
     name: string;
@@ -29,6 +31,7 @@ export const PdfSplitModal = ({
   onClose,
   baseId,
   tableId,
+  recordId, // Add recordId
   document,
   signedUrl,
   onSplitComplete,
@@ -39,9 +42,40 @@ export const PdfSplitModal = ({
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSelections, setPageSelections] = useState<PageSelection[]>([]);
   const [outputFileName, setOutputFileName] = useState("");
+  const [selectedFolder, setSelectedFolder] = useState<string>(""); // Folder path
+  const [availableFolders, setAvailableFolders] = useState<Array<{ name: string; path: string }>>([]);
+  const [loadingFolders, setLoadingFolders] = useState(false);
   const [pdfDoc, setPdfDoc] = useState<any>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const renderTaskRef = useRef<any>(null);
+
+  // Load available folders
+  useEffect(() => {
+    const loadFolders = async () => {
+      if (!isOpen) return;
+      
+      try {
+        setLoadingFolders(true);
+        const folders = recordId
+          ? await DocumentsService.listRecordFolders(baseId, recordId)
+          : await DocumentsService.listFolders(baseId, tableId ?? null, null, true);
+        
+        setAvailableFolders(folders || []);
+        
+        // Auto-select first folder if available
+        if (folders && folders.length > 0 && !selectedFolder) {
+          setSelectedFolder(folders[0].path);
+        }
+      } catch (err) {
+        console.error("Failed to load folders:", err);
+        toast.error("Failed to load folders");
+      } finally {
+        setLoadingFolders(false);
+      }
+    };
+
+    loadFolders();
+  }, [isOpen, baseId, tableId, recordId, selectedFolder]);
 
   // Generate default output filename
   useEffect(() => {
@@ -213,6 +247,11 @@ export const PdfSplitModal = ({
       return;
     }
 
+    if (!selectedFolder) {
+      toast.error("Please select a folder");
+      return;
+    }
+
     try {
       setSplitting(true);
 
@@ -236,9 +275,11 @@ export const PdfSplitModal = ({
         body: JSON.stringify({
           baseId,
           tableId,
+          recordId, // Pass recordId to API
           documentPath: document.path,
           pageRanges,
           outputFileName: outputFileName.trim(),
+          folderPath: selectedFolder, // Pass selected folder path
         }),
       });
 
@@ -464,6 +505,40 @@ export const PdfSplitModal = ({
                 <span className="text-sm text-gray-500">.pdf</span>
               </div>
             </div>
+
+            {/* Folder Selection */}
+            <div className="mt-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Destination Folder <span className="text-red-500">*</span>
+              </label>
+              {loadingFolders ? (
+                <div className="flex items-center gap-2 px-3 py-2 text-sm text-gray-500 border border-gray-300 rounded-lg">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Loading folders...
+                </div>
+              ) : availableFolders.length === 0 ? (
+                <div className="px-3 py-2 text-sm text-gray-500 border border-gray-300 rounded-lg bg-gray-50">
+                  No folders available. The file will be saved to the root.
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <Folder className="w-4 h-4 text-gray-400" />
+                  <select
+                    value={selectedFolder}
+                    onChange={(e) => setSelectedFolder(e.target.value)}
+                    className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    required
+                  >
+                    <option value="">Select a folder...</option>
+                    {availableFolders.map((folder) => (
+                      <option key={folder.path} value={folder.path}>
+                        {folder.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -478,7 +553,7 @@ export const PdfSplitModal = ({
           </button>
           <button
             onClick={handleSplit}
-            disabled={splitting || selectedCount === 0 || !outputFileName.trim()}
+            disabled={splitting || selectedCount === 0 || !outputFileName.trim() || !selectedFolder}
             className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
             {splitting ? (
