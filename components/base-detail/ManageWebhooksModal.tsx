@@ -139,8 +139,8 @@ export const ManageWebhooksModal = ({
     }
 
     // Build nested object structure from JSONPath mappings
-    payload.table_name = "REPLACE THIS with a table name/id, or omit it to select the default.";
-    Object.values(webhookFields[selectedWebhook.id]).forEach(({id, name, options}) => {
+    payload.table_name = "Replace this with a table name/id, or omit it to select the default.";
+    Object.values(webhookFields[selectedWebhook.id]).forEach(({id, type, name, options}) => {
       const jsonPath = fieldMappings[id];
       const sampleValue = Object.entries(options || {}).length > 0 ? Object.values(options as Record<string, { name: string }>)[0]?.name : `Example Value ${id.split('-')[0]}`;
       if (!jsonPath || jsonPath.trim() === '') {
@@ -172,7 +172,15 @@ export const ManageWebhooksModal = ({
           // Handle object key
           if (isLastPart) {
             // Set example value for the final key
-            current[part] = sampleValue;
+            switch (type) {
+              case 'monetary': current[part] = 100; break;
+              case 'date': current[part] = new Date().toISOString().split('T')[0]; break;
+              case 'datetime': current[part] = new Date().toISOString(); break;
+              case 'email': current[part] = "johndoe@example.com"; break;
+              case 'phone': current[part] = "1234567890"; break;
+              case 'link': current[part] = "https://example.com"; break;
+              default: current[part] = sampleValue;
+            }
           } else {
             // Check if next part is array index
             const nextPart = pathParts[index + 1];
@@ -198,7 +206,7 @@ export const ManageWebhooksModal = ({
 
   const buildTestCommand = (webhook: Webhook) => {
     const url = WebhookService.getWebhookUrl(webhook.secret_token);
-    const examplePayload = generateExamplePayload(webhook.field_mapping);
+    const examplePayload = generateExamplePayload(fieldMappings[webhook.id]);
     const jsonString = JSON.stringify(examplePayload).replace(/"/g, '\\"');
 
     return `curl -X POST "${url}" -H "Content-Type: application/json" -d "${jsonString}"`;

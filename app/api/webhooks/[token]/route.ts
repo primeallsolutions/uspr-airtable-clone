@@ -358,7 +358,11 @@ function convertValueToFieldType(value: any, fieldType: FieldType, fieldOptions?
     case 'monetary':
       return typeof value === 'number' ? value : parseFloat(value) || 0;
     case 'date':
-      return typeof value === 'string' ? value : new Date(value).toISOString();
+      return new Date(value).toISOString().split('T')[0];
+    case 'datetime':
+      return new Date(value).toISOString().slice(0, -8);
+    case 'phone':
+      return formatPhone(String(value));
     case 'multi_select':
       return Array.isArray(value) ? value : [value];
     default:
@@ -366,3 +370,16 @@ function convertValueToFieldType(value: any, fieldType: FieldType, fieldOptions?
   }
 }
 
+// Helper: Format phone number to standard US format
+const formatPhone = (phone: string): string => {
+  // Remove all non-digit characters
+  const digitsOnly = phone.replace(/\D/g, '');
+
+  // Format as US phone number if 10 digits, otherwise return as-is with dashes
+  if (digitsOnly.length === 10) {
+    return `(${digitsOnly.slice(0, 3)}) ${digitsOnly.slice(3, 6)}-${digitsOnly.slice(6)}`;
+  } else if (digitsOnly.length === 11 && digitsOnly[0] === '1') {
+    return `+1 (${digitsOnly.slice(1, 4)}) ${digitsOnly.slice(4, 7)}-${digitsOnly.slice(7)}`;
+  }
+  return phone;
+};
