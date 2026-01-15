@@ -110,6 +110,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const baseId = searchParams.get("baseId");
     const tableId = searchParams.get("tableId");
+    const recordId = searchParams.get("recordId");
 
     if (!baseId) {
       return NextResponse.json({ error: "baseId is required" }, { status: 400 });
@@ -118,7 +119,8 @@ export async function GET(request: NextRequest) {
     const requests = await ESignatureService.listSignatureRequests(
       baseId,
       tableId || null,
-      supabase
+      supabase,
+      recordId || null
     );
 
     return NextResponse.json({ requests });

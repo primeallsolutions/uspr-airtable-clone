@@ -33,7 +33,7 @@ export const SignatureRequestStatus = ({
       }
 
       const response = await fetch(
-        `/api/esignature/requests?baseId=${baseId}${tableId ? `&tableId=${tableId}` : ""}`,
+        `/api/esignature/requests?baseId=${baseId}${tableId ? `&tableId=${tableId}` : ""}${recordId ? `&recordId=${recordId}` : ""}`,
         { headers }
       );
 

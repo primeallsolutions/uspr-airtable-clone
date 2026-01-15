@@ -1099,7 +1099,8 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
             <SignatureRequestStatus
               baseId={baseId}
               tableId={selectedTable?.id ?? null}
-        />
+              recordId={recordId}
+            />
           </div>
         </div>
       )}

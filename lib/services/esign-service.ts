@@ -214,7 +214,7 @@ export const ESignatureService = {
   /**
    * Get signature requests for a base
    */
-  async listSignatureRequests(baseId: string, tableId?: string | null, client?: SupabaseClient): Promise<SignatureRequest[]> {
+  async listSignatureRequests(baseId: string, tableId?: string | null, client?: SupabaseClient, recordId?: string | null): Promise<SignatureRequest[]> {
     const db = client || supabase;
     let query = db
       .from("signature_requests")
@@ -229,6 +229,11 @@ export const ESignatureService = {
       query = query.eq("table_id", tableId);
     } else {
       query = query.is("table_id", null);
+    }
+    
+    // Filter by recordId if provided
+    if (recordId) {
+      query = query.eq("record_id", recordId);
     }
 
     const { data, error } = await query;
