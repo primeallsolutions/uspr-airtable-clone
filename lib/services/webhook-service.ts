@@ -33,7 +33,7 @@ export class WebhookService {
 
   static async updateWebhook(
     webhookId: string,
-    updates: Partial<Pick<Webhook, 'name' | 'is_enabled' | 'default_table_id'>>
+    updates: Partial<Pick<Webhook, 'name' | 'is_enabled' | 'default_table_id' | 'field_mapping'>>
   ): Promise<Webhook> {
     const response = await fetch('/api/webhooks', {
       method: 'PUT',
@@ -56,6 +56,17 @@ export class WebhookService {
     if (!response.ok) {
       throw new Error('Failed to delete webhook');
     }
+  }
+
+  static async getWebhookFieldMapping(webhookId: string): Promise<Record<string, string>[]> {
+    const { data, error } = await supabase
+      .from('webhooks')
+      .select('field_mapping')
+      .eq('webhook_id', webhookId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
   }
 
   static async getWebhookLogs(webhookId: string, limit: number = 50): Promise<WebhookLog[]> {
