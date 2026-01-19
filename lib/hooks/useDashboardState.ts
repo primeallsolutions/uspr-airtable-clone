@@ -28,26 +28,79 @@ export const useDashboardState = () => {
   const switchToWorkspaceView = useCallback((workspaceId: string) => {
     setSelectedWorkspaceId(workspaceId);
     setActiveView('workspace');
+    
+    // Update URL with workspace ID
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      params.delete('view');
+      params.set('workspaceId', workspaceId);
+      window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
+    }
   }, []);
 
   const switchToHomeView = useCallback(() => {
     setActiveView('home');
+
+    // Update URL with current view
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      params.delete('workspaceId');
+      params.delete('tab');
+      params.set('view', 'home');
+      window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
+    }
   }, []);
 
   const switchToStarredView = useCallback(() => {
     setActiveView('starred');
+
+    // Update URL with current view
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      params.delete('workspaceId');
+      params.delete('tab');
+      params.set('view', 'starred');
+      window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
+    }
   }, []);
 
   const switchToSharedView = useCallback(() => {
     setActiveView('shared');
+
+    // Update URL with current view
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      params.delete('workspaceId');
+      params.delete('tab');
+      params.set('view', 'shared');
+      window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
+    }
   }, []);
 
   const switchToAccountView = useCallback(() => {
     setActiveView('account');
+
+    // Update URL with current view
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      params.delete('workspaceId');
+      params.delete('tab');
+      params.set('view', 'account');
+      window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
+    }
   }, []);
 
   const switchToTemplatesView = useCallback(() => {
     setActiveView('templates');
+
+    // Update URL with current view
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      params.delete('workspaceId');
+      params.delete('tab');
+      params.set('view', 'templates');
+      window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
+    }
   }, []);
 
   const openCreateModal = useCallback(() => {
