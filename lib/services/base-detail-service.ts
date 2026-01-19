@@ -120,7 +120,7 @@ export class BaseDetailService {
   static async getBase(baseId: string): Promise<BaseRow> {
     const { data, error } = await supabase
       .from("bases")
-      .select("id, name, description, created_at, last_opened_at")
+      .select("id, name, description, created_at, workspace_id, last_opened_at")
       .eq("id", baseId)
       .single();
 
