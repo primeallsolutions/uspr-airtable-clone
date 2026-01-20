@@ -94,7 +94,7 @@ export const TopNavigation = ({
           {/* Back button */}
           <button
             type="button"
-            onClick={() => router.push('/dashboard')}
+            onClick={() => router.push(`/dashboard?workspaceId=${base?.workspace_id || ''}`)}
             className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
             title="Back to dashboard"
           >
