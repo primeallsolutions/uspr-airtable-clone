@@ -50,6 +50,10 @@ export const useDashboardState = () => {
     setActiveView('templates');
   }, []);
 
+  const switchToMarketingView = useCallback(() => {
+    setActiveView('marketing');
+  }, []);
+
   const openCreateModal = useCallback(() => {
     setIsCreateOpen(true);
   }, []);
@@ -148,6 +152,7 @@ export const useDashboardState = () => {
     switchToSharedView,
     switchToAccountView,
     switchToTemplatesView,
+    switchToMarketingView,
     openCreateModal,
     closeCreateModal,
     openRenameModal,

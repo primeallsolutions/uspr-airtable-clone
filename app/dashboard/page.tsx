@@ -19,6 +19,7 @@ import { Banner } from "@/components/dashboard/Banner";
 import { HomeView } from "@/components/dashboard/views/HomeView";
 import { WorkspaceView } from "@/components/dashboard/views/WorkspaceView";
 import { StarredView } from "@/components/dashboard/views/StarredView";
+import { MarketingView } from "@/components/dashboard/views/MarketingView";
 import { TemplatesView } from "@/components/dashboard/views/TemplatesView";
 import { CreateBaseModal } from "@/components/dashboard/modals/CreateBaseModal";
 import { CreateWorkspaceModal } from "@/components/dashboard/modals/CreateWorkspaceModal";
@@ -105,6 +106,7 @@ function DashboardContent() {
     switchToSharedView,
     switchToAccountView,
     switchToTemplatesView,
+    switchToMarketingView,
     openCreateModal,
     closeCreateModal,
     openRenameModal,
@@ -278,6 +280,10 @@ function DashboardContent() {
     switchToTemplatesView();
   }, [switchToTemplatesView]);
 
+  const handleMarketingViewSelect = useCallback(() => {
+    switchToMarketingView();
+  }, [switchToMarketingView]);
+
   const handleUseTemplate = useCallback((template: Template) => {
     setSelectedTemplate(template);
     setIsTemplatePreviewOpen(true);
@@ -408,6 +414,7 @@ function DashboardContent() {
             if (view === 'home') switchToHomeView();
             else if (view === 'starred') handleStarredViewSelect();
             else if (view === 'shared') handleSharedViewSelect();
+            else if (view === 'marketing') handleMarketingViewSelect();
             else if (view === 'templates') handleTemplatesViewSelect();
           }}
           onWorkspaceSelect={handleWorkspaceSelect}
@@ -499,6 +506,10 @@ function DashboardContent() {
                 onBaseStarToggle={toggleStar}
                 onBaseContextMenu={handleBaseContextMenu}
               />
+            )}
+
+            {activeView === 'marketing' && (
+              <MarketingView />
             )}
 
             {activeView === 'templates' && (
