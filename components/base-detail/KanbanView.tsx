@@ -8,6 +8,7 @@ interface KanbanViewProps {
   fields: FieldRow[];
   tables: TableRow[];
   selectedTableId: string | null;
+  baseId: string;
   onUpdateCell: (recordId: string, fieldId: string, value: unknown) => Promise<void> | void;
   onDeleteRow: (recordId: string) => Promise<void> | void;
   onAddRow: (values?: Record<string, unknown>) => void | Promise<void>;
@@ -113,6 +114,7 @@ export const KanbanView = ({
   fields,
   tables,
   selectedTableId,
+  baseId,
   onUpdateCell,
   onDeleteRow,
   onAddRow,
@@ -578,6 +580,7 @@ export const KanbanView = ({
         fields={fields}
         tables={tables}
         selectedTableId={selectedTableId}
+        baseId={baseId}
         savingCell={savingCell}
         onUpdateCell={onUpdateCell}
         onClose={() => setExpandedRecordId(null)}

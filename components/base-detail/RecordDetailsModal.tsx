@@ -1,8 +1,10 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
-import { X, Save, Edit2, Loader2, Calendar, Hash, Mail, Phone, Link as LinkIcon, CheckSquare, FileText, Clock, Info, Paperclip } from "lucide-react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { X, Save, Edit2, Loader2, Calendar, Hash, Mail, Phone, Link as LinkIcon, CheckSquare, FileText, Clock, Info, Paperclip, History } from "lucide-react";
 import type { RecordRow, FieldRow, SavingCell, TableRow } from "@/lib/types/base-detail";
+import type { AuditLogRow } from "@/lib/services/audit-log-service";
+import { AuditLogService } from "@/lib/services/audit-log-service";
 import { formatInTimezone } from "@/lib/utils/date-helpers";
 import { useTimezone } from "@/lib/hooks/useTimezone";
 import { RecordDocuments } from "./documents/RecordDocuments";
@@ -38,6 +40,30 @@ export const RecordDetailsModal = ({
   const nameFieldRef = useRef<HTMLInputElement>(null);
   const [activeTab, setActiveTab] = useState<"fields" | "documents">("fields");
   const [documentCount, setDocumentCount] = useState<number>(0);
+  const [isAuditOpen, setIsAuditOpen] = useState<boolean>(false);
+  const [auditLogs, setAuditLogs] = useState<AuditLogRow[]>([]);
+  const [auditLoading, setAuditLoading] = useState<boolean>(false);
+  const [auditError, setAuditError] = useState<string | null>(null);
+
+  const loadAudit = useCallback(async () => {
+    if (!record) return;
+    setAuditLoading(true);
+    setAuditError(null);
+    try {
+      const logs = await AuditLogService.getRecordLogs(record.id);
+      setAuditLogs(logs);
+    } catch (err) {
+      setAuditError(err instanceof Error ? err.message : "Failed to load audit log");
+    } finally {
+      setAuditLoading(false);
+    }
+  }, [record]);
+
+  useEffect(() => {
+    if (isAuditOpen && record) {
+      loadAudit();
+    }
+  }, [isAuditOpen, record, loadAudit]);
 
   // Find the "Name" field
   const nameField = useMemo(() => {

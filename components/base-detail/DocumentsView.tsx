@@ -92,6 +92,7 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
   const [activeTab, setActiveTab] = useState<"documents" | "photos">("documents");
   const [showAuditLog, setShowAuditLog] = useState<boolean>(false);
   const [showFolderSetup, setShowFolderSetup] = useState<boolean>(false);
+  const [checkedDocuments, setCheckedDocuments] = useState<string[]>([]);
 
   const currentPrefix = useMemo(
     () => (folderPath && !folderPath.endsWith("/") ? `${folderPath}/` : folderPath),
@@ -592,11 +593,6 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
     }
   }
 
-  const handleRenameSelected = () => {
-    if (!selectedDoc || isFolder(selectedDoc)) return;
-    setShowRenameModal(true);
-  };
-
   const handleRenameDocument = async (newName: string) => {
     if (!selectedDoc || isFolder(selectedDoc)) return;
     
@@ -934,6 +930,7 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
                   loading={loading && isInitialLoad}
                   error={error}
                   folderPath={folderPath}
+                  checkedDocuments={checkedDocuments}
                   onDocumentSelect={setSelectedDocPath}
                   onDocumentEdit={handleDocumentEdit}
                   baseId={baseId}

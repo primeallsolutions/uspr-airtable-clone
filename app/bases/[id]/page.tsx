@@ -1111,6 +1111,7 @@ export default function BaseDetailPage() {
                   fields={fields}
                   tables={tables}
                   selectedTableId={selectedTableId}
+                  baseId={baseId || ''}
                   onUpdateCell={updateCell}
                   onDeleteRow={deleteRecord}
                   onAddRow={handleAddRow}
