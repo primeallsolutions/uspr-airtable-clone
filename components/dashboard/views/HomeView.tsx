@@ -1,17 +1,17 @@
-import { BaseTile } from "../BaseTile";
-import { BaseRow } from "../BaseRow";
-import { EmptyState } from "../EmptyState";
 import { SortDropdown } from "../SortDropdown";
 import { ViewToggle } from "../ViewToggle";
 import { sortBases } from "@/lib/utils/sort-helpers";
 import { isToday } from "@/lib/utils/date-helpers";
 import type { BaseRecord, CollectionView, SortOption } from "@/lib/types/dashboard";
+import { BaseCard } from "../BaseCard";
 
 interface HomeViewProps {
   recentBases: BaseRecord[];
   collectionView: CollectionView;
   sortOption: SortOption;
   isSortOpen: boolean;
+  loading?: boolean;
+  initialLoad?: boolean;
   onCollectionViewChange: (view: CollectionView) => void;
   onSortOptionChange: (option: SortOption) => void;
   onSortToggle: (open: boolean) => void;
@@ -24,6 +24,8 @@ export const HomeView = ({
   collectionView,
   sortOption,
   isSortOpen,
+  loading = false,
+  initialLoad = false,
   onCollectionViewChange,
   onSortOptionChange,
   onSortToggle,
@@ -39,6 +41,14 @@ export const HomeView = ({
     const ref = b.last_opened_at ?? b.created_at;
     return !isToday(ref);
   });
+
+  if (loading && !initialLoad) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -56,65 +66,49 @@ export const HomeView = ({
         />
       </div>
 
-      {collectionView === 'grid' ? (
-        <>
-          {/* Today */}
-          <div className="space-y-3">
-            <div className="text-sm font-medium text-gray-600">Today</div>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {today.length === 0 ? (
-                <EmptyState type="today" />
-              ) : (
-                today.map((base) => (
-                  <BaseTile 
-                    key={base.id} 
-                    base={base}
-                    onStarToggle={onBaseStarToggle}
-                    onContextMenu={onBaseContextMenu}
-                  />
-                ))
-              )}
-            </div>
+      <div className="space-y-8">
+        {/* Today */}
+        <div>
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">Today</h2>
+          <div className={collectionView === 'grid' 
+            ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4'
+            : 'space-y-3'
+          }>
+            {sortBases(today, sortOption).map(
+              (base) => (
+                <BaseCard
+                  key={base.id}
+                  base={base}
+                  view={collectionView}
+                  onStarToggle={onBaseStarToggle}
+                  onContextMenu={onBaseContextMenu}
+                />
+              )
+            )}
           </div>
+        </div>
 
-          {/* Earlier */}
-          <div className="mt-8 space-y-3">
-            <div className="text-sm font-medium text-gray-600">Earlier</div>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {earlier.length === 0 ? (
-                <EmptyState type="earlier" />
-              ) : (
-                earlier.map((base) => (
-                  <BaseTile 
-                    key={base.id} 
-                    base={base}
-                    onStarToggle={onBaseStarToggle}
-                    onContextMenu={onBaseContextMenu}
-                  />
-                ))
-              )}
-            </div>
+        {/* Earlier */}
+        <div>
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">Earlier</h2>
+          <div className={collectionView === 'grid'
+            ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4'
+            : 'space-y-3'
+          }>
+            {sortBases(earlier, sortOption).map(
+              (base) => (
+                <BaseCard
+                  key={base.id}
+                  base={base}
+                  view={collectionView}
+                  onStarToggle={onBaseStarToggle}
+                  onContextMenu={onBaseContextMenu}
+                />
+              )
+            )}
           </div>
-        </>
-      ) : (
-        <>
-          <div className="mb-2 text-sm font-medium text-gray-600">Last opened</div>
-          <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
-            <div className="grid grid-cols-2 gap-4 border-b border-gray-100 px-4 py-2 text-xs font-medium uppercase tracking-wide text-gray-500">
-              <div>Name</div>
-              <div className="text-right">Last opened</div>
-            </div>
-            {sortBases(recentBases, sortOption).map((base) => (
-              <BaseRow
-                key={base.id}
-                base={base}
-                onStarToggle={onBaseStarToggle}
-                onContextMenu={onBaseContextMenu}
-              />
-            ))}
-          </div>
-        </>
-      )}
+        </div>
+      </div>
     </>
   );
 };

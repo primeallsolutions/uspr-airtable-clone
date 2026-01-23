@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { MoreVertical, Zap, Crown, Edit, Trash2, ArrowLeft } from "lucide-react";
 import type { BaseRow, TableRow, TopTab } from "@/lib/types/base-detail";
-import { GHLSyncStatus } from "./GHLSyncStatus";
+import { IntegrationsButton } from "./IntegrationsButton";
 
 interface TopNavigationProps {
   base: BaseRow | null;
@@ -22,6 +22,10 @@ interface TopNavigationProps {
   showFormsTab?: boolean;
   baseId?: string;
   onConnectGHL?: () => void;
+  onManageWebhooks?: () => void;
+  onOpenIntegrationsCatalog?: () => void;
+  GHLCheckStatus?: boolean;
+  setGHLCheckStatus?: (status: boolean) => void;
 }
 
 export const TopNavigation = ({
@@ -41,7 +45,11 @@ export const TopNavigation = ({
   showInterfacesTab = true,
   showFormsTab = true,
   baseId,
-  onConnectGHL
+  onConnectGHL,
+  onManageWebhooks,
+  onOpenIntegrationsCatalog,
+  GHLCheckStatus,
+  setGHLCheckStatus
 }: TopNavigationProps) => {
   const router = useRouter();
   const [isTableDropdownOpen, setIsTableDropdownOpen] = useState(false);
@@ -86,7 +94,7 @@ export const TopNavigation = ({
           {/* Back button */}
           <button
             type="button"
-            onClick={() => router.push('/dashboard')}
+            onClick={() => router.push(`/dashboard?workspaceId=${base?.workspace_id || ''}`)}
             className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
             title="Back to dashboard"
           >
@@ -191,12 +199,15 @@ export const TopNavigation = ({
 
         {/* Actions */}
         <div className="flex items-center gap-2">
-          {/* GHL Integration */}
-          {baseId && (
-            <GHLSyncStatus 
-              baseId={baseId} 
-              onOpenSettings={onConnectGHL}
-              showConnectButton={onConnectGHL !== undefined}
+          {/* Integrations */}
+          {baseId && onConnectGHL && onManageWebhooks && onOpenIntegrationsCatalog && (
+            <IntegrationsButton
+              baseId={baseId}
+              onConnectGHL={onConnectGHL}
+              onManageWebhooks={onManageWebhooks}
+              onOpenCatalog={onOpenIntegrationsCatalog}
+              GHLCheckStatus={GHLCheckStatus}
+              setGHLCheckStatus={setGHLCheckStatus}
             />
           )}
 

@@ -37,6 +37,8 @@ export const ImportCsvModal = ({
   const [step, setStep] = useState<'upload' | 'mapping' | 'importing' | 'success'>('upload');
   const [rowCount, setRowCount] = useState<number>(0);
   const [createAllFields, setCreateAllFields] = useState(false);
+  const [firstDataRow, setFirstDataRow] = useState<Record<string, string>>({});
+  const [mappingValidationErrors, setMappingValidationErrors] = useState<Record<string, string[]>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Helper function to properly parse CSV rows
@@ -151,6 +153,20 @@ export const ImportCsvModal = ({
       // Parse data rows to find sample values (look through up to 20 rows to find non-empty samples)
       const dataRows = lines.slice(1, Math.min(lines.length, 21)).map(line => parseCSVLine(line));
       
+      // Store the first data row for validation
+      const firstRow: Record<string, string> = {};
+      if (dataRows.length > 0) {
+        headerRow.forEach((header, index) => {
+          let value = dataRows[0][index] ? dataRows[0][index].trim() : '';
+          if (value.startsWith('"') && value.endsWith('"')) {
+            value = value.slice(1, -1);
+          }
+          value = value.replace(/""/g, '"');
+          firstRow[header] = value;
+        });
+      }
+      setFirstDataRow(firstRow);
+      
       const headers = headerRow.map((header, index) => {
         // Find first non-empty value for this column
         let sampleValue = '';
@@ -213,6 +229,7 @@ export const ImportCsvModal = ({
       });
 
       setCsvColumns(headers);
+      setMappingValidationErrors({});
       
       // Automatically map CSV columns to existing fields if they match
       const autoMappings: Record<string, string | { type: 'create', fieldType: string, fieldName: string }> = {};
@@ -259,6 +276,134 @@ export const ImportCsvModal = ({
     };
     reader.readAsText(selectedFile);
   }, [parseCSVLine, fields]);
+
+  // Function to validate field mappings against the first data row
+  const validateMappings = useCallback((mappings: Record<string, string | { type: 'create', fieldType: string, fieldName: string }>) => {
+    const errors: Record<string, string[]> = {};
+
+    Object.entries(mappings).forEach(([csvColumn, fieldMapping]) => {
+      const csvValue = firstDataRow[csvColumn] || '';
+      const columnErrors: string[] = [];
+
+      // Skip empty CSV values
+      if (!csvValue) {
+        return;
+      }
+
+      // Get the target field info
+      let targetFieldType: string | null = null;
+      if (typeof fieldMapping === 'string') {
+        // Mapping to existing field
+        const targetField = fields.find(f => f.id === fieldMapping);
+        targetFieldType = targetField?.type || null;
+      } else if (fieldMapping.type === 'create') {
+        // Mapping to new field
+        targetFieldType = fieldMapping.fieldType;
+      }
+
+      if (!targetFieldType) return;
+
+      // Validate based on target field type
+      switch (targetFieldType) {
+        case 'number':
+        case 'monetary':
+          if (isNaN(Number(csvValue))) {
+            columnErrors.push(`Value "${csvValue}" is not a valid number ${isValidPhone(csvValue) ? "(did you mean to use the \"Phone\" field type?)" : ""}`);
+          }
+          break;
+
+        case 'date':
+          // Check if it looks like a date
+          if (!isValidDate(csvValue)) {
+            columnErrors.push(`Value "${csvValue}" does not appear to be a valid date`);
+          }
+          break;
+
+        case 'datetime':
+          if (!isValidDateTime(csvValue)) {
+            columnErrors.push(`Value "${csvValue}" does not appear to be a valid date/time`);
+          }
+          break;
+
+        case 'email':
+          if (!isValidEmail(csvValue)) {
+            columnErrors.push(`Value "${csvValue}" does not appear to be a valid email address`);
+          }
+          break;
+
+        case 'phone':
+          if (!isValidPhone(csvValue)) {
+            columnErrors.push(`Value "${csvValue}" does not appear to be a valid phone number`);
+          }
+          break;
+
+        case 'checkbox':
+          if (!isValidBoolean(csvValue)) {
+            columnErrors.push(`Value "${csvValue}" is not a valid boolean (true/false, yes/no, 1/0)`);
+          }
+          break;
+
+        case 'link':
+          if (!isValidUrl(csvValue)) {
+            columnErrors.push(`Value "${csvValue}" does not appear to be a valid URL`);
+          }
+          break;
+      }
+
+      if (columnErrors.length > 0) {
+        errors[csvColumn] = columnErrors;
+      }
+    });
+
+    setMappingValidationErrors(errors);
+  }, [firstDataRow, fields]);
+
+  // Validation helper functions
+  const isValidDate = (value: string): boolean => {
+    if (!value) return true; // Empty is ok
+    // Check for common date formats
+    const dateRegex = /^\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}$|^\d{4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,2}$/;
+    if (!dateRegex.test(value)) return false;
+    
+    // Try parsing to ensure it's valid
+    const parsed = new Date(value);
+    return !isNaN(parsed.getTime());
+  };
+
+  const isValidDateTime = (value: string): boolean => {
+    if (!value) return true;
+    const parsed = new Date(value);
+    return !isNaN(parsed.getTime());
+  };
+
+  const isValidEmail = (value: string): boolean => {
+    if (!value) return true;
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(value);
+  };
+
+  const isValidPhone = (value: string): boolean => {
+    if (!value) return true;
+    // Phone number should contain digits and allow for common separators
+    const phoneRegex = /^[\+]?[\d\s\-\(\)\.]+$|^\d{7,}$/;
+    return phoneRegex.test(value) && /\d/.test(value);
+  };
+
+  const isValidBoolean = (value: string): boolean => {
+    if (!value) return true;
+    const booleanValues = ['true', 'false', 'yes', 'no', '1', '0', 'on', 'off', 'y', 'n'];
+    return booleanValues.includes(value.toLowerCase());
+  };
+
+  const isValidUrl = (value: string): boolean => {
+    if (!value) return true;
+    try {
+      new URL(value);
+      return true;
+    } catch {
+      return false;
+    }
+  };
 
   const handleFileDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -307,50 +452,60 @@ export const ImportCsvModal = ({
       
       if (existingField) {
         // Map to existing field instead of creating a new one
-        setFieldMappings(prev => ({
-          ...prev,
+        const newMappings: Record<string, string | { type: 'create', fieldType: string, fieldName: string }> = {
+          ...fieldMappings,
           [csvColumn]: existingField!.id
-        }));
+        };
+        setFieldMappings(newMappings);
+        validateMappings(newMappings);
       } else {
         // Initialize with default values for creating a new field
-        setFieldMappings(prev => ({
-          ...prev,
-          [csvColumn]: { type: 'create', fieldType: 'text', fieldName: cleanFieldName }
-        }));
+        const newMappings: Record<string, string | { type: 'create', fieldType: string, fieldName: string }> = {
+          ...fieldMappings,
+          [csvColumn]: { type: 'create' as const, fieldType: 'text', fieldName: cleanFieldName }
+        };
+        setFieldMappings(newMappings);
+        validateMappings(newMappings);
       }
     } else {
-      setFieldMappings(prev => ({
-        ...prev,
+      const newMappings: Record<string, string | { type: 'create', fieldType: string, fieldName: string }> = {
+        ...fieldMappings,
         [csvColumn]: fieldId
-      }));
+      };
+      setFieldMappings(newMappings);
+      validateMappings(newMappings);
     }
-  }, [fields]);
+  }, [fields, fieldMappings, validateMappings]);
 
   const handleCreateFieldTypeChange = useCallback((csvColumn: string, fieldType: string) => {
     setFieldMappings(prev => {
       const current = prev[csvColumn];
       if (typeof current === 'object' && current.type === 'create') {
-        return {
+        const newMappings = {
           ...prev,
           [csvColumn]: { ...current, fieldType }
         };
+        validateMappings(newMappings);
+        return newMappings;
       }
       return prev;
     });
-  }, []);
+  }, [validateMappings]);
 
   const handleCreateFieldNameChange = useCallback((csvColumn: string, fieldName: string) => {
     setFieldMappings(prev => {
       const current = prev[csvColumn];
       if (typeof current === 'object' && current.type === 'create') {
-        return {
+        const newMappings = {
           ...prev,
           [csvColumn]: { ...current, fieldName }
         };
+        validateMappings(newMappings);
+        return newMappings;
       }
       return prev;
     });
-  }, []);
+  }, [validateMappings]);
 
   // Function to automatically create field mappings for all columns
   const handleCreateAllFields = useCallback((checked: boolean) => {
@@ -453,12 +608,14 @@ export const ImportCsvModal = ({
       
       console.log('📊 Created mappings:', allMappings);
       setFieldMappings(allMappings);
+      validateMappings(allMappings);
     } else {
       // Clear all mappings when unchecked
       console.log('📊 Clearing all mappings');
       setFieldMappings({});
+      setMappingValidationErrors({});
     }
-  }, [csvColumns, fields]);
+  }, [csvColumns, fields, validateMappings]);
 
   const handleImport = useCallback(async () => {
     if (!file) return;
@@ -498,6 +655,8 @@ export const ImportCsvModal = ({
     setError(null);
     setStep('upload');
     setCreateAllFields(false);
+    setFirstDataRow({});
+    setMappingValidationErrors({});
     onClose();
   }, [onClose]);
 
@@ -509,6 +668,8 @@ export const ImportCsvModal = ({
     setStep('upload');
     setRowCount(0);
     setCreateAllFields(false);
+    setFirstDataRow({});
+    setMappingValidationErrors({});
   }, []);
 
   if (!isOpen) return null;
@@ -714,9 +875,12 @@ export const ImportCsvModal = ({
                               <option value="email">Email</option>
                               <option value="phone">Phone</option>
                               <option value="checkbox">Checkbox</option>
-                              <option value="single_select">Single Select</option>
-                              <option value="multi_select">Multi Select</option>
+                              <option value="single_select">Dropdown (Single)</option>
+                              <option value="multi_select">Dropdown (Multiple)</option>
+                              <option value="radio_select">Radio Select</option>
                               <option value="link">Link</option>
+                              <option value="long_text">Long Text</option>
+                              <option value="monetary">Monetary</option>
                             </select>
                           </div>
                         </div>
@@ -730,6 +894,31 @@ export const ImportCsvModal = ({
                 <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700">
                   <AlertCircle size={16} />
                   <span>{error}</span>
+                </div>
+              )}
+
+              {/* Mapping Validation Errors */}
+              {Object.keys(mappingValidationErrors).length > 0 && (
+                <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <div className="flex items-center gap-2 mb-3">
+                    <AlertCircle className="w-5 h-5 text-yellow-600" />
+                    <span className="font-medium text-yellow-900">Data Type Mismatches Detected</span>
+                  </div>
+                  <div className="space-y-2 text-sm text-yellow-800">
+                    {Object.entries(mappingValidationErrors).map(([csvColumn, errors]) => (
+                      <div key={csvColumn} className="ml-7">
+                        <span className="font-medium">{csvColumn}:</span>
+                        <ul className="list-disc ml-5 mt-1">
+                          {errors.map((error, index) => (
+                            <li key={index}>{error}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs text-yellow-700 mt-3 italic">
+                    Note: These values may be left blank or cause errors during import. Consider changing the field type or mapping to a different field.
+                  </p>
                 </div>
               )}
             </div>
@@ -787,7 +976,16 @@ export const ImportCsvModal = ({
                   disabled={isProcessing || (Object.keys(fieldMappings).length === 0 && !createAllFields)}
                   className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
                 >
-                  {isProcessing ? 'Importing...' : `Import ${rowCount} ${rowCount === 1 ? 'Row' : 'Rows'} (${Object.keys(fieldMappings).length} mapped)`}
+                  {isProcessing ? (
+                    'Importing...'
+                  ) : (
+                    <>
+                      {Object.keys(mappingValidationErrors).length > 0 && (
+                        <AlertCircle size={16} />
+                      )}
+                      Import {rowCount} {rowCount === 1 ? 'Row' : 'Rows'} ({Object.keys(fieldMappings).length} mapped)
+                    </>
+                  )}
                 </button>
               )}
             </div>

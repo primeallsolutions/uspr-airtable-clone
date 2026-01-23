@@ -214,6 +214,8 @@ export const CreateAutomationModal = ({
     : sourceFields.find(f => f.id === formData.trigger.field_id);
   const isNumericField = selectedField?.type === 'number';
   const isTextField = selectedField?.type === 'text' || selectedField?.type === 'email';
+  const isSelectField = selectedField?.type === 'single_select' || selectedField?.type === 'multi_select';
+  const selectOptions = (selectedField && isSelectField && selectedField.options) ? selectedField.options : [];
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
@@ -689,22 +691,53 @@ export const CreateAutomationModal = ({
                           <label className="block text-sm font-medium text-gray-600 mb-1">
                             Value
                           </label>
-                          <input
-                            type={isNumericField ? "number" : "text"}
-                            value={formData.trigger.condition.value}
-                            onChange={(e) => setFormData(prev => ({ 
-                              ...prev, 
-                              trigger: { 
-                                ...prev.trigger, 
-                                condition: { 
-                                  ...prev.trigger.condition, 
-                                  value: isNumericField ? parseFloat(e.target.value) || 0 : e.target.value 
+                          {isSelectField ? (
+                            <select
+                              value={typeof formData.trigger.condition.value === 'string' ? formData.trigger.condition.value : ''}
+                              onChange={(e) => setFormData(prev => ({
+                                ...prev,
+                                trigger: {
+                                  ...prev.trigger,
+                                  condition: {
+                                    ...prev.trigger.condition,
+                                    value: e.target.value
+                                  }
                                 }
-                              }
-                            }))}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            placeholder={isNumericField ? "Enter numeric value (e.g., 5)" : "Enter trigger value (e.g., 'buyer')"}
-                          />
+                              }))}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                              <option value="">Select option</option>
+                              {Object.keys(selectOptions).length === 0 && (
+                                <option value="" disabled>No options available</option>
+                              )}
+                              {Object.keys(selectOptions).map(key => {
+                                const option = selectOptions[key as keyof typeof selectOptions];
+                                const value = (option as any)?.label;
+                                return typeof value === 'string' ? (
+                                  <option key={key} value={value}>
+                                    {value}
+                                  </option>
+                                ) : null;
+                              })}
+                            </select>
+                          ) : (
+                            <input
+                              type={isNumericField ? "number" : "text"}
+                              value={formData.trigger.condition.value}
+                              onChange={(e) => setFormData(prev => ({ 
+                                ...prev, 
+                                trigger: { 
+                                  ...prev.trigger, 
+                                  condition: { 
+                                    ...prev.trigger.condition, 
+                                    value: isNumericField ? parseFloat(e.target.value) || 0 : e.target.value 
+                                  }
+                                }
+                              }))}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              placeholder={isNumericField ? "Enter numeric value (e.g., 5)" : "Enter trigger value (e.g., 'buyer')"}
+                            />
+                          )}
                         </div>
                       </div>
                     </div>
@@ -775,25 +808,10 @@ export const CreateAutomationModal = ({
                   </div>
                   <div className="flex-1">
                     <h5 className="text-sm font-medium text-blue-900 mb-1">Move Operation</h5>
-                    <p className="text-sm text-blue-700 mb-3">
+                    <p className="text-sm text-blue-700">
                       This automation will move records from the source table to the target table. 
                       The original record will be removed from the source table.
                     </p>
-                    <label className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={formData.action.preserve_original}
-                        disabled
-                        onChange={(e) => setFormData(prev => ({
-                          ...prev,
-                          action: { ...prev.action, preserve_original: e.target.checked }
-                        }))}
-                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <span className="text-sm text-blue-700">
-                        Keep original record in source table (disabled for move operations)
-                      </span>
-                    </label>
                   </div>
                 </div>
               </div>

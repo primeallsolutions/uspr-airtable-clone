@@ -1,11 +1,17 @@
-import { Home as HomeIcon, Star, Share2, ChevronDown, Plus, Edit3, Trash2, Check, X } from "lucide-react";
+import { Home as HomeIcon, Star, Share2, ChevronDown, Plus, Edit3, Trash2, Check, X, Sparkles, Megaphone } from "lucide-react";
 import type { ActiveView, WorkspaceRecord } from "@/lib/types/dashboard";
+import type { RoleType } from "@/lib/services/membership-service";
+
+type SidebarWorkspace = WorkspaceRecord & {
+  accessRole?: RoleType;
+  owner_name?: string | null;
+};
 
 interface SidebarProps {
   activeView: ActiveView;
   selectedWorkspaceId: string | null;
-  workspaces: WorkspaceRecord[];
-  sharedWorkspaces?: Array<WorkspaceRecord & { owner_name?: string | null }>;
+  workspaces: SidebarWorkspace[];
+  sharedWorkspaces?: SidebarWorkspace[];
   workspacesCollapsed: boolean;
   editingWorkspaceId: string | null;
   editingWorkspaceName: string;
@@ -40,10 +46,19 @@ export const Sidebar = ({
   onDeleteWorkspace,
   setEditingWorkspaceName
 }: SidebarProps) => {
+  const workspaceList = (() => {
+    const map = new Map<string, SidebarWorkspace>();
+    [...workspaces, ...(sharedWorkspaces ?? [])].forEach((ws) => {
+      if (ws?.id) {
+        map.set(ws.id, ws);
+      }
+    });
+    return Array.from(map.values());
+  })();
   const dotColors = ["bg-blue-600", "bg-gray-400", "bg-purple-600", "bg-green-600", "bg-amber-500"];
 
   return (
-    <aside className="hidden w-64 flex-col border-r bg-white md:flex">
+    <aside className="hidden fixed top-0 left-0 w-64 h-screen flex-col border-r bg-white md:flex">
       <div className="flex items-center gap-2 px-4 py-4">
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-xs font-bold text-white">US</div>
         <div className="text-base font-semibold text-gray-900">Prime Database</div>
@@ -75,15 +90,39 @@ export const Sidebar = ({
         </button>
         
         <button
-          /* TODO: Add onClick attribute when "Shared" page is created */
-          className={`flex w-full items-center gap-2 rounded-md px-2 py-2 ${
+          onClick={() => onViewChange('shared')}
+          className={`flex w-full items-center gap-2 rounded-md px-2 py-2 cursor-pointer ${
             activeView === 'shared'
               ? 'bg-blue-100 text-blue-700 font-medium'
-              : 'text-gray-400' // Currently disabled; enabled state: 'text-gray-900 hover:bg-gray-100'
+              : 'text-gray-900 hover:bg-gray-100'
           }`}
         >
           <Share2 size={18} />
           <span>Shared</span>
+        </button>
+        
+        <button
+          onClick={() => onViewChange('marketing')}
+          className={`flex w-full items-center gap-2 rounded-md px-2 py-2 cursor-pointer ${
+            activeView === 'marketing'
+              ? 'bg-blue-100 text-blue-700 font-medium'
+              : 'text-gray-900 hover:bg-gray-100'
+          }`}
+        >
+          <Megaphone size={18} />
+          <span>Marketing</span>
+        </button>
+        
+        <button
+          onClick={() => onViewChange('templates')}
+          className={`flex w-full items-center gap-2 rounded-md px-2 py-2 cursor-pointer ${
+            activeView === 'templates'
+              ? 'bg-blue-100 text-blue-700 font-medium'
+              : 'text-gray-900 hover:bg-gray-100'
+          }`}
+        >
+          <Sparkles size={18} />
+          <span>Templates</span>
         </button>
       </nav>
       
@@ -100,12 +139,13 @@ export const Sidebar = ({
       </div>
       
       {!workspacesCollapsed && (
-        <div className="space-y-1 px-2 py-2">
-          {workspaces.length === 0 ? (
+        <div className="flex-1 min-h-0 overflow-y-auto space-y-1 px-2 py-2">
+          {workspaceList.length === 0 ? (
             <div className="px-2 py-2 text-sm text-gray-500">No workspaces</div>
           ) : (
-            workspaces.map((workspace, idx) => {
+            workspaceList.map((workspace, idx) => {
               const color = dotColors[idx % dotColors.length];
+              const canManageWorkspace = workspace.accessRole === 'owner';
               return (
                 <div key={workspace.id} className="group relative">
                   {editingWorkspaceId === workspace.id ? (
@@ -161,9 +201,11 @@ export const Sidebar = ({
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
+                          if (!canManageWorkspace) return;
                           onStartEditingWorkspace(workspace.id, workspace.name);
                         }}
-                        className="p-1 text-gray-400 hover:text-gray-600 rounded cursor-pointer"
+                        className={`p-1 rounded ${canManageWorkspace ? 'text-gray-400 hover:text-gray-600 cursor-pointer' : 'text-gray-300 cursor-not-allowed'}`}
+                        disabled={!canManageWorkspace}
                         title="Edit workspace"
                       >
                         <Edit3 className="w-3 h-3" />
@@ -171,11 +213,12 @@ export const Sidebar = ({
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
+                          if (!canManageWorkspace) return;
                           onDeleteWorkspace({ id: workspace.id, name: workspace.name });
                         }}
-                        className="p-1 text-gray-400 hover:text-red-600 rounded disabled:opacity-40 cursor-pointer"
+                        className={`p-1 rounded disabled:opacity-40 ${canManageWorkspace ? 'text-gray-400 hover:text-red-600 cursor-pointer' : 'text-gray-300 cursor-not-allowed'}`}
                         title="Delete workspace"
-                        disabled={false /* gated by parent using menu visibility; RLS still protects */}
+                        disabled={!canManageWorkspace}
                       >
                         <Trash2 className="w-3 h-3" />
                       </button>
@@ -185,34 +228,6 @@ export const Sidebar = ({
               );
             })
           )}
-        </div>
-      )}
-      
-      {/* Shared Workspaces section (visible/expanded by default) */}
-      {sharedWorkspaces && sharedWorkspaces.length > 0 && (
-        <div className="mt-2 border-t pt-2">
-          <div className="px-4 text-xs font-medium uppercase tracking-wide text-gray-500 mb-1">
-            Shared Workspaces
-          </div>
-          <div className="space-y-1 px-2 py-2">
-            {sharedWorkspaces.map((workspace, idx) => {
-              const color = dotColors[(idx + 3) % dotColors.length];
-              return (
-                <button
-                  key={workspace.id}
-                  className={`flex w-full items-center gap-2 rounded-md px-2 py-2 cursor-pointer ${
-                    activeView === 'workspace' && selectedWorkspaceId === workspace.id
-                      ? 'bg-blue-100 text-blue-700 font-medium'
-                      : 'text-gray-900 hover:bg-gray-100'
-                  }`}
-                  onClick={() => onWorkspaceSelect(workspace.id)}
-                >
-                  <span className={`inline-block h-3.5 w-3.5 rounded-full ${color}`}></span>
-                  <span className="truncate">{workspace.name}</span>
-                </button>
-              );
-            })}
-          </div>
         </div>
       )}
 

@@ -27,6 +27,8 @@ interface GridViewProps {
   groupFieldIds?: string[];
   colorFieldId?: string | null;
   colorAssignments?: Record<string, string>;
+  showCreatedAt?: boolean;
+  scrollContainerRef?: React.Ref<HTMLDivElement>;
 }
 
 export const GridView = ({
@@ -49,7 +51,9 @@ export const GridView = ({
   onReorderFields,
   groupFieldIds,
   colorFieldId,
-  colorAssignments = {}
+  colorAssignments = {},
+  showCreatedAt = false,
+  scrollContainerRef
 }: GridViewProps) => {
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
   const initialOrderRef = useRef<string[] | null>(null);
@@ -192,11 +196,11 @@ export const GridView = ({
     const validIds = groupFieldIds.filter(id => fieldsToUse.some(field => field.id === id));
     if (validIds.length === 0) return null;
 
-    const buildSections = (data: RecordRow[], ids: string[], depth = 0): GroupSection[] => {
-      if (ids.length === 0) {
-        return [];
-      }
-      const [currentId, ...rest] = ids;
+        const buildSections = (data: RecordRow[], ids: string[], depth = 0): GroupSection[] => {
+          if (ids.length === 0) {
+            return [];
+          }
+          const [currentId, ...rest] = ids;
       const groupField = fieldsToUse.find(field => field.id === currentId);
       if (!groupField) {
         return rest.length ? buildSections(data, rest, depth) : [];
@@ -205,7 +209,7 @@ export const GridView = ({
       const buckets = new Map<string, RecordRow[]>();
       data.forEach(record => {
         const rawValue = record.values?.[currentId];
-        const label = rawValue === null || rawValue === undefined || rawValue === '' ? 'No value' : String(rawValue);
+        const label = rawValue === null || rawValue === undefined || rawValue === '' ? 'No data' : String(rawValue);
         if (!buckets.has(label)) {
           buckets.set(label, []);
         }
@@ -305,6 +309,7 @@ export const GridView = ({
           onSelectRow={handleSelectRow}
           colorFieldId={colorFieldId}
           colorAssignments={colorAssignments}
+          showCreatedAt={showCreatedAt}
         />
       ));
 
@@ -328,7 +333,7 @@ export const GridView = ({
       )}
 
       {/* Single Scrollable Container for Table */}
-      <div className="flex-1 min-h-0 overflow-auto" style={{ scrollbarGutter: 'stable' }}>
+      <div ref={scrollContainerRef} className="flex-1 min-h-0 overflow-auto" style={{ scrollbarGutter: 'stable' }}>
         <div className="min-w-max">
           {/* Sticky Table Header */}
           <div className="sticky top-0 z-10 bg-gray-50">
@@ -343,6 +348,7 @@ export const GridView = ({
               onFieldContextMenu={onFieldContextMenu}
               onSelectAll={handleSelectAll}
               onReorderFields={onReorderFields}
+              showCreatedAt={showCreatedAt}
             />
           </div>
           
@@ -374,53 +380,17 @@ export const GridView = ({
               {rowContent}
               
               {/* Floating Add Row button pinned to viewport, as opposed to a button on a row that scrolls out of view */}
-              <div className="pointer-events-none fixed bottom-2 right-6 z-20">
-                <button
-                  onClick={() => onAddRow()}
-                  className="pointer-events-auto inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg shadow-lg hover:bg-blue-700 transition-colors"
-                >
-                  <Plus size={16} />
-                  <span>Add Row</span>
-                </button>
-              </div>
-              {/* Add Row button spanning entire row */}
-              <div className="flex border-b border-gray-200 hover:bg-gray-50">
-                {/* Checkbox column */}
-                  <div className="flex-shrink-0 border-r border-gray-200" style={{ width: selectWidth }}></div>
-                
-                {/* Actions placeholder */}
-                <div
-                  className="flex-shrink-0 border-r border-gray-200 bg-gray-50 flex items-center justify-center text-xs text-gray-400"
-                  style={{ width: actionsWidth }}
-                >
-                  —
-                </div>
-
-                <div
-                  className="flex-shrink-0 border-r border-gray-200 bg-gray-100 flex items-center justify-center"
-                  style={{ width: rowNumberWidth }}
-                >
-                  <span className="text-xs text-gray-500">+</span>
-                </div>
-                <div className="flex-1 min-w-0">
+              {totalPages == 1 && ( /* Handle separately when pagination is visible */
+                <div className="pointer-events-none fixed bottom-2 right-6 z-20">
                   <button
                     onClick={() => onAddRow()}
-                    className="w-full h-12 flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 transition-colors"
+                    className="pointer-events-auto inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg shadow-lg hover:bg-blue-700 transition-colors"
                   >
                     <Plus size={16} />
                     <span>Add Row</span>
                   </button>
                 </div>
-                <div
-                  className="flex-shrink-0 border-l border-gray-200 bg-gray-50"
-                  style={{ width: addFieldWidth }}
-                ></div>
-              </div>
-              
-              {/* Footer with record count */}
-              <div className="flex items-center justify-end px-6 py-3 bg-gray-50 border-t border-gray-200">
-                <span className="text-sm text-gray-500">{records.length} {records.length === 1 ? 'record' : 'records'}</span>
-              </div>
+              )}
             </>
           )}
         </div>
@@ -506,6 +476,15 @@ export const GridView = ({
                 <ChevronsRight size={18} className="text-gray-600" />
               </button>
             </div>
+              
+            {/* Add Row button */}
+            <button
+              onClick={() => onAddRow()}
+              className="pointer-events-auto inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg shadow-lg hover:bg-blue-700 transition-colors cursor-pointer"
+            >
+              <Plus size={16} />
+              <span>Add Row</span>
+            </button>
           </div>
         )}
       </div>

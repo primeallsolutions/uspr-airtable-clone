@@ -15,6 +15,9 @@ export type GHLIntegration = {
   created_at: string;
   updated_at: string;
   is_private_integration: boolean; // True if using Private Integration Token
+  auto_sync_enabled: boolean; // Enable automatic background sync when base is open
+  auto_sync_interval_minutes: number | null; // Auto-sync interval in minutes (1, 5, 15, 30, 60)
+  last_auto_sync_at: string | null; // Timestamp of last automatic sync
 };
 
 export type GHLFieldMapping = {
@@ -60,6 +63,7 @@ export type GHLWebhookPayload = {
 export type GHLTokenResponse = {
   access_token: string;
   refresh_token: string;
+  locationId: string;
   expires_in: number; // seconds until expiration
   token_type: string;
   scope?: string;

@@ -10,6 +10,7 @@ import type {
   CreateFieldData,
   FieldType
 } from '../types/base-detail';
+import { AuditLogService } from './audit-log-service';
 
 // Simple in-memory cache for automations per base to reduce repeated fetches on cell updates
 const automationCache = new Map<string, Automation[]>();
@@ -119,7 +120,7 @@ export class BaseDetailService {
   static async getBase(baseId: string): Promise<BaseRow> {
     const { data, error } = await supabase
       .from("bases")
-      .select("id, name, description, created_at, last_opened_at")
+      .select("id, name, description, created_at, workspace_id, last_opened_at")
       .eq("id", baseId)
       .single();
 
@@ -228,7 +229,28 @@ export class BaseDetailService {
       .single();
 
     if (error) throw error;
-    return data as TableRow;
+
+    const table = data as TableRow;
+
+    // Get workspace_id from base for audit log scope
+    const { data: baseData } = await supabase
+      .from("bases")
+      .select("workspace_id")
+      .eq("id", tableData.base_id)
+      .single();
+
+    if (baseData?.workspace_id) {
+      await AuditLogService.log({
+        action: 'create',
+        entity_type: 'table',
+        entity_id: table.id,
+        scope_type: 'workspace',
+        scope_id: baseData.workspace_id,
+        metadata: { name: tableData.name, base_id: tableData.base_id },
+      });
+    }
+
+    return table;
   }
 
   static async updateTable(tableId: string, updates: Partial<TableRow>): Promise<void> {
@@ -241,6 +263,24 @@ export class BaseDetailService {
   }
 
   static async deleteTable(tableId: string): Promise<void> {
+    // Get table info before deletion for audit log
+    const { data: tableData } = await supabase
+      .from("tables")
+      .select("name, base_id")
+      .eq("id", tableId)
+      .single();
+
+    // Get workspace_id from base for audit log scope
+    let workspaceId: string | null = null;
+    if (tableData?.base_id) {
+      const { data: baseData } = await supabase
+        .from("bases")
+        .select("workspace_id")
+        .eq("id", tableData.base_id)
+        .single();
+      workspaceId = baseData?.workspace_id ?? null;
+    }
+
     // First delete records and fields to avoid FK violations
     const { error: recordsError } = await supabase
       .from("records")
@@ -268,6 +308,18 @@ export class BaseDetailService {
     if (error) {
       console.error('Failed to delete table', tableId, error);
       throw error;
+    }
+
+    // Log table deletion
+    if (workspaceId) {
+      await AuditLogService.log({
+        action: 'delete',
+        entity_type: 'table',
+        entity_id: tableId,
+        scope_type: 'workspace',
+        scope_id: workspaceId,
+        metadata: { name: tableData?.name, base_id: tableData?.base_id },
+      });
     }
   }
 
@@ -475,7 +527,7 @@ export class BaseDetailService {
     }
     
     // Validate and sanitize field type
-    const allowedTypes = ['text', 'number', 'date', 'datetime', 'email', 'phone', 'single_select', 'multi_select', 'checkbox', 'link'];
+    const allowedTypes = ['text', 'long_text', 'number', 'monetary', 'date', 'datetime', 'email', 'phone', 'single_select', 'multi_select', 'radio_select', 'checkbox', 'link'];
 
     // Sanitize the field type - remove any whitespace and ensure it's lowercase
     const sanitizedType = fieldData.type.trim().toLowerCase();
@@ -511,7 +563,29 @@ export class BaseDetailService {
     }
     
     console.log('✅ Field created successfully in table:', tableData.name);
-    return data as FieldRow;
+
+    const field = data as FieldRow;
+
+    // Get workspace_id from table -> base for audit log scope
+    const { data: tableWithBase } = await supabase
+      .from("tables")
+      .select("base_id, bases(workspace_id)")
+      .eq("id", fieldData.table_id)
+      .single();
+
+    const workspaceId = (tableWithBase?.bases as { workspace_id?: string } | null)?.workspace_id;
+    if (workspaceId) {
+      await AuditLogService.log({
+        action: 'create',
+        entity_type: 'field',
+        entity_id: field.id,
+        scope_type: 'workspace',
+        scope_id: workspaceId,
+        metadata: { name: fieldData.name, type: sanitizedType, table_id: fieldData.table_id },
+      });
+    }
+
+    return field;
   }
 
   static async updateField(fieldId: string, updates: Partial<FieldRow>): Promise<void> {
@@ -608,12 +682,33 @@ export class BaseDetailService {
   }
 
   static async deleteField(fieldId: string): Promise<void> {
+    // Get field info before deletion for audit log
+    const { data: fieldData } = await supabase
+      .from("fields")
+      .select("name, table_id, tables(base_id, bases(workspace_id))")
+      .eq("id", fieldId)
+      .single();
+
     const { error } = await supabase
       .from("fields")
       .delete()
       .eq("id", fieldId);
 
     if (error) throw error;
+
+    // Log field deletion
+    const tableInfo = fieldData?.tables as { base_id?: string; bases?: { workspace_id?: string } } | null;
+    const workspaceId = tableInfo?.bases?.workspace_id;
+    if (workspaceId) {
+      await AuditLogService.log({
+        action: 'delete',
+        entity_type: 'field',
+        entity_id: fieldId,
+        scope_type: 'workspace',
+        scope_id: workspaceId,
+        metadata: { name: fieldData?.name, table_id: fieldData?.table_id },
+      });
+    }
   }
 
   static async deleteAllFields(tableId: string): Promise<void> {
@@ -807,6 +902,24 @@ export class BaseDetailService {
       // Don't throw here as the record creation was successful
     }
 
+    // Log record creation
+    const { data: baseData } = await supabase
+      .from("bases")
+      .select("workspace_id")
+      .eq("id", table.base_id)
+      .single();
+
+    if (baseData?.workspace_id) {
+      await AuditLogService.log({
+        action: 'create',
+        entity_type: 'record',
+        entity_id: masterRecordId,
+        scope_type: 'workspace',
+        scope_id: baseData.workspace_id,
+        metadata: { table_id: tableId },
+      });
+    }
+
     return data as RecordRow;
   }
 
@@ -837,12 +950,33 @@ export class BaseDetailService {
   }
 
   static async deleteRecord(recordId: string): Promise<void> {
+    // Get record info before deletion for audit log
+    const { data: recordData } = await supabase
+      .from("records")
+      .select("table_id, tables(base_id, bases(workspace_id))")
+      .eq("id", recordId)
+      .single();
+
     const { error } = await supabase
       .from("records")
       .delete()
       .eq("id", recordId);
 
     if (error) throw error;
+
+    // Log record deletion
+    const tableInfo = recordData?.tables as { base_id?: string; bases?: { workspace_id?: string } } | null;
+    const workspaceId = tableInfo?.bases?.workspace_id;
+    if (workspaceId) {
+      await AuditLogService.log({
+        action: 'delete',
+        entity_type: 'record',
+        entity_id: recordId,
+        scope_type: 'workspace',
+        scope_id: workspaceId,
+        metadata: { table_id: recordData?.table_id },
+      });
+    }
   }
 
   static async updateCell(recordId: string, fieldId: string, value: unknown): Promise<void> {
@@ -856,6 +990,7 @@ export class BaseDetailService {
       .single();
 
     if (fetchError) throw fetchError;
+    const previousValue = record.values?.[fieldId];
 
     // Get table info to check if it's masterlist and get base_id
     const { data: table, error: tableError } = await supabase
@@ -877,13 +1012,15 @@ export class BaseDetailService {
 
     // Field name (used for propagation)
     let masterFieldName: string | null = null;
+    let masterFieldType: string | null = null;
     if (baseId) {
       const { data: fieldMeta } = await supabase
         .from("fields")
-        .select("name")
+        .select("name, type")
         .eq("id", fieldId)
         .maybeSingle();
       masterFieldName = fieldMeta?.name || null;
+      masterFieldType = fieldMeta?.type || null;
     }
 
     // Update the specific field value
@@ -902,7 +1039,7 @@ export class BaseDetailService {
         ? updatedValues._source_record_id
         : sourceMasterRecordId;
 
-    console.log(`📝 UPDATED VALUES:`, updatedValues);
+    console.log(`[cell] updated values:`, updatedValues);
 
     // Save back to database
     const { error: updateError } = await supabase
@@ -912,7 +1049,30 @@ export class BaseDetailService {
 
     if (updateError) throw updateError;
 
-    console.log(`✅ CELL SAVED: Cell update successful`);
+    console.log(`[cell] update saved successfully`);
+
+    // Record audit trail for the change
+    try {
+      const { data: userResp } = await supabase.auth.getUser();
+      const actorId = userResp.user?.id ?? null;
+      await supabase.from('audit_logs').insert({
+        actor_id: actorId,
+        action: 'update',
+        entity_type: 'record',
+        entity_id: recordId,
+        scope_type: 'base',
+        scope_id: baseId,
+        metadata: {
+          field_id: fieldId,
+          field_name: masterFieldName,
+          field_type: masterFieldType,
+          previous_value: previousValue ?? null,
+          new_value: value ?? null,
+        },
+      });
+    } catch (logError) {
+      console.warn('Failed to write audit log for cell update', logError);
+    }
 
     let masterlistTableId: string | null = null;
     let mergedMasterlistValues: Record<string, unknown> | null = null;
@@ -1443,13 +1603,13 @@ export class BaseDetailService {
             }
 
             // Check which values are missing from current options
-            const currentOptions = field.options as Record<string, { name: string; color: string }> || {};
+            const currentOptions = field.options as Record<string, { name?: string; color: string }> || {};
             const newOptionsToAdd: Record<string, { name: string; color: string }> = {};
             let nextOptionIndex = Object.keys(currentOptions).length + 1;
 
             for (const value of uniqueValues) {
               // Check for exact match
-              const exactMatch = Object.values(currentOptions).some(opt => opt && opt.name === value);
+              const exactMatch = Object.values(currentOptions).some(opt => opt && (opt.name === value));
 
               // Check for case-insensitive match
               const caseInsensitiveMatch = Object.values(currentOptions).some(opt => opt && opt.name && opt.name.toLowerCase() === value.toLowerCase());

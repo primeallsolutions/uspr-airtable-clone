@@ -310,6 +310,60 @@ export const RecordDetailsModal = ({
   const isSaving = savingCell?.recordId === record.id && savingCell?.fieldId !== null;
   const isNameSaving = isSaving && savingCell?.fieldId === nameField?.id;
 
+  const summarizeValue = (val: unknown): string => {
+    if (val === null || val === undefined || val === "") return "empty";
+    if (Array.isArray(val)) return val.join(", ");
+    if (typeof val === "object") return JSON.stringify(val);
+    return String(val);
+  };
+
+  const renderAuditSummary = (log: AuditLogRow): string => {
+    const meta = (log.metadata || {}) as Record<string, unknown>;
+    
+    // Handle GHL sync entries
+    if (meta["source"] === "ghl") {
+      const contactName = meta["contact_name"] as string;
+      if (log.action === "create") {
+        return contactName 
+          ? `Record created from GoHighLevel sync (${contactName})`
+          : "Record created from GoHighLevel sync";
+      }
+      if (log.action === "update") {
+        return contactName
+          ? `Record updated from GoHighLevel sync (${contactName})`
+          : "Record updated from GoHighLevel sync";
+      }
+    }
+
+    // Handle record creation
+    if (log.action === "create") {
+      return "Record created";
+    }
+
+    // Handle record deletion
+    if (log.action === "delete") {
+      return "Record deleted";
+    }
+
+    // Handle field changes (update action)
+    const fieldLabel = (meta["field_name"] as string) || (meta["field_id"] as string) || "field";
+    const prevVal = meta["previous_value"];
+    const newVal = meta["new_value"];
+    return `Changed ${fieldLabel} from ${summarizeValue(prevVal)} to ${summarizeValue(newVal)}`;
+  };
+
+  const renderActor = (log: AuditLogRow): string => {
+    // GHL sync is system-initiated (no actor)
+    if (!log.actor_id) {
+      const meta = (log.metadata || {}) as Record<string, unknown>;
+      if (meta["source"] === "ghl") {
+        return "GoHighLevel Sync";
+      }
+      return "System";
+    }
+    return log.actor?.full_name || log.actor?.email || "Someone";
+  };
+
   return (
     <div
       className="fixed inset-0 z-50 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200"
@@ -729,10 +783,10 @@ export const RecordDetailsModal = ({
                           )}
                         </div>
                       ) : (
-                        <span className="text-gray-400 italic text-sm">Click to edit</span>
+                        <span className="text-gray-400 italic text-sm">No data</span>
                       )}
-                    </div>
-                  )}
+                  </div>
+                )}
                   <div className="mt-3 flex items-center justify-between">
                     {field.type && (
                       <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-gray-600 bg-gray-100 rounded-md">
@@ -798,6 +852,86 @@ export const RecordDetailsModal = ({
           </button>
         </div>
       </div>
+
+      {/* Audit Log Modal */}
+      {isAuditOpen && (
+        <div
+          className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setIsAuditOpen(false)}
+        >
+          <div
+            className="w-full max-w-2xl rounded-2xl bg-white shadow-2xl border border-gray-200 overflow-hidden animate-in fade-in zoom-in-95"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 bg-gray-50">
+              <div className="flex items-center gap-2">
+                <History className="w-4 h-4 text-gray-700" />
+                <h3 className="text-base font-semibold text-gray-900">Audit Log</h3>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => void loadAudit()}
+                  disabled={auditLoading}
+                  className="text-xs px-2.5 py-1.5 border border-gray-300 rounded-md bg-white hover:bg-gray-100 text-gray-700 disabled:opacity-50"
+                >
+                  Refresh
+                </button>
+                <button
+                  onClick={() => setIsAuditOpen(false)}
+                  className="p-2 rounded-md hover:bg-gray-200 text-gray-600"
+                  aria-label="Close audit log"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-5 space-y-3 max-h-[60vh] overflow-y-auto">
+              {auditLoading && (
+                <div className="text-sm text-gray-500 flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Loading audit trail…
+                </div>
+              )}
+              {auditError && (
+                <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md p-3">{auditError}</div>
+              )}
+              {!auditLoading && !auditError && auditLogs.length === 0 && (
+                <div className="text-sm text-gray-500">No changes logged yet.</div>
+              )}
+              {!auditLoading && !auditError && auditLogs.length > 0 && (
+                <div className="divide-y divide-gray-100 border border-gray-100 rounded-lg overflow-hidden bg-gray-50">
+                  {auditLogs.map((log) => (
+                    <div key={log.id} className="px-4 py-3 text-sm">
+                      <div className="font-medium text-gray-900">
+                        {renderActor(log)} — {renderAuditSummary(log)}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {formatInTimezone(log.created_at, timezone, {
+                          year: "numeric",
+                          month: "short",
+                          day: "numeric",
+                          hour: "numeric",
+                          minute: "2-digit",
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-gray-200 bg-gray-50">
+              <button
+                onClick={() => setIsAuditOpen(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-lg bg-white hover:bg-gray-100"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

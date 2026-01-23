@@ -17,11 +17,13 @@ export type WorkspaceRecord = {
   id: string;
   name: string;
   created_at?: string;
+  accessRole?: 'owner' | 'admin' | 'member';
+  isShared?: boolean;
 };
 
-export type ActiveView = 'home' | 'workspace' | 'starred' | 'shared' | 'account';
+export type ActiveView = 'home' | 'workspace' | 'starred' | 'shared' | 'account' | 'templates' | 'marketing';
 export type CollectionView = 'grid' | 'list';
-export type SortOption = 'lastOpened' | 'lastModified' | 'alphabetical' | 'oldestToNewest' | 'newestToOldest';
+export type SortOption = 'lastOpened' | 'alphabetical' | 'oldestToNewest' | 'newestToOldest';
 
 export type CreateBaseFormData = {
   name: string;

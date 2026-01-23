@@ -13,8 +13,8 @@ export const ViewToggle = ({ collectionView, setCollectionView }: ViewToggleProp
         onClick={() => setCollectionView('grid')} 
         className={`rounded-md px-2 py-1 ${
           collectionView === 'grid' 
-            ? 'bg-gray-100 text-gray-900' 
-            : 'text-gray-500 hover:bg-gray-100 cursor-pointer'
+            ? 'bg-blue-200 text-gray-900' 
+            : 'text-gray-500 hover:bg-blue-100 cursor-pointer'
         }`}
       >
         <Grid3X3 size={18} />
@@ -23,8 +23,8 @@ export const ViewToggle = ({ collectionView, setCollectionView }: ViewToggleProp
         onClick={() => setCollectionView('list')} 
         className={`rounded-md px-2 py-1 ${
           collectionView === 'list' 
-            ? 'bg-gray-100 text-gray-900' 
-            : 'text-gray-500 hover:bg-gray-100 cursor-pointer'
+            ? 'bg-blue-200 text-gray-900' 
+            : 'text-gray-500 hover:bg-blue-100 cursor-pointer'
         }`}
       >
         <List size={18} />

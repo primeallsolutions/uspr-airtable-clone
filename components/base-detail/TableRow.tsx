@@ -2,6 +2,8 @@ import { Eye } from "lucide-react";
 import CellEditor from "../../app/bases/[id]/CellEditor";
 import type { RecordRow, FieldRow, SavingCell, TableRow as TableRowType } from "@/lib/types/base-detail";
 import { tableLayout } from "./tableLayout";
+import { formatInTimezone } from "@/lib/utils/date-helpers";
+import { useTimezone } from "@/lib/hooks/useTimezone";
 
 interface TableRowProps {
   record: RecordRow;
@@ -18,6 +20,7 @@ interface TableRowProps {
   onSelectRow: (recordId: string, checked: boolean) => void;
   colorFieldId?: string | null;
   colorAssignments?: Record<string, string>;
+  showCreatedAt?: boolean;
 }
 
 export const TableRow = ({
@@ -34,11 +37,13 @@ export const TableRow = ({
   onViewDetails,
   onSelectRow,
   colorFieldId,
-  colorAssignments
+  colorAssignments,
+  showCreatedAt = false
 }: TableRowProps) => {
+  const { timezone } = useTimezone();
   const isSaving = savingCell?.recordId === record.id;
-  const { selectWidth, actionsWidth, rowNumberWidth, addFieldWidth } = tableLayout;
-  const firstDataLeftOffset = `calc(${selectWidth} + ${actionsWidth} + ${rowNumberWidth})`;
+  const { selectWidth, actionsWidth, rowNumberWidth, createdAtWidth, addFieldWidth } = tableLayout;
+  const firstDataLeftOffset = `calc(${selectWidth} + ${actionsWidth} + ${rowNumberWidth} + ${showCreatedAt ? createdAtWidth : '0rem'})`;
   
   // Determine if we're viewing the masterlist
   const selectedTable = selectedTableId ? tables.find(t => t.id === selectedTableId) : null;
@@ -95,6 +100,24 @@ export const TableRow = ({
       >
         <span className="text-xs text-gray-500">{rowIndex + 1}</span>
       </div>
+      
+      {/* Record creation time */}
+      { showCreatedAt && (
+        <div
+          className="border-r border-gray-200 bg-gray-50 flex items-center justify-center group relative transition-all sticky z-20 bg-white shadow-[4px_0_6px_-4px_rgba(0,0,0,0.1)]"
+          style={{ left: `calc(${selectWidth} + ${actionsWidth} + ${rowNumberWidth})`, width: createdAtWidth }}
+        >
+          <span className="text-sm font-medium text-gray-900 truncate text-center flex-1">
+            {formatInTimezone(record.created_at, timezone, {
+              year: "numeric",
+              month: "short",
+              day: "numeric",
+              hour: "numeric",
+              minute: "2-digit",
+            })}
+          </span>
+        </div>
+      )}
       
       {/* Field cells */}
       {fields.map((field, idx) => {

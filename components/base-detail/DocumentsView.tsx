@@ -568,7 +568,29 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
         description: errorMessage,
       });
     }
+  }
+
+  const handleRenameSelected = () => {
+    if (!selectedDoc || isFolder(selectedDoc)) return;
+    setShowRenameModal(true);
   };
+  const handleDeleteChecked = async () => {
+    if (checkedDocuments.length === 0) return;
+    const confirmDelete = window.confirm(
+      `Delete ${checkedDocuments.length} selected documents? This cannot be undone.`
+    );
+    if (!confirmDelete) return;
+    try {
+      for (const docPath of checkedDocuments)
+        await DocumentsService.deleteDocument(baseId, selectedTable?.id ?? null, docPath);
+      if (selectedDoc && checkedDocuments.includes(selectedDoc.path)) setSelectedDocPath(null);
+      setCheckedDocuments([]);
+      await refresh();
+    } catch (err) {
+      console.error("Failed to delete document", err);
+      alert("Unable to delete document");
+    }
+  }
 
   const handleRenameSelected = () => {
     if (!selectedDoc || isFolder(selectedDoc)) return;

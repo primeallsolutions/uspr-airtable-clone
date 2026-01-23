@@ -14,7 +14,10 @@ import {
   Upload,
   MoreVertical,
   Edit,
-  Trash2
+  Trash2,
+  CalendarPlus,
+  CalendarX2,
+  ArrowLeftFromLine
 } from "lucide-react";
 import type { TableRow } from "@/lib/types/base-detail";
 
@@ -24,7 +27,6 @@ interface TableControlsProps {
   tables: TableRow[];
   selectedTableId: string | null;
   onTableSelect: (tableId: string) => void;
-  onAddRecord: () => void | Promise<void>;
   showTableTabs?: boolean;
   viewMode?: 'grid' | 'kanban'; // View mode to show appropriate controls
   onImportCsv: () => void;
@@ -50,13 +52,16 @@ interface TableControlsProps {
   activePanel?: ViewControlPanel | null;
   searchQuery: string;
   onSearchChange: (value: string) => void;
+  showCreatedAt?: boolean;
+  onToggleCreatedAt?: () => void;
+  onScrollLeft?: () => void;
+  onScrollRight?: () => void;
 }
 
 export const TableControls = ({
   tables,
   selectedTableId,
   onTableSelect,
-  onAddRecord,
   showTableTabs = true,
   viewMode = 'grid',
   onImportCsv,
@@ -75,7 +80,11 @@ export const TableControls = ({
   viewState,
   activePanel = null,
   searchQuery,
-  onSearchChange
+  onSearchChange,
+  showCreatedAt = false,
+  onToggleCreatedAt,
+  onScrollLeft,
+  onScrollRight
 }: TableControlsProps) => {
   const [contextMenu, setContextMenu] = useState<{
     tableId: string;
@@ -89,6 +98,43 @@ export const TableControls = ({
 
   const [draggedTableId, setDraggedTableId] = useState<string | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
+  // Hold-to-scroll support for chevrons
+  const holdScrollIntervalRef = useRef<number | null>(null);
+  const holdScrollDirectionRef = useRef<'left' | 'right' | null>(null);
+
+  const stopHoldScroll = () => {
+    if (holdScrollIntervalRef.current !== null) {
+      window.clearInterval(holdScrollIntervalRef.current);
+      holdScrollIntervalRef.current = null;
+    }
+    holdScrollDirectionRef.current = null;
+    document.removeEventListener('mouseup', stopHoldScroll);
+    document.removeEventListener('touchend', stopHoldScroll);
+  };
+
+  const startHoldScroll = (direction: 'left' | 'right') => {
+    // Prevent duplicate intervals
+    stopHoldScroll();
+    holdScrollDirectionRef.current = direction;
+    // Trigger one immediate scroll
+    if (direction === 'left') {
+      onScrollLeft?.();
+    } else {
+      onScrollRight?.();
+    }
+    // Then continue at a tight interval
+    holdScrollIntervalRef.current = window.setInterval(() => {
+      if (holdScrollDirectionRef.current === 'left') {
+        onScrollLeft?.();
+      } else if (holdScrollDirectionRef.current === 'right') {
+        onScrollRight?.();
+      }
+    }, 16); // ~60fps
+    // Stop when mouse/touch ends anywhere
+    document.addEventListener('mouseup', stopHoldScroll);
+    document.addEventListener('touchend', stopHoldScroll, { passive: true });
+  };
 
   // Sort tables by order_index to ensure consistent display order
   const sortedTables = [...tables].sort((a, b) => a.order_index - b.order_index);
@@ -250,29 +296,15 @@ export const TableControls = ({
                 </button>
               </div>
             ))}
-            <button
-              type="button"
-              onClick={onCreateTable}
-              className="flex items-center justify-center w-8 h-8 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-              title="Create new table"
-            >
-              <Plus size={16} />
-            </button>
           </div>
 
           {/* Table Navigation */}
-          <div className="flex items-center gap-2">
-            <button type="button" className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
-              <ChevronLeft size={16} className="text-gray-400" />
-            </button>
-            <button type="button" className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
-              <ChevronRight size={16} className="text-gray-400" />
-            </button>
+          <div className="flex items-center gap-2 pl-3">
             <button
               type="button"
-              onClick={onAddRecord}
+              onClick={onCreateTable}
               className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              title="Add record"
+              title="Create new table"
             >
               <Plus size={16} className="text-gray-400" />
             </button>
@@ -305,6 +337,23 @@ export const TableControls = ({
                     ref={settingsMenuRef}
                     className="absolute right-0 mt-2 w-56 bg-white border border-gray-200 rounded-lg shadow-xl py-1 z-50"
                   >
+                    <button
+                      type="button"
+                      onClick={onToggleCreatedAt}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:bg-gray-100 transition-colors text-left"
+                    >
+                      {showCreatedAt ? (
+                        <>
+                          <CalendarX2 size={14} className="text-gray-600" />
+                          <span>Hide Record Creation Dates</span>
+                        </>
+                      ) : (
+                        <>
+                          <CalendarPlus size={14} />
+                          <span>Show Record Creation Dates</span>
+                        </>
+                      )}
+                    </button>
                     <button
                       type="button"
                       onClick={() => {
@@ -453,16 +502,46 @@ export const TableControls = ({
           </button>
         </div>
 
-        {/* Search */}
-        <div className="relative">
-          <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Search records..."
-            value={searchQuery}
-            onChange={(e) => onSearchChange(e.target.value)}
-            className="pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent w-64"
-          />
+        {/* Navigation + Search */}
+        <div className="flex items-center gap-3">
+          <div className="flex items-center">
+            <button
+              type="button"
+              onClick={onScrollLeft}
+              onMouseDown={() => startHoldScroll('left')}
+              onMouseUp={stopHoldScroll}
+              onMouseLeave={stopHoldScroll}
+              onTouchStart={() => startHoldScroll('left')}
+              onTouchEnd={stopHoldScroll}
+              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              <ChevronLeft size={16} className="text-gray-400" />
+            </button>
+            <button
+              type="button"
+              onClick={onScrollRight}
+              onMouseDown={() => startHoldScroll('right')}
+              onMouseUp={stopHoldScroll}
+              onMouseLeave={stopHoldScroll}
+              onTouchStart={() => startHoldScroll('right')}
+              onTouchEnd={stopHoldScroll}
+              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              <ChevronRight size={16} className="text-gray-400" />
+            </button>
+          </div>
+
+          {/* Search */}
+          <div className="relative">
+            <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search records..."
+              value={searchQuery}
+              onChange={(e) => onSearchChange(e.target.value)}
+              className="pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent w-64"
+            />
+          </div>
         </div>
       </div>
 

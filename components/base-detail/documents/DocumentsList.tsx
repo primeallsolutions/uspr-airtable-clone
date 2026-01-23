@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
-import { FileText, Image as ImageIcon, File, Loader2, Search, X, LayoutGrid, List } from "lucide-react";
+import { FileText, Image as ImageIcon, File, Loader2, Trash2, Search, X, LayoutGrid, List } from "lucide-react";
 import type { StoredDocument } from "@/lib/services/documents-service";
 import { DocumentsService } from "@/lib/services/documents-service";
 import { formatSize, isImage, isPdf, isFolder } from "./utils";
@@ -12,6 +12,7 @@ type DocumentsListProps = {
   loading: boolean;
   error: string | null;
   folderPath: string;
+  checkedDocuments: string[];
   onDocumentSelect: (path: string) => void;
   onDocumentEdit?: (doc: StoredDocument & { relative: string }) => void;
   baseId: string;
@@ -31,6 +32,7 @@ export const DocumentsList = ({
   loading,
   error,
   folderPath,
+  checkedDocuments,
   onDocumentSelect,
   onDocumentEdit,
   baseId,

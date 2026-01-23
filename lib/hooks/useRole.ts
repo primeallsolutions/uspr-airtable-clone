@@ -48,6 +48,7 @@ export function useRole(params: { workspaceId?: string | null; baseId?: string |
             .eq('user_id', uid)
             .maybeSingle();
 
+          if (bm?.role === 'owner') { setRole('owner'); return; }
           if (bm?.role === 'admin') { setRole('admin'); return; }
           if (bm?.role === 'member') { setRole('member'); return; }
 
@@ -58,6 +59,7 @@ export function useRole(params: { workspaceId?: string | null; baseId?: string |
             .eq('workspace_id', base.workspace_id)
             .eq('user_id', uid)
             .maybeSingle();
+          if (wm?.role === 'owner') { setRole('owner'); return; }
           if (wm?.role === 'admin') { setRole('admin'); return; }
           if (wm?.role === 'member') { setRole('member'); return; }
 
@@ -85,6 +87,7 @@ export function useRole(params: { workspaceId?: string | null; baseId?: string |
             .eq('workspace_id', workspaceId)
             .eq('user_id', uid)
             .maybeSingle();
+          if (wm?.role === 'owner') { setRole('owner'); return; }
           if (wm?.role === 'admin') { setRole('admin'); return; }
           if (wm?.role === 'member') { setRole('member'); return; }
           setRole(null);
@@ -112,6 +115,5 @@ export function useRole(params: { workspaceId?: string | null; baseId?: string |
 
   return { role, can, loading };
 }
-
 
 

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { X, Type, Hash, Calendar, Clock, Mail, Phone, CheckSquare, Link, List, CheckCircle, Plus, Edit2, Trash2, GripVertical } from "lucide-react";
+import { X, Type, Hash, Calendar, Clock, Mail, Phone, CheckSquare, Link, List, CheckCircle, Plus, Edit2, Trash2, GripVertical, AlignLeft, DollarSign, CircleDot } from "lucide-react";
 import type { FieldType } from "@/lib/types/base-detail";
 
 interface OptionItem {
@@ -20,18 +20,33 @@ const fieldTypes: Array<{
   description: string;
   icon: React.ReactNode;
 }> = [
+  // Text Input Types
   {
     type: 'text',
-    label: 'Text',
+    label: 'Text (Single Line)',
     description: 'Single line of text',
     icon: <Type size={20} className="text-gray-600" />
   },
+  {
+    type: 'long_text',
+    label: 'Long Text (Multi Line)',
+    description: 'Multi-line text or text box list',
+    icon: <AlignLeft size={20} className="text-gray-600" />
+  },
+  // Numeric Types
   {
     type: 'number',
     label: 'Number',
     description: 'Numeric values',
     icon: <Hash size={20} className="text-gray-600" />
   },
+  {
+    type: 'monetary',
+    label: 'Monetary',
+    description: 'Currency/money values',
+    icon: <DollarSign size={20} className="text-gray-600" />
+  },
+  // Date/Time Types
   {
     type: 'date',
     label: 'Date',
@@ -44,6 +59,7 @@ const fieldTypes: Array<{
     description: 'Date and time values',
     icon: <Clock size={20} className="text-gray-600" />
   },
+  // Contact Types
   {
     type: 'email',
     label: 'Email',
@@ -56,17 +72,24 @@ const fieldTypes: Array<{
     description: 'Phone numbers',
     icon: <Phone size={20} className="text-gray-600" />
   },
+  // Selection Types
   {
     type: 'single_select',
-    label: 'Single Select',
-    description: 'Choose one option from a list',
+    label: 'Dropdown (Single)',
+    description: 'Choose one option from a dropdown',
     icon: <List size={20} className="text-gray-600" />
   },
   {
     type: 'multi_select',
-    label: 'Multi Select',
-    description: 'Choose multiple options from a list',
+    label: 'Dropdown (Multiple)',
+    description: 'Choose multiple options from a dropdown',
     icon: <CheckCircle size={20} className="text-gray-600" />
+  },
+  {
+    type: 'radio_select',
+    label: 'Radio Select',
+    description: 'Choose one option with radio buttons',
+    icon: <CircleDot size={20} className="text-gray-600" />
   },
   {
     type: 'checkbox',
@@ -74,6 +97,7 @@ const fieldTypes: Array<{
     description: 'True or false values',
     icon: <CheckSquare size={20} className="text-gray-600" />
   },
+  // Other Types
   {
     type: 'link',
     label: 'Link',
@@ -109,7 +133,11 @@ export const CreateFieldModal = ({ isOpen, onClose, onCreateField }: CreateField
     if (!fieldName.trim()) return;
     
     // Validate that selectedType is a valid FieldType
-    const validTypes: FieldType[] = ['text', 'number', 'date', 'datetime', 'email', 'phone', 'single_select', 'multi_select', 'checkbox', 'link'];
+    const validTypes: FieldType[] = [
+      'text', 'long_text', 'number', 'monetary', 'date', 'datetime', 
+      'email', 'phone', 'single_select', 'multi_select', 'radio_select', 
+      'checkbox', 'link'
+    ];
     if (!validTypes.includes(selectedType)) {
       console.error('Invalid field type selected:', selectedType);
       return;
@@ -120,16 +148,21 @@ export const CreateFieldModal = ({ isOpen, onClose, onCreateField }: CreateField
       type: selectedType
     };
     
-    // Add options for select fields
-    if (selectedType === 'single_select' || selectedType === 'multi_select') {
+    // Add options for select fields (single_select, multi_select, radio_select)
+    if (selectedType === 'single_select' || selectedType === 'multi_select' || selectedType === 'radio_select') {
       const optionsMap: Record<string, unknown> = {};
       options.forEach(option => {
         optionsMap[option.id] = {
-          label: option.label,
+          name: option.label,
           color: option.color
         };
       });
       fieldData.options = optionsMap;
+    }
+    
+    // Add currency options for monetary fields
+    if (selectedType === 'monetary') {
+      fieldData.options = { currency: 'USD', symbol: '$' };
     }
     
     onCreateField(fieldData);
@@ -294,8 +327,8 @@ export const CreateFieldModal = ({ isOpen, onClose, onCreateField }: CreateField
             </div>
           </div>
           
-          {/* Options for Select Fields */}
-          {(selectedType === 'single_select' || selectedType === 'multi_select') && (
+          {/* Options for Select Fields (single_select, multi_select, radio_select) */}
+          {(selectedType === 'single_select' || selectedType === 'multi_select' || selectedType === 'radio_select') && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-3">
                 Options

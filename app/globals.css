@@ -166,3 +166,38 @@
     scrollbar-color: #c1c1c1 #f1f1f1;
   }
 }
+
+.react-grid-layout {
+  position: relative;
+}
+
+.react-grid-item {
+  transition: transform 200ms ease;
+}
+
+.react-grid-item.react-grid-placeholder {
+  background: #dbeafe;
+  opacity: 0.4;
+  border-radius: 0.5rem;
+}
+
+.react-grid-item > .react-resizable-handle {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  bottom: 6px;
+  right: 6px;
+  cursor: se-resize;
+}
+
+.react-grid-item > .react-resizable-handle::after {
+  content: "";
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 10px;
+  height: 10px;
+  border-right: 2px solid #94a3b8;
+  border-bottom: 2px solid #94a3b8;
+  opacity: 0.8;
+}

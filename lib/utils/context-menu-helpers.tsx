@@ -1,4 +1,3 @@
-import { Star } from "lucide-react";
 import type { ContextMenuOption } from "@/components/ui/context-menu";
 import type { BaseRecord } from "../types/dashboard";
 
@@ -7,6 +6,7 @@ interface ContextMenuActions {
   onRename: (base: BaseRecord) => void;
   onToggleStar: (base: BaseRecord) => void;
   onDuplicate: (base: BaseRecord) => void;
+  onSaveAsTemplate?: (base: BaseRecord) => void;
   onDelete: (base: BaseRecord) => void;
 }
 
@@ -35,14 +35,6 @@ export const getBaseContextMenuOptions = (
     onClick: () => actions.onRename(base),
   },
   {
-    id: "star",
-    label: base.is_starred ? "Remove from starred" : "Add to starred",
-    icon: (
-      <Star className={`w-4 h-4 ${base.is_starred ? 'fill-current text-yellow-500' : ''}`} />
-    ),
-    onClick: () => actions.onToggleStar(base),
-  },
-  {
     id: "duplicate",
     label: "Duplicate",
     icon: (
@@ -52,11 +44,21 @@ export const getBaseContextMenuOptions = (
     ),
     onClick: () => actions.onDuplicate(base),
   },
+  ...(actions.onSaveAsTemplate ? [{
+    id: "save-as-template",
+    label: "Save as Template",
+    icon: (
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+      </svg>
+    ),
+    onClick: () => actions.onSaveAsTemplate!(base),
+  }] : []),
   {
     id: "delete",
     label: "Delete",
     icon: (
-      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg className="w-4 h-4" fill="none" stroke="red" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
       </svg>
     ),

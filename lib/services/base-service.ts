@@ -2,6 +2,7 @@ import { supabase } from '../supabaseClient';
 import type { BaseRecord, CreateBaseFormData } from '../types/dashboard';
 import type { Automation } from '../types/base-detail';
 import { BaseDetailService } from './base-detail-service';
+import { AuditLogService } from './audit-log-service';
 
 export class BaseService {
   /**
@@ -97,6 +98,37 @@ export class BaseService {
     return (data ?? []) as BaseRecord[];
   }
 
+  static async getSharedBases(): Promise<BaseRecord[]> {
+    const { data: userResp, error: userError } = await supabase.auth.getUser();
+    if (userError || !userResp.user?.id) {
+      return [];
+    }
+    const uid = userResp.user.id;
+
+    // Collect workspace_ids from workspace_memberships
+    const { data: sharedWorkspaces, error: workspaceMembershipError } = await supabase
+      .from('workspace_memberships')
+      .select('workspace_id')
+      .eq('user_id', uid);
+
+    if (workspaceMembershipError) {
+      throw workspaceMembershipError;
+    }
+
+    const accessFilter = await this.getBaseAccessFilter();
+    if (!accessFilter) return [];
+
+    const { data, error } = await supabase
+      .from('bases')
+      .select('id, name, description, created_at, last_opened_at, is_starred')
+      .in('workspace_id', sharedWorkspaces.map(w => w.workspace_id))
+      .or(accessFilter)
+      .order('last_opened_at', { ascending: false, nullsFirst: false });
+
+    if (error) throw error;
+    return (data ?? []) as BaseRecord[];
+  }
+
   static async createBase(formData: CreateBaseFormData): Promise<string> {
     // Validate that we have a workspace ID
     if (!formData.workspaceId) {
@@ -183,19 +215,55 @@ export class BaseService {
       throw new Error(fieldsInsertError.message || "Failed to create default fields");
     }
 
+    // Log base creation
+    await AuditLogService.log({
+      action: 'create',
+      entity_type: 'base',
+      entity_id: baseId,
+      scope_type: 'workspace',
+      scope_id: formData.workspaceId,
+      metadata: { name: formData.name.trim() },
+    });
+
     return baseId;
   }
 
   static async renameBase(baseId: string, newName: string): Promise<void> {
+    // Get workspace_id for audit log scope
+    const { data: baseData } = await supabase
+      .from("bases")
+      .select("workspace_id, name")
+      .eq("id", baseId)
+      .single();
+
     const { error } = await supabase
       .from("bases")
       .update({ name: newName })
       .eq("id", baseId);
 
     if (error) throw error;
+
+    // Log base rename
+    if (baseData?.workspace_id) {
+      await AuditLogService.log({
+        action: 'update',
+        entity_type: 'base',
+        entity_id: baseId,
+        scope_type: 'workspace',
+        scope_id: baseData.workspace_id,
+        metadata: { old_name: baseData.name, new_name: newName },
+      });
+    }
   }
 
   static async updateBase(baseId: string, updates: { name?: string; description?: string | null }): Promise<void> {
+    // Get workspace_id for audit log scope
+    const { data: baseData } = await supabase
+      .from("bases")
+      .select("workspace_id, name")
+      .eq("id", baseId)
+      .single();
+
     const { error } = await supabase
       .from('bases')
       .update({
@@ -205,6 +273,18 @@ export class BaseService {
       .eq('id', baseId);
 
     if (error) throw error;
+
+    // Log base update
+    if (baseData?.workspace_id) {
+      await AuditLogService.log({
+        action: 'update',
+        entity_type: 'base',
+        entity_id: baseId,
+        scope_type: 'workspace',
+        scope_id: baseData.workspace_id,
+        metadata: { name: baseData.name, updates },
+      });
+    }
   }
 
   static async toggleStar(baseId: string, isStarred: boolean): Promise<void> {
@@ -217,7 +297,26 @@ export class BaseService {
   }
 
   static async deleteBase(baseId: string): Promise<void> {
+    // Get base info before deletion for audit log
+    const { data: baseData } = await supabase
+      .from("bases")
+      .select("workspace_id, name")
+      .eq("id", baseId)
+      .single();
+
     await BaseDetailService.deleteBaseCascade(baseId);
+
+    // Log base deletion
+    if (baseData?.workspace_id) {
+      await AuditLogService.log({
+        action: 'delete',
+        entity_type: 'base',
+        entity_id: baseId,
+        scope_type: 'workspace',
+        scope_id: baseData.workspace_id,
+        metadata: { name: baseData.name },
+      });
+    }
   }
 
   static async duplicateBase(baseId: string): Promise<string> {
@@ -380,6 +479,22 @@ export class BaseService {
         console.warn(`Failed to create automation: ${automation.name}`, error);
         // Continue with other automations even if one fails
       }
+    }
+
+    // Log base duplication
+    if (baseData?.workspace_id) {
+      await AuditLogService.log({
+        action: 'duplicate',
+        entity_type: 'base',
+        entity_id: newBaseId,
+        scope_type: 'workspace',
+        scope_id: baseData.workspace_id,
+        metadata: { 
+          original_base_id: baseId, 
+          original_name: originalBase.name,
+          new_name: newBaseName,
+        },
+      });
     }
 
     return newBaseId;

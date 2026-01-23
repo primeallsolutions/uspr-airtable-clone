@@ -1,6 +1,6 @@
 "use client";
-import { useEffect, useCallback, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useCallback, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { ContextMenu, useContextMenu } from "@/components/ui/context-menu";
 import { RenameModal } from "@/components/ui/rename-modal";
@@ -19,12 +19,17 @@ import { Banner } from "@/components/dashboard/Banner";
 import { HomeView } from "@/components/dashboard/views/HomeView";
 import { WorkspaceView } from "@/components/dashboard/views/WorkspaceView";
 import { StarredView } from "@/components/dashboard/views/StarredView";
+import { MarketingView } from "@/components/dashboard/views/MarketingView";
+import { TemplatesView } from "@/components/dashboard/views/TemplatesView";
 import { CreateBaseModal } from "@/components/dashboard/modals/CreateBaseModal";
 import { CreateWorkspaceModal } from "@/components/dashboard/modals/CreateWorkspaceModal";
 import { DeleteWorkspaceModal } from "@/components/dashboard/modals/DeleteWorkspaceModal";
 import { DeleteBaseModal } from "@/components/dashboard/modals/DeleteBaseModal";
-import { ManageWorkspaceMembersModal } from "@/components/dashboard/modals/ManageWorkspaceMembersModal";
 import { ImportBaseModal } from "@/components/dashboard/modals/ImportBaseModal";
+import { TemplatePreviewModal } from "@/components/dashboard/modals/TemplatePreviewModal";
+import { CreateTemplateModal } from "@/components/dashboard/modals/CreateTemplateModal";
+import type { Template } from "@/lib/types/templates";
+import { TemplateService } from "@/lib/services/template-service";
 
 // Utils
 import { getBaseContextMenuOptions } from "@/lib/utils/context-menu-helpers";
@@ -32,20 +37,28 @@ import { useRole } from "@/lib/hooks/useRole";
 
 // Types
 import type { BaseRecord } from "@/lib/types/dashboard";
+import { SharedView } from "@/components/dashboard/views/SharedView";
 
-export default function Dashboard() {
+function DashboardContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const viewFromQuery = searchParams?.get("view");
+  const workspaceIdFromQuery = searchParams?.get("workspaceId");
   const { contextMenu, showContextMenu, hideContextMenu } = useContextMenu();
 
   // Custom hooks
-  const { user, loading, signOut } = useAuth();
+  const { user, loading: authLoading, signOut } = useAuth();
   const {
     recentBases,
     workspaceBases,
     starredBases,
+    sharedBases,
+    loading: basesLoading,
+    initialLoad: initialBasesLoad,
     loadRecentBases,
     loadWorkspaceBases,
     loadStarredBases,
+    loadSharedBases,
     createBase,
     renameBase,
     updateBaseDetails,
@@ -60,6 +73,7 @@ export default function Dashboard() {
     createWorkspace,
     updateWorkspace,
     deleteWorkspace,
+    leaveWorkspace,
   } = useWorkspaces();
   
   const {
@@ -90,7 +104,10 @@ export default function Dashboard() {
     switchToWorkspaceView,
     switchToHomeView,
     switchToStarredView,
+    switchToSharedView,
     switchToAccountView,
+    switchToTemplatesView,
+    switchToMarketingView,
     openCreateModal,
     closeCreateModal,
     openRenameModal,
@@ -105,20 +122,36 @@ export default function Dashboard() {
   } = useDashboardState();
 
   // Resolve delete permission for selected workspace/base context
-  const { role, can } = useRole({ workspaceId: selectedWorkspaceId ?? undefined });
-  const [isManageWorkspaceMembersOpen, setIsManageWorkspaceMembersOpen] = useState(false);
+  const { role, can, loading: roleLoading } = useRole({ workspaceId: selectedWorkspaceId ?? undefined });
+  
+  // Only show manage members button if role is definitively owner/admin (not while loading)
+  const canManageMembers = !roleLoading && (role === 'owner' || role === 'admin');
   const [isImportBaseModalOpen, setIsImportBaseModalOpen] = useState(false);
+  
+  // Template modal states
+  const [isTemplatePreviewOpen, setIsTemplatePreviewOpen] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
+  const [isCreateTemplateModalOpen, setIsCreateTemplateModalOpen] = useState(false);
+  const [templateBaseId, setTemplateBaseId] = useState<string>('');
+  const [isTransitioning, setIsTransitioning] = useState(false);
 
   // Initialize data on component mount
-  const initializeDashboard = useCallback(async () => {
+  const initializeDashboard = useCallback(async (preferredWorkspaceId?: string | null) => {
     // Ensure user is present before loading data
     if (!user) return;
     const defaultWorkspaceId = await loadWorkspaces();
-    if (defaultWorkspaceId) {
-      setSelectedWorkspaceId(defaultWorkspaceId);
+    const workspaceToSelect = preferredWorkspaceId ?? defaultWorkspaceId;
+
+    if (workspaceToSelect) {
+      setSelectedWorkspaceId(workspaceToSelect);
+    }
+
+    if (preferredWorkspaceId && workspaceToSelect) {
+      switchToWorkspaceView(workspaceToSelect);
+      await loadWorkspaceBases(workspaceToSelect);
     }
     await loadRecentBases();
-  }, [user, loadWorkspaces, loadRecentBases, setSelectedWorkspaceId]);
+  }, [user, loadWorkspaces, loadRecentBases, setSelectedWorkspaceId, switchToWorkspaceView, loadWorkspaceBases]);
 
   // Event handlers
   const handleBaseContextMenu = useCallback((e: React.MouseEvent, base: BaseRecord) => {
@@ -141,6 +174,36 @@ export default function Dashboard() {
   const handleCreateBase = useCallback(async (formData: { name: string; description: string; workspaceId: string }) => {
     await createBase(formData);
   }, [createBase]);
+
+  const handleCreateFromTemplate = useCallback(async (templateId: string, workspaceId: string, baseName?: string) => {
+    const toastId = toast.loading('Creating base from template...', {
+      description: 'This may take a few moments'
+    });
+    
+    try {
+      const newBaseId = await TemplateService.createBaseFromTemplate(templateId, workspaceId, baseName);
+      
+      // Reload bases to show the new one
+      await loadRecentBases();
+      if (activeView === 'workspace' && selectedWorkspaceId) {
+        await loadWorkspaceBases(selectedWorkspaceId);
+      }
+      
+      toast.success('Base created successfully!', {
+        id: toastId,
+        description: 'Your new base is ready to use'
+      });
+      
+      // Navigate to the new base
+      router.push(`/bases/${newBaseId}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to create base from template';
+      toast.error('Failed to create base', {
+        id: toastId,
+        description: message
+      });
+    }
+  }, [activeView, selectedWorkspaceId, loadRecentBases, loadWorkspaceBases, router]);
 
   const handleCreateWorkspace = useCallback(async (formData: { name: string }) => {
     try {
@@ -182,15 +245,95 @@ export default function Dashboard() {
     }
   }, [workspaceToDelete, deleteWorkspace, selectedWorkspaceId, switchToHomeView, setSelectedWorkspaceId, closeDeleteWorkspaceModal]);
 
+  const handleLeaveWorkspace = useCallback(async () => {
+    if (!selectedWorkspaceId) return;
+    
+    const confirmed = window.confirm('Are you sure you want to leave this workspace? You will lose access to all bases in this workspace.');
+    if (!confirmed) return;
+    
+    try {
+      await leaveWorkspace(selectedWorkspaceId);
+      // After leaving, switch to home view
+      switchToHomeView();
+      setSelectedWorkspaceId(null);
+      toast.success('You have left the workspace');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to leave workspace';
+      toast.error(message);
+    }
+  }, [selectedWorkspaceId, leaveWorkspace, switchToHomeView, setSelectedWorkspaceId]);
+
   const handleWorkspaceSelect = useCallback((workspaceId: string) => {
+    setIsTransitioning(true);
     switchToWorkspaceView(workspaceId);
-    loadWorkspaceBases(workspaceId);
+    loadWorkspaceBases(workspaceId).finally(() => setIsTransitioning(false));
   }, [switchToWorkspaceView, loadWorkspaceBases]);
 
   const handleStarredViewSelect = useCallback(() => {
+    setIsTransitioning(true);
     switchToStarredView();
-    loadStarredBases();
+    loadStarredBases().finally(() => setIsTransitioning(false));
   }, [switchToStarredView, loadStarredBases]);
+
+  const handleSharedViewSelect = useCallback(() => {
+    setIsTransitioning(true);
+    switchToSharedView();
+    loadSharedBases().finally(() => setIsTransitioning(false));
+  }, [switchToSharedView, loadSharedBases]);
+
+  const handleTemplatesViewSelect = useCallback(() => {
+    switchToTemplatesView();
+  }, [switchToTemplatesView]);
+
+  const handleMarketingViewSelect = useCallback(() => {
+    switchToMarketingView();
+  }, [switchToMarketingView]);
+
+  const handleUseTemplate = useCallback((template: Template) => {
+    setSelectedTemplate(template);
+    setIsTemplatePreviewOpen(true);
+  }, []);
+
+  const handlePreviewTemplate = useCallback((template: Template) => {
+    setSelectedTemplate(template);
+    setIsTemplatePreviewOpen(true);
+  }, []);
+
+  const handleCreateTemplate = useCallback(async (data: {
+    name: string;
+    description: string;
+    category: string;
+    icon: string;
+    includeRecords: boolean;
+  }) => {
+    const toastId = toast.loading('Creating template...', {
+      description: 'This may take a moment'
+    });
+    
+    try {
+      await TemplateService.createTemplateFromBase(templateBaseId, {
+        name: data.name,
+        description: data.description,
+        category: data.category as any,
+        icon: data.icon,
+        includeRecords: data.includeRecords
+      });
+      
+      toast.success('Template created successfully!', {
+        id: toastId,
+        description: 'Your template is now available for use'
+      });
+      
+      setIsCreateTemplateModalOpen(false);
+      hideContextMenu();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to create template';
+      toast.error('Failed to create template', {
+        id: toastId,
+        description: message
+      });
+    }
+  }, [templateBaseId, hideContextMenu]);
 
   // Handle duplicate base
   const handleDuplicateBase = useCallback(async (base: BaseRecord) => {
@@ -238,16 +381,32 @@ export default function Dashboard() {
         onRename: openRenameModal,
         onToggleStar: toggleStar,
         onDuplicate: handleDuplicateBase,
+        onSaveAsTemplate: (base: BaseRecord) => {
+          setTemplateBaseId(base.id);
+          setSelectedBase(base);
+          setIsCreateTemplateModalOpen(true);
+        },
         onDelete: openDeleteBaseModal,
       }).filter((opt) => !(opt.id === "delete" && !can.delete))
     : [];
 
   // Initialize dashboard on mount
   useEffect(() => {
-    initializeDashboard();
-  }, [initializeDashboard]);
+    if (viewFromQuery !== null) {
+      switch (viewFromQuery) {
+        case 'home': switchToHomeView(); break;
+        case 'starred': switchToStarredView(); break;
+        case 'shared': switchToSharedView(); break;
+        case 'templates': switchToTemplatesView(); break;
+        case 'account': switchToAccountView(); break;
+      }
+      initializeDashboard();
+      return;
+    }
+    initializeDashboard(workspaceIdFromQuery);
+  }, [initializeDashboard, viewFromQuery, workspaceIdFromQuery]);
 
-  if (loading) {
+  if (authLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
@@ -257,8 +416,14 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Loading Overlay */}
+      {isTransitioning && (
+        <div className="absolute inset-0 bg-gray-900/50 flex items-center justify-center z-50">
+          <div className="w-8 h-8 border-4 border-white-600 border-t-transparent rounded-full animate-spin"></div>
+        </div>
+      )}
       <div className="flex min-h-screen">
-          {/* Sidebar */}
+        {/* Sidebar */}
         <Sidebar
           activeView={activeView}
           selectedWorkspaceId={selectedWorkspaceId}
@@ -270,6 +435,9 @@ export default function Dashboard() {
           onViewChange={(view) => {
             if (view === 'home') switchToHomeView();
             else if (view === 'starred') handleStarredViewSelect();
+            else if (view === 'shared') handleSharedViewSelect();
+            else if (view === 'marketing') handleMarketingViewSelect();
+            else if (view === 'templates') handleTemplatesViewSelect();
           }}
           onWorkspaceSelect={handleWorkspaceSelect}
           onWorkspacesToggle={() => setWorkspacesCollapsed(!workspacesCollapsed)}
@@ -283,7 +451,7 @@ export default function Dashboard() {
         />
 
         {/* Main Content */}
-        <section className="flex min-w-0 flex-1 flex-col">
+        <section className="flex min-w-0 flex-1 flex-col md:ml-64"> {/* offset left-margin by 64 to account for fixed sidebar */}
           {/* Top Bar */}
           <TopBar user={user} onSignOut={signOut} onOpenAccount={switchToAccountView} />
 
@@ -298,6 +466,8 @@ export default function Dashboard() {
                 collectionView={collectionView}
                 sortOption={sortOption}
                 isSortOpen={isSortOpen}
+                loading={basesLoading}
+                initialLoad={initialBasesLoad}
                 onCollectionViewChange={setCollectionView}
                 onSortOptionChange={setSortOption}
                 onSortToggle={setIsSortOpen}
@@ -311,15 +481,21 @@ export default function Dashboard() {
                 workspaceBases={workspaceBases}
                 workspaces={workspaces}
                 selectedWorkspaceId={selectedWorkspaceId}
+                isTransitioning={isTransitioning}
                 collectionView={collectionView}
                 sortOption={sortOption}
+                isSortOpen={isSortOpen}
+                loading={basesLoading}
+                initialLoad={initialBasesLoad}
                 onCollectionViewChange={setCollectionView}
+                onSortOptionChange={setSortOption}
+                onSortToggle={setIsSortOpen}
                 onCreateBase={openCreateModal}
                 onBaseStarToggle={toggleStar}
                 onBaseContextMenu={handleBaseContextMenu}
-                onManageMembers={() => setIsManageWorkspaceMembersOpen(true)}
-                canManageMembers={role === 'owner' || role === 'admin'}
-                onDeleteBaseClick={handleDeleteBaseShortcut}
+                canManageMembers={canManageMembers}
+                onLeaveWorkspace={handleLeaveWorkspace}
+                canLeaveWorkspace={role === 'member' || role === 'admin'}
               />
             )}
             
@@ -327,9 +503,45 @@ export default function Dashboard() {
               <StarredView
                 starredBases={starredBases}
                 collectionView={collectionView}
+                sortOption={sortOption}
+                isSortOpen={isSortOpen}
+                loading={basesLoading}
+                initialLoad={initialBasesLoad}
                 onCollectionViewChange={setCollectionView}
+                onSortOptionChange={setSortOption}
+                onSortToggle={setIsSortOpen}
                 onBaseStarToggle={toggleStar}
                 onBaseContextMenu={handleBaseContextMenu}
+              />
+            )}
+            
+            {activeView === 'shared' && (
+              <SharedView
+                sharedBases={sharedBases}
+                collectionView={collectionView}
+                sortOption={sortOption}
+                isSortOpen={isSortOpen}
+                loading={basesLoading}
+                initialLoad={initialBasesLoad}
+                onCollectionViewChange={setCollectionView}
+                onSortOptionChange={setSortOption}
+                onSortToggle={setIsSortOpen}
+                onBaseStarToggle={toggleStar}
+                onBaseContextMenu={handleBaseContextMenu}
+              />
+            )}
+
+            {activeView === 'marketing' && (
+              <MarketingView />
+            )}
+
+            {activeView === 'templates' && (
+              <TemplatesView
+                onUseTemplate={handleUseTemplate}
+                onPreviewTemplate={handlePreviewTemplate}
+                userId={user?.id}
+                collectionView={collectionView}
+                onCollectionViewChange={setCollectionView}
               />
             )}
 
@@ -345,10 +557,12 @@ export default function Dashboard() {
             isOpen={isCreateOpen}
             onClose={closeCreateModal}
             onCreate={handleCreateBase}
+            onCreateFromTemplate={handleCreateFromTemplate}
             activeView={activeView}
             selectedWorkspaceId={selectedWorkspaceId}
             workspaces={workspaces}
             onImport={() => setIsImportBaseModalOpen(true)}
+            userId={user?.id}
           />
 
           <CreateWorkspaceModal
@@ -380,15 +594,6 @@ export default function Dashboard() {
             onDelete={handleDeleteWorkspace}
             deleting={false}
           />
-
-          {/* Manage Workspace Members */}
-          {selectedWorkspaceId && (
-            <ManageWorkspaceMembersModal
-              isOpen={isManageWorkspaceMembersOpen}
-              onClose={() => setIsManageWorkspaceMembersOpen(false)}
-              workspaceId={selectedWorkspaceId}
-            />
-          )}
 
           {/* Context Menu */}
           {selectedBase && (
@@ -423,9 +628,44 @@ export default function Dashboard() {
             }}
           />
 
+          {/* Template Preview Modal */}
+          <TemplatePreviewModal
+            template={selectedTemplate}
+            isOpen={isTemplatePreviewOpen}
+            onClose={() => {
+              setIsTemplatePreviewOpen(false);
+              setSelectedTemplate(null);
+            }}
+            onUseTemplate={handleCreateFromTemplate}
+            workspaces={workspaces}
+          />
+
+          {/* Create Template Modal */}
+          <CreateTemplateModal
+            isOpen={isCreateTemplateModalOpen}
+            onClose={() => setIsCreateTemplateModalOpen(false)}
+            onCreate={handleCreateTemplate}
+            baseId={templateBaseId}
+            baseName={selectedBase?.name}
+          />
+
           
         </section>
       </div>
     </div>
+  );
+}
+
+export default function DashboardPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center min-h-screen bg-gray-50">
+          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+        </div>
+      }
+    >
+      <DashboardContent />
+    </Suspense>
   );
 }

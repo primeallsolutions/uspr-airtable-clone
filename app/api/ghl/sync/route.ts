@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { transformGHLContactToRecord } from '@/lib/utils/ghl-transform';
+import type { FieldType } from '@/lib/types/base-detail';
 
 const GHL_API_BASE_URL = 'https://services.leadconnectorhq.com';
 
@@ -16,6 +17,31 @@ const supabaseAdmin = createClient(
   }
 );
 
+// Helper to log audit events from API routes
+async function logAuditEvent(params: {
+  actorId: string | null;
+  action: string;
+  entityType: string;
+  entityId: string;
+  scopeType: 'workspace' | 'base';
+  scopeId: string;
+  metadata?: Record<string, unknown>;
+}) {
+  try {
+    await supabaseAdmin.from('audit_logs').insert({
+      actor_id: params.actorId,
+      action: params.action,
+      entity_type: params.entityType,
+      entity_id: params.entityId,
+      scope_type: params.scopeType,
+      scope_id: params.scopeId,
+      metadata: params.metadata ?? {},
+    });
+  } catch (error) {
+    console.warn('Failed to write audit log:', error);
+  }
+}
+
 /**
  * POST /api/ghl/sync
  * Manually sync contacts from Go High Level
@@ -23,7 +49,7 @@ const supabaseAdmin = createClient(
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { baseId, fullSync } = body; // fullSync option to force full sync
+    const { baseId, fullSync, isAutoSync } = body; // fullSync option to force full sync, isAutoSync to track auto-sync
 
     if (!baseId) {
       return NextResponse.json(
@@ -53,24 +79,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Initialize sync progress (store in integration's field_mapping as temp storage or update integration directly)
-    // We'll store progress in a separate update to ghl_integrations
+    // Initialize sync progress
     let totalContactsToSync = 0;
 
     // Helper function to update sync progress
     const updateSyncProgress = async (current: number, total: number, phase: 'fetching' | 'syncing') => {
       try {
-        // Construct URL for internal API call - use origin from request or default to localhost
         const origin = request.headers.get('origin') || 
                        request.nextUrl.origin || 
                        `http://localhost:${process.env.PORT || 3000}`;
         
-        // Call internal progress endpoint to update progress
         await fetch(`${origin}/api/ghl/sync-progress`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ baseId, current, total, phase }),
-        }).catch(() => {}); // Ignore errors - progress update is best effort
+        }).catch(() => {});
       } catch (error) {
         // Ignore progress update errors
       }
@@ -82,17 +105,13 @@ export async function POST(request: NextRequest) {
     // Determine if this is an incremental sync
     const isIncrementalSync = !fullSync && integration.last_sync_at;
     const syncType = isIncrementalSync ? 'incremental' : 'full';
+    const lastSyncDate = isIncrementalSync ? new Date(integration.last_sync_at) : null;
 
-    // Build query URL with optional date filter for incremental sync
+    // Build query URL - GHL API doesn't support date filtering, so we fetch all and filter client-side
     let queryUrl = `${GHL_API_BASE_URL}/contacts/?locationId=${integration.location_id}&limit=100`;
 
-    // If we have a previous sync timestamp and not forcing full sync, only fetch contacts updated after that
     if (isIncrementalSync) {
-      const lastSyncDate = new Date(integration.last_sync_at);
-      // Format as ISO string for GHL API (they accept ISO 8601 format)
-      const isoDateString = lastSyncDate.toISOString();
-      queryUrl += `&startAfterDate=${encodeURIComponent(isoDateString)}`;
-      console.log(`Incremental sync: fetching contacts updated after ${isoDateString}`);
+      console.log(`Incremental sync: will filter contacts updated after ${lastSyncDate?.toISOString()}`);
     } else {
       console.log('Full sync: fetching all contacts');
     }
@@ -131,13 +150,9 @@ export async function POST(request: NextRequest) {
       // Get next page URL from meta
       nextPageUrl = contactsData.meta?.nextPageUrl || null;
 
-        // Update progress during fetching (if we have meta.total, use it; otherwise use current count)
+      // Update progress during fetching
       const estimatedTotal = contactsData.meta?.total || allContacts.length + (nextPageUrl ? 100 : 0);
       await updateSyncProgress(allContacts.length, estimatedTotal, 'fetching');
-      
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/618db0db-dc88-4b24-9388-3127a0884ae1',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'sync/route.ts:PAGINATION',message:'Fetched page',data:{pageCount,contactsOnPage:contacts.length,totalSoFar:allContacts.length,hasMore:!!nextPageUrl},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'PAGINATION'})}).catch(()=>{});
-      // #endregion
 
       // Small delay between pages to avoid rate limiting
       if (nextPageUrl) {
@@ -145,11 +160,26 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    totalContactsToSync = allContacts.length;
+    // For incremental sync, filter contacts updated after last_sync_at
+    let contacts = allContacts;
+    if (isIncrementalSync && lastSyncDate) {
+      const beforeFilterCount = allContacts.length;
+      contacts = allContacts.filter((contact: any) => {
+        // Check if contact has a dateUpdated field
+        if (contact.dateUpdated) {
+          const contactUpdated = new Date(contact.dateUpdated);
+          return contactUpdated > lastSyncDate;
+        }
+        // If no dateUpdated, include it (might be new)
+        return true;
+      });
+      
+      console.log(`Filtered ${beforeFilterCount} contacts to ${contacts.length} modified since last sync`);
+    }
 
-    const contacts = allContacts;
+    totalContactsToSync = contacts.length;
 
-    // Log first contact for debugging (to see what fields are available)
+    // Log first contact for debugging
     if (contacts.length > 0) {
       console.log('Sample GHL contact structure:', JSON.stringify(contacts[0], null, 2));
       console.log('Available customFields:', contacts[0].customFields ? Object.keys(contacts[0].customFields) : 'none');
@@ -182,15 +212,18 @@ export async function POST(request: NextRequest) {
 
     const masterTable = tables[0];
 
+    // Get workspace_id for audit logging
+    const { data: baseData } = await supabaseAdmin
+      .from('bases')
+      .select('workspace_id, name')
+      .eq('id', baseId)
+      .single();
+
     // Get fields for field mapping
     const { data: fields } = await supabaseAdmin
       .from('fields')
-      .select('id, name, type')
+      .select('id, name, type, options')
       .eq('table_id', masterTable.id);
-
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/618db0db-dc88-4b24-9388-3127a0884ae1',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'sync/route.ts:FIELDS',message:'Database fields for table',data:{tableId:masterTable.id,fieldCount:fields?.length,sampleFields:fields?.slice(0,5).map(f=>({id:f.id,name:f.name}))},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'B'})}).catch(()=>{});
-    // #endregion
 
     // Build field mapping with actual field IDs
     const fieldIds: Record<string, string | undefined> = {};
@@ -206,15 +239,16 @@ export async function POST(request: NextRequest) {
       ...fieldIds,
     };
 
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/618db0db-dc88-4b24-9388-3127a0884ae1',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'sync/route.ts:MAPPING',message:'Field mapping being used',data:{integrationMappingKeys:Object.keys(integration.field_mapping).slice(0,10),finalMappingKeys:Object.keys(fieldMapping).slice(0,10),sampleMapping:Object.entries(fieldMapping).slice(0,5)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'B'})}).catch(()=>{});
-    // #endregion
+    // Build field types map for better value extraction
+    const fieldTypesMap: Record<string, FieldType> = {};
+    fields?.forEach(field => {
+      fieldTypesMap[field.id] = field.type as FieldType;
+    });
 
     // Sync each contact
     let created = 0;
     let updated = 0;
     let errors = 0;
-    let syncedCount = 0;
 
     // Update progress - syncing phase started
     await updateSyncProgress(0, totalContactsToSync, 'syncing');
@@ -225,13 +259,44 @@ export async function POST(request: NextRequest) {
     for (let i = 0; i < contacts.length; i++) {
       const contact = contacts[i];
       
+      // Check for cancellation every 10 contacts
+      if (i % 10 === 0) {
+        try {
+          const progressResponse = await fetch(`${request.nextUrl.origin}/api/ghl/sync-progress?base_id=${baseId}`);
+          const progressData = await progressResponse.json();
+          if (progressData.progress?.cancelled) {
+            console.log(`Sync cancelled at contact ${i + 1}/${contacts.length}`);
+            // Clear progress
+            await fetch(`${request.nextUrl.origin}/api/ghl/sync-progress`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ baseId, current: null, total: null }),
+            }).catch(() => {});
+            
+            return NextResponse.json({
+              success: false,
+              cancelled: true,
+              message: `Sync cancelled after processing ${created + updated} contacts (${created} created, ${updated} updated)`,
+              synced: created + updated,
+              created,
+              updated,
+              errors,
+              total: i,
+              syncType,
+            });
+          }
+        } catch (checkError) {
+          // Ignore cancellation check errors - continue syncing
+        }
+      }
+      
       // Update progress every 10 contacts
       if (i % 10 === 0 || i === contacts.length - 1) {
         await updateSyncProgress(i + 1, totalContactsToSync, 'syncing');
       }
+      
       try {
         // Fetch full contact details to get custom field values
-        // The list endpoint doesn't include custom field values
         let fullContact = contact;
         try {
           const fullContactResponse: Response = await fetch(
@@ -250,7 +315,7 @@ export async function POST(request: NextRequest) {
             fullContact = fullContactData.contact || fullContactData || contact;
             
             // Log first full contact for debugging
-            if (contacts.indexOf(contact) === 0) {
+            if (i === 0) {
               console.log('Full contact with custom fields:', JSON.stringify(fullContact, null, 2));
             }
           }
@@ -261,14 +326,58 @@ export async function POST(request: NextRequest) {
         // Small delay to avoid rate limiting (50ms between requests)
         await new Promise(resolve => setTimeout(resolve, 50));
 
-        const recordValues = transformGHLContactToRecord(fullContact, fieldMapping);
+        const recordValues = transformGHLContactToRecord(fullContact, fieldMapping, fieldTypesMap);
+        // Collect unique values for single_select and multi_select fields
+        for (const [fieldKey, fieldId] of Object.entries(fieldMapping)) {
+          const newValues = new Set<string>();
+          if (!fieldId || typeof fieldId !== 'string') continue;
+          const field = fields?.find(f => f.id === fieldId && (f.type === 'single_select' || f.type === 'multi_select'));
+          if (!field) continue;
+          let selectedValues = recordValues[fieldId];
+          if (typeof selectedValues === 'string') {
+            selectedValues = selectedValues.split(',').map((val: string) => val.trim());
+          }
+          if (Array.isArray(selectedValues)) { // if it was a string before, now it's an array
+            (selectedValues as string[]).forEach((val: string) => {
+              const existingOptions = field.options ? Object.values(field.options) as Array<{ label?: string; name?: string; color?: string }> : [];
+              // Check both 'label' and 'name' properties for backward compatibility
+              if (!existingOptions.find(option => option.label === val || option.name === val)) {
+                newValues.add(val);
+              }
+            });
+          }
+          if (newValues.size > 0) {
+            const newOptions = { ...(field.options || {}) };
+            const colorPalette = ['#1E40AF', '#065F46', '#C2410C', '#B91C1C', '#5B21B6', '#BE185D', '#3730A3', '#374151'];
+            let colorIndex = Object.keys(newOptions).length; // Continue from existing options count
+            newValues.forEach((val: string) => {
+              const color = colorPalette[colorIndex % colorPalette.length];
+              // Create option with 'label' and 'color' (standardized format)
+              newOptions[`option_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`] = { 
+                label: val,
+                color: color
+              };
+              colorIndex++;
+            });
+            const { error: optUpdateError } = await supabaseAdmin
+              .from('fields')
+              .update({ options: newOptions })
+              .eq('id', field.id);
+            if (optUpdateError) {
+              console.warn(`Failed to add missing option to field ${field.name} (${field.id})`, optUpdateError);
+            } else {
+              // Update the field object in the array to reflect the new options
+              const fieldIndex = fields?.findIndex(f => f.id === field.id);
+              if (fieldIndex !== undefined && fieldIndex !== -1 && fields) {
+                fields[fieldIndex] = { ...field, options: newOptions };
+              }
+            }
+          }
+        }
         
         // Log first contact's transformed values for debugging
-        if (contacts.indexOf(contact) === 0) {
+        if (i === 0) {
           console.log('First contact transformed values:', JSON.stringify(recordValues, null, 2));
-          // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/618db0db-dc88-4b24-9388-3127a0884ae1',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'sync/route.ts:TRANSFORM',message:'First contact transform',data:{rawCustomFieldsSample:fullContact.customFields?.slice?.(0,3)||fullContact.customFields,transformedValuesSample:Object.entries(recordValues).slice(0,10).map(([k,v])=>({key:k,value:typeof v==='string'&&v.length>100?v.slice(0,100)+'...':v}))},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'CUSTOM_FIELDS'})}).catch(()=>{});
-          // #endregion
         }
 
         // Check if record already exists (by ghl_contact_id)
@@ -281,47 +390,66 @@ export async function POST(request: NextRequest) {
 
         if (existingRecords && existingRecords.length > 0) {
           // Update existing record
-          // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/618db0db-dc88-4b24-9388-3127a0884ae1',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'sync/route.ts:UPDATE',message:'Updating existing record',data:{recordId:existingRecords[0].id,valuesKeys:Object.keys(recordValues),valuesPreview:JSON.stringify(recordValues).slice(0,500)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
-          // #endregion
-          const { data: updateData, error: updateError } = await supabaseAdmin
+          const recordId = existingRecords[0].id;
+          const { error: updateError } = await supabaseAdmin
             .from('records')
             .update({ values: recordValues })
-            .eq('id', existingRecords[0].id)
-            .select('id, values');
-
-          // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/618db0db-dc88-4b24-9388-3127a0884ae1',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'sync/route.ts:UPDATE_RESULT',message:'Update result',data:{success:!updateError,error:updateError?.message,updatedValues:updateData?.[0]?.values?JSON.stringify(updateData[0].values).slice(0,500):null},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
-          // #endregion
+            .eq('id', recordId);
 
           if (updateError) {
             console.error('Update error:', updateError);
             errors++;
           } else {
             updated++;
+            // Log record update at record level for audit trail
+            if (baseData?.workspace_id) {
+              await logAuditEvent({
+                actorId: null, // GHL sync is system-initiated
+                action: 'update',
+                entityType: 'record',
+                entityId: recordId,
+                scopeType: 'workspace',
+                scopeId: baseData.workspace_id,
+                metadata: {
+                  source: 'ghl',
+                  ghl_contact_id: contact.id,
+                  contact_name: fullContact.name || fullContact.contactName || `${fullContact.firstName || ''} ${fullContact.lastName || ''}`.trim(),
+                },
+              });
+            }
           }
         } else {
           // Create new record
-          // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/618db0db-dc88-4b24-9388-3127a0884ae1',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'sync/route.ts:INSERT',message:'Creating new record',data:{tableId:masterTable.id,valuesKeys:Object.keys(recordValues),valuesPreview:JSON.stringify(recordValues).slice(0,500)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
-          // #endregion
-          const { data: insertData, error: createError } = await supabaseAdmin
+          const { data: newRecord, error: createError } = await supabaseAdmin
             .from('records')
             .insert({
               table_id: masterTable.id,
               values: recordValues,
             })
-            .select('id, values');
-
-          // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/618db0db-dc88-4b24-9388-3127a0884ae1',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'sync/route.ts:INSERT_RESULT',message:'Insert result',data:{success:!createError,error:createError?.message,insertedId:insertData?.[0]?.id,insertedValues:insertData?.[0]?.values?JSON.stringify(insertData[0].values).slice(0,500):null},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
-          // #endregion
+            .select('id')
+            .single();
 
           if (createError) {
             console.error('Create error:', createError);
             errors++;
           } else {
             created++;
+            // Log record creation at record level for audit trail
+            if (baseData?.workspace_id && newRecord) {
+              await logAuditEvent({
+                actorId: null, // GHL sync is system-initiated
+                action: 'create',
+                entityType: 'record',
+                entityId: newRecord.id,
+                scopeType: 'workspace',
+                scopeId: baseData.workspace_id,
+                metadata: {
+                  source: 'ghl',
+                  ghl_contact_id: contact.id,
+                  contact_name: fullContact.name || fullContact.contactName || `${fullContact.firstName || ''} ${fullContact.lastName || ''}`.trim(),
+                },
+              });
+            }
           }
         }
       } catch (contactError) {
@@ -330,19 +458,20 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Verify records were actually saved by reading them back
-    // #region agent log
-    const { data: verifyRecords, error: verifyError } = await supabaseAdmin.from('records').select('id, values').eq('table_id', masterTable.id).limit(3);
-    fetch('http://127.0.0.1:7242/ingest/618db0db-dc88-4b24-9388-3127a0884ae1',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'sync/route.ts:VERIFY',message:'Verifying saved records',data:{error:verifyError?.message,recordCount:verifyRecords?.length,firstRecordValues:verifyRecords?.[0]?.values?JSON.stringify(verifyRecords[0].values).slice(0,500):null},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'C'})}).catch(()=>{});
-    // #endregion
-
     // Update last sync timestamp
+    const updateData: Record<string, string> = {
+      last_sync_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    // If this was an auto-sync, also update last_auto_sync_at
+    if (isAutoSync) {
+      updateData.last_auto_sync_at = new Date().toISOString();
+    }
+
     await supabaseAdmin
       .from('ghl_integrations')
-      .update({
-        last_sync_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      })
+      .update(updateData)
       .eq('id', integration.id);
 
     // Clear progress
@@ -359,9 +488,35 @@ export async function POST(request: NextRequest) {
       // Ignore clear errors
     }
 
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/618db0db-dc88-4b24-9388-3127a0884ae1',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'sync/route.ts:FINAL',message:'Sync completed',data:{created,updated,errors,total:contacts.length},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'C'})}).catch(()=>{});
-    // #endregion
+    // Try to get current user from auth header
+    let actorId: string | null = null;
+    const authHeader = request.headers.get('authorization');
+    if (authHeader?.startsWith('Bearer ')) {
+      const token = authHeader.substring(7);
+      const { data: userData } = await supabaseAdmin.auth.getUser(token);
+      actorId = userData.user?.id ?? null;
+    }
+
+    // Log GHL import to audit log
+    if (baseData?.workspace_id) {
+      await logAuditEvent({
+        actorId,
+        action: 'import',
+        entityType: 'base',
+        entityId: baseId,
+        scopeType: 'workspace',
+        scopeId: baseData.workspace_id,
+        metadata: {
+          source: 'ghl',
+          base_name: baseData.name,
+          contacts_synced: created + updated,
+          contacts_created: created,
+          contacts_updated: updated,
+          errors,
+          sync_type: syncType,
+        },
+      });
+    }
 
     return NextResponse.json({
       success: true,
@@ -371,7 +526,7 @@ export async function POST(request: NextRequest) {
       updated,
       errors,
       total: contacts.length,
-      syncType, // Return sync type for UI display
+      syncType,
     });
   } catch (error) {
     console.error('GHL sync error:', error);
@@ -382,4 +537,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

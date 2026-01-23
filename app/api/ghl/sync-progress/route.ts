@@ -7,7 +7,12 @@ const syncProgressStore = new Map<string, {
   total: number;
   phase: 'fetching' | 'syncing';
   startedAt: string;
+  cancelled: boolean;
 }>();
+
+// Export for use by other API routes
+export const getSyncProgress = (baseId: string) => syncProgressStore.get(baseId);
+export const isSyncCancelled = (baseId: string) => syncProgressStore.get(baseId)?.cancelled ?? false;
 
 /**
  * GET /api/ghl/sync-progress
@@ -41,6 +46,7 @@ export async function GET(request: NextRequest) {
         total: progress.total,
         phase: progress.phase,
         startedAt: progress.startedAt,
+        cancelled: progress.cancelled,
       },
     });
   } catch (error) {
@@ -60,13 +66,26 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { baseId, current, total, phase } = body;
+    const { baseId, current, total, phase, cancel } = body;
 
     if (!baseId) {
       return NextResponse.json(
         { error: 'base_id is required' },
         { status: 400 }
       );
+    }
+
+    // Handle cancellation request
+    if (cancel === true) {
+      const existing = syncProgressStore.get(baseId);
+      if (existing) {
+        syncProgressStore.set(baseId, {
+          ...existing,
+          cancelled: true,
+        });
+        return NextResponse.json({ success: true, cancelled: true });
+      }
+      return NextResponse.json({ success: true, cancelled: false, message: 'No sync in progress' });
     }
 
     if (current === null || total === null) {
@@ -80,6 +99,7 @@ export async function POST(request: NextRequest) {
         total,
         phase: phase || 'syncing',
         startedAt: existing?.startedAt || new Date().toISOString(),
+        cancelled: existing?.cancelled || false,
       });
     }
 
@@ -93,3 +113,38 @@ export async function POST(request: NextRequest) {
   }
 }
 
+/**
+ * DELETE /api/ghl/sync-progress
+ * Cancel an ongoing sync
+ */
+export async function DELETE(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const baseId = searchParams.get('base_id');
+
+    if (!baseId) {
+      return NextResponse.json(
+        { error: 'base_id is required' },
+        { status: 400 }
+      );
+    }
+
+    const existing = syncProgressStore.get(baseId);
+    if (existing) {
+      syncProgressStore.set(baseId, {
+        ...existing,
+        cancelled: true,
+      });
+      return NextResponse.json({ success: true, message: 'Sync cancellation requested' });
+    }
+
+    return NextResponse.json({ success: true, message: 'No sync in progress' });
+  } catch (error) {
+    console.error('GHL sync cancel error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return NextResponse.json(
+      { error: errorMessage },
+      { status: 500 }
+    );
+  }
+}
