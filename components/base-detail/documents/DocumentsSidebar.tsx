@@ -175,7 +175,7 @@ export const DocumentsSidebar = ({
       const pathsToExpand = new Set<string>();
       let currentPath = "";
       parts.forEach((part) => {
-        currentPath += (currentPath ? "/" : "") + part + "/";
+        currentPath += part + "/";
         pathsToExpand.add(currentPath);
       });
       setExpandedFolders(pathsToExpand);
