@@ -1104,6 +1104,7 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
           setShowSignatureRequestModal(false);
           setShowSignatureStatus(true);
         }}
+        recordId={recordId}
       />
 
       {/* Signature Request Status */}

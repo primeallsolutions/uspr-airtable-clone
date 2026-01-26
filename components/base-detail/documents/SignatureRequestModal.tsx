@@ -505,6 +505,7 @@ export const SignatureRequestModal = ({
         body: JSON.stringify({
           baseId,
           tableId: tableId || null,
+          record_id: recordId || null,
           title,
           message: message || null,
           document_path: fullDocumentPath,
@@ -517,7 +518,6 @@ export const SignatureRequestModal = ({
           })),
           fields: signatureFields.length > 0 ? signatureFields : undefined,
           // Status column update fields
-          record_id: showStatusUpdate && recordId ? recordId : null,
           status_field_id: showStatusUpdate && selectedStatusFieldId ? selectedStatusFieldId : null,
           status_value_on_complete: showStatusUpdate ? statusValueOnComplete : null,
           status_value_on_decline: showStatusUpdate ? statusValueOnDecline : null,
@@ -580,6 +580,7 @@ export const SignatureRequestModal = ({
           templateId: selectedTemplateId,
           baseId,
           tableId: tableId || null,
+          recordId: recordId || null,
           fieldValues: {}, // Empty field values - template will be used as-is
           skipSignatureRequest: true, // We'll create signature request manually with our signers
         }),
@@ -632,6 +633,7 @@ export const SignatureRequestModal = ({
         body: JSON.stringify({
           baseId,
           tableId: tableId || null,
+          record_id: recordId || null,
           title,
           message: message || null,
           document_path: fullDocumentPath,
@@ -644,7 +646,6 @@ export const SignatureRequestModal = ({
           })),
           fields: signatureFields.length > 0 ? signatureFields : undefined,
           // Status column update fields
-          record_id: showStatusUpdate && recordId ? recordId : null,
           status_field_id: showStatusUpdate && selectedStatusFieldId ? selectedStatusFieldId : null,
           status_value_on_complete: showStatusUpdate ? statusValueOnComplete : null,
           status_value_on_decline: showStatusUpdate ? statusValueOnDecline : null,
