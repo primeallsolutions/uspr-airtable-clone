@@ -1178,6 +1178,7 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
         onClose={() => setShowFolderSetup(false)}
         baseId={baseId}
         tableId={selectedTable?.id}
+        recordId={recordId}
         existingFolders={rootFolders}
         onComplete={() => {
           refresh();

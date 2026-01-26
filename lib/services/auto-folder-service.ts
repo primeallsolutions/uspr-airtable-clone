@@ -100,7 +100,8 @@ export const AutoFolderService = {
     baseId: string,
     tableId: string | null,
     transactionType: TransactionType,
-    existingFolders?: string[]
+    existingFolders?: string[],
+    recordId?: string | null
   ): Promise<{ created: string[]; skipped: string[] }> {
     const templates = TRANSACTION_FOLDER_TEMPLATES[transactionType];
     const created: string[] = [];
@@ -111,7 +112,7 @@ export const AutoFolderService = {
       // Create main folder if doesn't exist
       if (!existing.has(template.name.toLowerCase())) {
         try {
-          await DocumentsService.createFolder(baseId, tableId, "", template.name);
+          await DocumentsService.createFolder(baseId, tableId, "", template.name, recordId);
           created.push(template.name);
         } catch (err) {
           console.error(`Failed to create folder "${template.name}":`, err);
@@ -126,7 +127,7 @@ export const AutoFolderService = {
         for (const subfolder of template.subfolders) {
           const subPath = `${template.name}/`;
           try {
-            await DocumentsService.createFolder(baseId, tableId, subPath, subfolder);
+            await DocumentsService.createFolder(baseId, tableId, subPath, subfolder, recordId);
             created.push(`${template.name}/${subfolder}`);
           } catch (err) {
             // Subfolder creation might fail if it already exists

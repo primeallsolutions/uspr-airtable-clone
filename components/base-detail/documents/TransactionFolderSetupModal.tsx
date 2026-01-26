@@ -26,6 +26,7 @@ type TransactionFolderSetupModalProps = {
   onClose: () => void;
   baseId: string;
   tableId?: string | null;
+  recordId?: string | null;
   existingFolders?: string[];
   onComplete?: () => void;
 };
@@ -53,6 +54,7 @@ export const TransactionFolderSetupModal = ({
   onClose,
   baseId,
   tableId,
+  recordId,
   existingFolders = [],
   onComplete,
 }: TransactionFolderSetupModalProps) => {
@@ -72,7 +74,8 @@ export const TransactionFolderSetupModal = ({
         baseId,
         tableId ?? null,
         selectedType,
-        existingFolders
+        existingFolders,
+        recordId ?? null
       );
 
       if (result.created.length > 0) {
