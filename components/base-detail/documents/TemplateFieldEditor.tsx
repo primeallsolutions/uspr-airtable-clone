@@ -34,6 +34,8 @@ export const TemplateFieldEditor = ({
   const [isPlacingField, setIsPlacingField] = useState(false);
   const [snapToGrid, setSnapToGrid] = useState(true);
   const [gridSize, setGridSize] = useState(10);
+  const [editingGridSize, setEditingGridSize] = useState(false);
+  const [gridSizeInput, setGridSizeInput] = useState(gridSize.toString());
   const [draggingField, setDraggingField] = useState<string | null>(null);
   const [resizingField, setResizingField] = useState<{ id: string; handle: string } | null>(null);
   const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
@@ -592,20 +594,16 @@ export const TemplateFieldEditor = ({
       }
       if (handle.includes("s")) { // South (bottom)
         newHeight = Math.max(10, (field.height || 20) - pdfDeltaY);
+        if (newHeight >= 10) { // Only move if height is valid
+          newY = field.y_position - (newHeight - (field.height || 20));
+        }
       }
       if (handle.includes("n")) { // North (top)
         const heightDelta = pdfDeltaY;
         newHeight = Math.max(10, (field.height || 20) + heightDelta);
-        if (newHeight >= 10) { // Only move if height is valid
-          newY = field.y_position - heightDelta;
-        }
       }
 
-      // Snap to grid
-      if (snapToGrid) {
-        newWidth = Math.max(20, Math.round(newWidth / gridSize) * gridSize);
-        newHeight = Math.max(10, Math.round(newHeight / gridSize) * gridSize);
-      }
+      // Note: Snap to grid was removed from resizing to avoid stuttering UX
 
       const updatedField: TemplateField = {
         ...field,
@@ -987,7 +985,7 @@ export const TemplateFieldEditor = ({
           </div>
 
           {/* Fields Panel - Improved UI */}
-          <div className="w-80 border-l border-gray-200 bg-white overflow-y-auto flex flex-col">
+          <div className="w-80 border-l border-gray-200 bg-white flex flex-col">
             <div className="p-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-blue-50/30">
               <h3 className="font-semibold text-gray-900 mb-1 flex items-center justify-between">
                 <span>Fields on Page {currentPage}</span>
@@ -1000,10 +998,41 @@ export const TemplateFieldEditor = ({
                 </p>
               )}
               {snapToGrid && (
-                <p className="text-xs text-blue-600 mt-2 flex items-center gap-1">
+                <div className="text-xs text-blue-600 mt-2 flex items-center gap-1">
                   <Grid className="w-3 h-3" />
-                  Snap to grid: {gridSize}px
-                </p>
+                  <span>Snap to grid:</span>
+                  {editingGridSize ? (
+                    <input
+                      type="number"
+                      value={gridSizeInput}
+                      onChange={(e) => setGridSizeInput(e.target.value)}
+                      onBlur={() => {
+                        const value = parseInt(gridSizeInput) || 10;
+                        setGridSize(Math.max(1, value));
+                        setEditingGridSize(false);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          const value = parseInt(gridSizeInput) || 10;
+                          setGridSize(Math.max(1, value));
+                          setEditingGridSize(false);
+                        }
+                      }}
+                      className="w-12 px-1 py-0 text-xs border border-blue-300 rounded bg-blue-50"
+                      autoFocus
+                    />
+                  ) : (
+                    <span
+                      onClick={() => {
+                        setEditingGridSize(true);
+                        setGridSizeInput(gridSize.toString());
+                      }}
+                      className="cursor-pointer hover:bg-blue-100 px-1 rounded"
+                    >
+                      {gridSize}px
+                    </span>
+                  )}
+                </div>
               )}
             </div>
 
@@ -1075,358 +1104,374 @@ export const TemplateFieldEditor = ({
 
             {/* Field Editor */}
             {editingField && (
-              <div className="border-t border-gray-200 p-4 bg-gray-50">
-                <h4 className="font-semibold text-gray-900 mb-3">Edit Field</h4>
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      Field Name
-                    </label>
-                    <input
-                      type="text"
-                      value={editingField.field_name}
-                      onChange={(e) =>
-                        setEditingField({ ...editingField, field_name: e.target.value })
-                      }
-                      className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      Field Key
-                    </label>
-                    <input
-                      type="text"
-                      value={editingField.field_key}
-                      onChange={(e) =>
-                        setEditingField({ ...editingField, field_key: e.target.value })
-                      }
-                      className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      Field Type
-                    </label>
-                    <select
-                      value={editingField.field_type}
-                      onChange={(e) =>
-                        setEditingField({
-                          ...editingField,
-                          field_type: e.target.value as TemplateField["field_type"],
-                        })
-                      }
-                      className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
-                    >
-                      <option value="text">Text</option>
-                      <option value="number">Number</option>
-                      <option value="date">Date</option>
-                      <option value="checkbox">Checkbox</option>
-                      <option value="signature">Signature</option>
-                    </select>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
+              <div className="border-t border-gray-200 bg-gray-50 h-1/2 flex flex-col overflow-hidden">
+                <div className="border-b border-gray-200 p-4 flex items-center justify-between flex-shrink-0 bg-white">
+                  <h4 className="font-semibold text-gray-900">Edit Field</h4>
+                  <button
+                    onClick={() => {
+                      setSelectedField(null);
+                      setEditingField(null);
+                    }}
+                    className="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
+                    title="Close edit field"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+                <div className="flex-1 overflow-y-auto p-4">
+                  <div className="space-y-3">
                     <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">X</label>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Field Name
+                      </label>
                       <input
-                        type="number"
-                        value={Math.round(editingField.x_position)}
+                        type="text"
+                        value={editingField.field_name}
                         onChange={(e) =>
-                          setEditingField({
-                            ...editingField,
-                            x_position: parseFloat(e.target.value) || 0,
-                          })
+                          setEditingField({ ...editingField, field_name: e.target.value })
                         }
                         className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">Y</label>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Field Key
+                      </label>
                       <input
-                        type="number"
-                        value={Math.round(editingField.y_position)}
+                        type="text"
+                        value={editingField.field_key}
                         onChange={(e) =>
-                          setEditingField({
-                            ...editingField,
-                            y_position: parseFloat(e.target.value) || 0,
-                          })
-                        }
-                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
-                      />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">Width</label>
-                      <input
-                        type="number"
-                        value={editingField.width || 200}
-                        onChange={(e) =>
-                          setEditingField({
-                            ...editingField,
-                            width: parseFloat(e.target.value) || 200,
-                          })
+                          setEditingField({ ...editingField, field_key: e.target.value })
                         }
                         className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">Height</label>
-                      <input
-                        type="number"
-                        value={editingField.height || 20}
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Field Type
+                      </label>
+                      <select
+                        value={editingField.field_type}
                         onChange={(e) =>
                           setEditingField({
                             ...editingField,
-                            height: parseFloat(e.target.value) || 20,
+                            field_type: e.target.value as TemplateField["field_type"],
                           })
                         }
                         className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
-                      />
+                      >
+                        <option value="text">Text</option>
+                        <option value="number">Number</option>
+                        <option value="date">Date</option>
+                        <option value="checkbox">Checkbox</option>
+                        <option value="signature">Signature</option>
+                      </select>
                     </div>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      Font Size
-                    </label>
-                    <input
-                      type="number"
-                      value={editingField.font_size || 12}
-                      onChange={(e) =>
-                        setEditingField({
-                          ...editingField,
-                          font_size: parseFloat(e.target.value) || 12,
-                        })
-                      }
-                      className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
-                    />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={editingField.is_required || false}
-                      onChange={(e) =>
-                        setEditingField({ ...editingField, is_required: e.target.checked })
-                      }
-                      className="rounded"
-                    />
-                    <label className="text-xs text-gray-700">Required</label>
-                  </div>
-
-                  {/* Signature Field Info */}
-                  {editingField.field_type === "signature" && (
-                    <div className="border-t border-gray-200 pt-3 mt-3">
-                      <div className="p-3 bg-blue-50/50 rounded border border-blue-200">
-                        <p className="text-xs text-gray-600">
-                          <strong>Signature Field:</strong> This field marks where a signature will be placed. When requesting an e-signature, you will add signers and they will sign at this location.
-                        </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">X</label>
+                        <input
+                          type="number"
+                          value={Math.round(editingField.x_position)}
+                          onChange={(e) =>
+                            setEditingField({
+                              ...editingField,
+                              x_position: parseFloat(e.target.value) || 0,
+                            })
+                          }
+                          className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Y</label>
+                        <input
+                          type="number"
+                          value={Math.round(editingField.y_position)}
+                          onChange={(e) =>
+                            setEditingField({
+                              ...editingField,
+                              y_position: parseFloat(e.target.value) || 0,
+                            })
+                          }
+                          className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                        />
                       </div>
                     </div>
-                  )}
-
-                  {/* Validation Rules */}
-                  {(editingField.field_type === "text" || editingField.field_type === "number") && (
-                    <div className="border-t border-gray-200 pt-3 mt-3">
-                      <label className="block text-xs font-medium text-gray-700 mb-2">
-                        Validation Rules
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Width</label>
+                        <input
+                          type="number"
+                          value={Math.round(editingField.width || 200)}
+                          onChange={(e) =>
+                            setEditingField({
+                              ...editingField,
+                              width: parseFloat(e.target.value) || 200,
+                            })
+                          }
+                          className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Height</label>
+                        <input
+                          type="number"
+                          value={Math.round(editingField.height || 20)}
+                          onChange={(e) =>
+                            setEditingField({
+                              ...editingField,
+                              height: parseFloat(e.target.value) || 20,
+                            })
+                          }
+                          className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Font Size
                       </label>
-                      <div className="space-y-2">
-                        {editingField.field_type === "text" && (
-                          <>
+                      <input
+                        type="number"
+                        value={editingField.font_size || 12}
+                        onChange={(e) =>
+                          setEditingField({
+                            ...editingField,
+                            font_size: parseFloat(e.target.value) || 12,
+                          })
+                        }
+                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={editingField.is_required || false}
+                        onChange={(e) =>
+                          setEditingField({ ...editingField, is_required: e.target.checked })
+                        }
+                        className="rounded"
+                      />
+                      <label className="text-xs text-gray-700">Required</label>
+                    </div>
+
+                    {/* Signature Field Info */}
+                    {editingField.field_type === "signature" && (
+                      <div className="border-t border-gray-200 pt-3 mt-3">
+                        <div className="p-3 bg-blue-50/50 rounded border border-blue-200">
+                          <p className="text-xs text-gray-600">
+                            <strong>Signature Field:</strong> This field marks where a signature will be placed. When requesting an e-signature, you will add signers and they will sign at this location.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Validation Rules */}
+                    {(editingField.field_type === "text" || editingField.field_type === "number") && (
+                      <div className="border-t border-gray-200 pt-3 mt-3">
+                        <label className="block text-xs font-medium text-gray-700 mb-2">
+                          Validation Rules
+                        </label>
+                        <div className="space-y-2">
+                          {editingField.field_type === "text" && (
+                            <>
+                              <div className="grid grid-cols-2 gap-2">
+                                <input
+                                  type="number"
+                                  placeholder="Min length"
+                                  value={(editingField.validation_rules?.find(r => r.type === "minLength")?.value as number) || ""}
+                                  onChange={(e) => {
+                                    const val = e.target.value ? parseInt(e.target.value) : undefined;
+                                    const rules = editingField.validation_rules || [];
+                                    const filtered = rules.filter(r => r.type !== "minLength");
+                                    setEditingField({
+                                      ...editingField,
+                                      validation_rules: val ? [...filtered, { type: "minLength", value: val }] : filtered,
+                                    });
+                                  }}
+                                  className="w-full px-2 py-1 text-xs border border-gray-300 rounded"
+                                />
+                                <input
+                                  type="number"
+                                  placeholder="Max length"
+                                  value={(editingField.validation_rules?.find(r => r.type === "maxLength")?.value as number) || ""}
+                                  onChange={(e) => {
+                                    const val = e.target.value ? parseInt(e.target.value) : undefined;
+                                    const rules = editingField.validation_rules || [];
+                                    const filtered = rules.filter(r => r.type !== "maxLength");
+                                    setEditingField({
+                                      ...editingField,
+                                      validation_rules: val ? [...filtered, { type: "maxLength", value: val }] : filtered,
+                                    });
+                                  }}
+                                  className="w-full px-2 py-1 text-xs border border-gray-300 rounded"
+                                />
+                              </div>
+                              <input
+                                type="text"
+                                placeholder="Regex pattern (e.g., ^[A-Z]+$)"
+                                value={(editingField.validation_rules?.find(r => r.type === "pattern")?.value as string) || ""}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  const rules = editingField.validation_rules || [];
+                                  const filtered = rules.filter(r => r.type !== "pattern");
+                                  setEditingField({
+                                    ...editingField,
+                                    validation_rules: val ? [...filtered, { type: "pattern", value: val }] : filtered,
+                                  });
+                                }}
+                                className="w-full px-2 py-1 text-xs border border-gray-300 rounded"
+                              />
+                            </>
+                          )}
+                          {editingField.field_type === "number" && (
                             <div className="grid grid-cols-2 gap-2">
                               <input
                                 type="number"
-                                placeholder="Min length"
-                                value={(editingField.validation_rules?.find(r => r.type === "minLength")?.value as number) || ""}
+                                placeholder="Min value"
+                                value={(editingField.validation_rules?.find(r => r.type === "min")?.value as number) || ""}
                                 onChange={(e) => {
-                                  const val = e.target.value ? parseInt(e.target.value) : undefined;
+                                  const val = e.target.value ? parseFloat(e.target.value) : undefined;
                                   const rules = editingField.validation_rules || [];
-                                  const filtered = rules.filter(r => r.type !== "minLength");
+                                  const filtered = rules.filter(r => r.type !== "min");
                                   setEditingField({
                                     ...editingField,
-                                    validation_rules: val ? [...filtered, { type: "minLength", value: val }] : filtered,
+                                    validation_rules: val !== undefined ? [...filtered, { type: "min", value: val }] : filtered,
                                   });
                                 }}
                                 className="w-full px-2 py-1 text-xs border border-gray-300 rounded"
                               />
                               <input
                                 type="number"
-                                placeholder="Max length"
-                                value={(editingField.validation_rules?.find(r => r.type === "maxLength")?.value as number) || ""}
+                                placeholder="Max value"
+                                value={(editingField.validation_rules?.find(r => r.type === "max")?.value as number) || ""}
                                 onChange={(e) => {
-                                  const val = e.target.value ? parseInt(e.target.value) : undefined;
+                                  const val = e.target.value ? parseFloat(e.target.value) : undefined;
                                   const rules = editingField.validation_rules || [];
-                                  const filtered = rules.filter(r => r.type !== "maxLength");
+                                  const filtered = rules.filter(r => r.type !== "max");
                                   setEditingField({
                                     ...editingField,
-                                    validation_rules: val ? [...filtered, { type: "maxLength", value: val }] : filtered,
+                                    validation_rules: val !== undefined ? [...filtered, { type: "max", value: val }] : filtered,
                                   });
                                 }}
                                 className="w-full px-2 py-1 text-xs border border-gray-300 rounded"
                               />
                             </div>
-                            <input
-                              type="text"
-                              placeholder="Regex pattern (e.g., ^[A-Z]+$)"
-                              value={(editingField.validation_rules?.find(r => r.type === "pattern")?.value as string) || ""}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                const rules = editingField.validation_rules || [];
-                                const filtered = rules.filter(r => r.type !== "pattern");
-                                setEditingField({
-                                  ...editingField,
-                                  validation_rules: val ? [...filtered, { type: "pattern", value: val }] : filtered,
-                                });
-                              }}
-                              className="w-full px-2 py-1 text-xs border border-gray-300 rounded"
-                            />
-                          </>
-                        )}
-                        {editingField.field_type === "number" && (
-                          <div className="grid grid-cols-2 gap-2">
-                            <input
-                              type="number"
-                              placeholder="Min value"
-                              value={(editingField.validation_rules?.find(r => r.type === "min")?.value as number) || ""}
-                              onChange={(e) => {
-                                const val = e.target.value ? parseFloat(e.target.value) : undefined;
-                                const rules = editingField.validation_rules || [];
-                                const filtered = rules.filter(r => r.type !== "min");
-                                setEditingField({
-                                  ...editingField,
-                                  validation_rules: val !== undefined ? [...filtered, { type: "min", value: val }] : filtered,
-                                });
-                              }}
-                              className="w-full px-2 py-1 text-xs border border-gray-300 rounded"
-                            />
-                            <input
-                              type="number"
-                              placeholder="Max value"
-                              value={(editingField.validation_rules?.find(r => r.type === "max")?.value as number) || ""}
-                              onChange={(e) => {
-                                const val = e.target.value ? parseFloat(e.target.value) : undefined;
-                                const rules = editingField.validation_rules || [];
-                                const filtered = rules.filter(r => r.type !== "max");
-                                setEditingField({
-                                  ...editingField,
-                                  validation_rules: val !== undefined ? [...filtered, { type: "max", value: val }] : filtered,
-                                });
-                              }}
-                              className="w-full px-2 py-1 text-xs border border-gray-300 rounded"
-                            />
-                          </div>
-                        )}
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
 
-                  {/* Formatting Options */}
-                  {(editingField.field_type === "text" || editingField.field_type === "number" || editingField.field_type === "date") && (
-                    <div className="border-t border-gray-200 pt-3 mt-3">
-                      <label className="block text-xs font-medium text-gray-700 mb-2">
-                        Formatting Options
-                      </label>
-                      <div className="space-y-2">
-                        {editingField.field_type === "text" && (
-                          <select
-                            value={editingField.formatting_options?.textCase || ""}
-                            onChange={(e) =>
-                              setEditingField({
-                                ...editingField,
-                                formatting_options: {
-                                  ...editingField.formatting_options,
-                                  textCase: (e.target.value as "title" | "uppercase" | "lowercase" | undefined) || undefined,
-                                },
-                              })
-                            }
-                            className="w-full px-2 py-1 text-xs border border-gray-300 rounded"
-                          >
-                            <option value="">No case formatting</option>
-                            <option value="uppercase">Uppercase</option>
-                            <option value="lowercase">Lowercase</option>
-                            <option value="title">Title Case</option>
-                          </select>
-                        )}
-                        {editingField.field_type === "number" && (
-                          <>
+                    {/* Formatting Options */}
+                    {(editingField.field_type === "text" || editingField.field_type === "number" || editingField.field_type === "date") && (
+                      <div className="border-t border-gray-200 pt-3 mt-3">
+                        <label className="block text-xs font-medium text-gray-700 mb-2">
+                          Formatting Options
+                        </label>
+                        <div className="space-y-2">
+                          {editingField.field_type === "text" && (
                             <select
-                              value={editingField.formatting_options?.numberFormat || ""}
+                              value={editingField.formatting_options?.textCase || ""}
                               onChange={(e) =>
                                 setEditingField({
                                   ...editingField,
-                                   formatting_options: {
-                                     ...editingField.formatting_options,
-                                     numberFormat: (e.target.value as "integer" | "currency" | "percentage" | "decimal" | undefined) || undefined,
-                                   },
+                                  formatting_options: {
+                                    ...editingField.formatting_options,
+                                    textCase: (e.target.value as "title" | "uppercase" | "lowercase" | undefined) || undefined,
+                                  },
                                 })
                               }
                               className="w-full px-2 py-1 text-xs border border-gray-300 rounded"
                             >
-                              <option value="">No formatting</option>
-                              <option value="currency">Currency</option>
-                              <option value="percentage">Percentage</option>
-                              <option value="decimal">Decimal</option>
-                              <option value="integer">Integer</option>
+                              <option value="">No case formatting</option>
+                              <option value="uppercase">Uppercase</option>
+                              <option value="lowercase">Lowercase</option>
+                              <option value="title">Title Case</option>
                             </select>
-                            {editingField.formatting_options?.numberFormat === "currency" && (
-                              <input
-                                type="text"
-                                placeholder="Currency symbol ($)"
-                                value={editingField.formatting_options?.currencySymbol || "$"}
+                          )}
+                          {editingField.field_type === "number" && (
+                            <>
+                              <select
+                                value={editingField.formatting_options?.numberFormat || ""}
                                 onChange={(e) =>
                                   setEditingField({
                                     ...editingField,
                                     formatting_options: {
                                       ...editingField.formatting_options,
-                                      currencySymbol: e.target.value,
+                                      numberFormat: (e.target.value as "integer" | "currency" | "percentage" | "decimal" | undefined) || undefined,
                                     },
                                   })
                                 }
                                 className="w-full px-2 py-1 text-xs border border-gray-300 rounded"
-                              />
-                            )}
-                            {(editingField.formatting_options?.numberFormat === "currency" ||
-                              editingField.formatting_options?.numberFormat === "percentage" ||
-                              editingField.formatting_options?.numberFormat === "decimal") && (
-                              <input
-                                type="number"
-                                placeholder="Decimal places"
-                                value={editingField.formatting_options?.decimalPlaces || 2}
-                                onChange={(e) =>
-                                  setEditingField({
-                                    ...editingField,
-                                    formatting_options: {
-                                      ...editingField.formatting_options,
-                                      decimalPlaces: parseInt(e.target.value) || 2,
-                                    },
-                                  })
-                                }
-                                className="w-full px-2 py-1 text-xs border border-gray-300 rounded"
-                              />
-                            )}
-                          </>
-                        )}
-                        {editingField.field_type === "text" && (
-                          <input
-                            type="text"
-                            placeholder="Input mask (e.g., (###) ###-####)"
-                            value={editingField.formatting_options?.inputMask || ""}
-                            onChange={(e) =>
-                              setEditingField({
-                                ...editingField,
-                                formatting_options: {
-                                  ...editingField.formatting_options,
-                                  inputMask: e.target.value || undefined,
-                                },
-                              })
-                            }
-                            className="w-full px-2 py-1 text-xs border border-gray-300 rounded"
-                          />
-                        )}
+                              >
+                                <option value="">No formatting</option>
+                                <option value="currency">Currency</option>
+                                <option value="percentage">Percentage</option>
+                                <option value="decimal">Decimal</option>
+                                <option value="integer">Integer</option>
+                              </select>
+                              {editingField.formatting_options?.numberFormat === "currency" && (
+                                <input
+                                  type="text"
+                                  placeholder="Currency symbol ($)"
+                                  value={editingField.formatting_options?.currencySymbol || "$"}
+                                  onChange={(e) =>
+                                    setEditingField({
+                                      ...editingField,
+                                      formatting_options: {
+                                        ...editingField.formatting_options,
+                                        currencySymbol: e.target.value,
+                                      },
+                                    })
+                                  }
+                                  className="w-full px-2 py-1 text-xs border border-gray-300 rounded"
+                                />
+                              )}
+                              {(editingField.formatting_options?.numberFormat === "currency" ||
+                                editingField.formatting_options?.numberFormat === "percentage" ||
+                                editingField.formatting_options?.numberFormat === "decimal") && (
+                                <input
+                                  type="number"
+                                  placeholder="Decimal places"
+                                  value={editingField.formatting_options?.decimalPlaces || 2}
+                                  onChange={(e) =>
+                                    setEditingField({
+                                      ...editingField,
+                                      formatting_options: {
+                                        ...editingField.formatting_options,
+                                        decimalPlaces: parseInt(e.target.value) || 2,
+                                      },
+                                    })
+                                  }
+                                  className="w-full px-2 py-1 text-xs border border-gray-300 rounded"
+                                />
+                              )}
+                            </>
+                          )}
+                          {editingField.field_type === "text" && (
+                            <input
+                              type="text"
+                              placeholder="Input mask (e.g., (###) ###-####)"
+                              value={editingField.formatting_options?.inputMask || ""}
+                              onChange={(e) =>
+                                setEditingField({
+                                  ...editingField,
+                                  formatting_options: {
+                                    ...editingField.formatting_options,
+                                    inputMask: e.target.value || undefined,
+                                  },
+                                })
+                              }
+                              className="w-full px-2 py-1 text-xs border border-gray-300 rounded"
+                            />
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
+                </div>
 
+                <div className="border-t border-gray-200 p-4 bg-gray-50 flex-shrink-0">
                   <button
                     onClick={handleSaveField}
                     disabled={
