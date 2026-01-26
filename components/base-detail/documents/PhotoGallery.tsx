@@ -22,6 +22,7 @@ import { toast } from "sonner";
 type PhotoGalleryProps = {
   baseId: string;
   tableId?: string | null;
+  recordId?: string | null;
   documents: StoredDocument[];
   onUpload: (files: FileList | null) => void;
   onRefresh: () => void;
@@ -36,6 +37,7 @@ const isImage = (mimeType: string) => {
 export const PhotoGallery = ({
   baseId,
   tableId,
+  recordId,
   documents,
   onUpload,
   onRefresh,
@@ -59,7 +61,7 @@ export const PhotoGallery = ({
 
       setLoadingUrls((prev) => new Set(prev).add(path));
       try {
-        const url = await DocumentsService.getSignedUrl(baseId, tableId ?? null, path);
+        const url = await DocumentsService.getSignedUrl(baseId, tableId ?? null, path, 600, recordId ?? null);
         setSignedUrls((prev) => new Map(prev).set(path, url));
       } catch (err) {
         console.error("Failed to load photo URL:", err);
@@ -71,7 +73,7 @@ export const PhotoGallery = ({
         });
       }
     },
-    [baseId, tableId, signedUrls, loadingUrls]
+    [baseId, tableId, recordId, signedUrls, loadingUrls]
   );
 
   // Load URLs for visible photos

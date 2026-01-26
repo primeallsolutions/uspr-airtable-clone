@@ -966,6 +966,7 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
               <PhotoGallery
                 baseId={baseId}
                 tableId={selectedTable?.id}
+                recordId={recordId}
                 documents={allDocs}
                 onUpload={handleUpload}
                 onRefresh={refresh}
