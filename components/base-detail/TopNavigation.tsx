@@ -84,7 +84,7 @@ export const TopNavigation = ({
   if (showFormsTab) {
     tabs.push({ id: 'forms', label: 'Forms' });
   }
-  tabs.push({ id: 'documents', label: 'Documents' });
+  // Removed 'documents' tab - documents are now accessed per-record in RecordDetailsModal
 
   return (
     <div className="border-b border-gray-200 bg-white">
@@ -94,7 +94,7 @@ export const TopNavigation = ({
           {/* Back button */}
           <button
             type="button"
-            onClick={() => router.push('/dashboard')}
+            onClick={() => router.push(`/dashboard?workspaceId=${base?.workspace_id || ''}`)}
             className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
             title="Back to dashboard"
           >

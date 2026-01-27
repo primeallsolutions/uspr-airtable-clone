@@ -269,6 +269,7 @@ export default function BaseDetailPage() {
                   allFields={fields}
                   tables={tables}
                   selectedTableId={selectedTableId}
+                  baseId={baseId || ''}
                   sortFieldId={sortFieldId}
                   sortDirection={sortDirection}
                   savingCell={savingCell}
@@ -286,6 +287,7 @@ export default function BaseDetailPage() {
                   fields={fields}
                   tables={tables}
                   selectedTableId={selectedTableId}
+                  baseId={baseId || ''}
                   onUpdateCell={updateCell}
                   onDeleteRow={deleteRecord}
                   onAddRow={handleAddRow}

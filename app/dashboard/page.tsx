@@ -19,6 +19,7 @@ import { Banner } from "@/components/dashboard/Banner";
 import { HomeView } from "@/components/dashboard/views/HomeView";
 import { WorkspaceView } from "@/components/dashboard/views/WorkspaceView";
 import { StarredView } from "@/components/dashboard/views/StarredView";
+import { MarketingView } from "@/components/dashboard/views/MarketingView";
 import { TemplatesView } from "@/components/dashboard/views/TemplatesView";
 import { CreateBaseModal } from "@/components/dashboard/modals/CreateBaseModal";
 import { CreateWorkspaceModal } from "@/components/dashboard/modals/CreateWorkspaceModal";
@@ -28,7 +29,7 @@ import { ImportBaseModal } from "@/components/dashboard/modals/ImportBaseModal";
 import { TemplatePreviewModal } from "@/components/dashboard/modals/TemplatePreviewModal";
 import { CreateTemplateModal } from "@/components/dashboard/modals/CreateTemplateModal";
 import type { Template } from "@/lib/types/templates";
-import { TemplateService } from "@/lib/services/template-service";
+import { TemplateService } from "@/lib/services/dashboard-template-service";
 
 // Utils
 import { getBaseContextMenuOptions } from "@/lib/utils/context-menu-helpers";
@@ -41,6 +42,7 @@ import { SharedView } from "@/components/dashboard/views/SharedView";
 function DashboardContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const viewFromQuery = searchParams?.get("view");
   const workspaceIdFromQuery = searchParams?.get("workspaceId");
   const { contextMenu, showContextMenu, hideContextMenu } = useContextMenu();
 
@@ -105,6 +107,7 @@ function DashboardContent() {
     switchToSharedView,
     switchToAccountView,
     switchToTemplatesView,
+    switchToMarketingView,
     openCreateModal,
     closeCreateModal,
     openRenameModal,
@@ -130,6 +133,7 @@ function DashboardContent() {
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
   const [isCreateTemplateModalOpen, setIsCreateTemplateModalOpen] = useState(false);
   const [templateBaseId, setTemplateBaseId] = useState<string>('');
+  const [isTransitioning, setIsTransitioning] = useState(false);
 
   // Initialize data on component mount
   const initializeDashboard = useCallback(async (preferredWorkspaceId?: string | null) => {
@@ -260,23 +264,30 @@ function DashboardContent() {
   }, [selectedWorkspaceId, leaveWorkspace, switchToHomeView, setSelectedWorkspaceId]);
 
   const handleWorkspaceSelect = useCallback((workspaceId: string) => {
+    setIsTransitioning(true);
     switchToWorkspaceView(workspaceId);
-    loadWorkspaceBases(workspaceId);
+    loadWorkspaceBases(workspaceId).finally(() => setIsTransitioning(false));
   }, [switchToWorkspaceView, loadWorkspaceBases]);
 
   const handleStarredViewSelect = useCallback(() => {
+    setIsTransitioning(true);
     switchToStarredView();
-    loadStarredBases();
+    loadStarredBases().finally(() => setIsTransitioning(false));
   }, [switchToStarredView, loadStarredBases]);
 
   const handleSharedViewSelect = useCallback(() => {
+    setIsTransitioning(true);
     switchToSharedView();
-    loadSharedBases();
+    loadSharedBases().finally(() => setIsTransitioning(false));
   }, [switchToSharedView, loadSharedBases]);
 
   const handleTemplatesViewSelect = useCallback(() => {
     switchToTemplatesView();
   }, [switchToTemplatesView]);
+
+  const handleMarketingViewSelect = useCallback(() => {
+    switchToMarketingView();
+  }, [switchToMarketingView]);
 
   const handleUseTemplate = useCallback((template: Template) => {
     setSelectedTemplate(template);
@@ -381,8 +392,20 @@ function DashboardContent() {
 
   // Initialize dashboard on mount
   useEffect(() => {
+    if (viewFromQuery !== null) {
+      switch (viewFromQuery) {
+        case 'home': switchToHomeView(); break;
+        case 'starred': switchToStarredView(); break;
+        case 'shared': switchToSharedView(); break;
+        case 'templates': switchToTemplatesView(); break;
+        case 'marketing': switchToMarketingView(); break;
+        case 'account': switchToAccountView(); break;
+      }
+      initializeDashboard();
+      return;
+    }
     initializeDashboard(workspaceIdFromQuery);
-  }, [initializeDashboard, workspaceIdFromQuery]);
+  }, [initializeDashboard, viewFromQuery, workspaceIdFromQuery, switchToHomeView, switchToStarredView, switchToSharedView, switchToTemplatesView, switchToMarketingView, switchToAccountView]);
 
   if (authLoading) {
     return (
@@ -394,8 +417,14 @@ function DashboardContent() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Loading Overlay */}
+      {isTransitioning && (
+        <div className="absolute inset-0 bg-gray-900/50 flex items-center justify-center z-50">
+          <div className="w-8 h-8 border-4 border-white-600 border-t-transparent rounded-full animate-spin"></div>
+        </div>
+      )}
       <div className="flex min-h-screen">
-          {/* Sidebar */}
+        {/* Sidebar */}
         <Sidebar
           activeView={activeView}
           selectedWorkspaceId={selectedWorkspaceId}
@@ -408,6 +437,7 @@ function DashboardContent() {
             if (view === 'home') switchToHomeView();
             else if (view === 'starred') handleStarredViewSelect();
             else if (view === 'shared') handleSharedViewSelect();
+            else if (view === 'marketing') handleMarketingViewSelect();
             else if (view === 'templates') handleTemplatesViewSelect();
           }}
           onWorkspaceSelect={handleWorkspaceSelect}
@@ -452,6 +482,7 @@ function DashboardContent() {
                 workspaceBases={workspaceBases}
                 workspaces={workspaces}
                 selectedWorkspaceId={selectedWorkspaceId}
+                isTransitioning={isTransitioning}
                 collectionView={collectionView}
                 sortOption={sortOption}
                 isSortOpen={isSortOpen}
@@ -499,6 +530,10 @@ function DashboardContent() {
                 onBaseStarToggle={toggleStar}
                 onBaseContextMenu={handleBaseContextMenu}
               />
+            )}
+
+            {activeView === 'marketing' && (
+              <MarketingView />
             )}
 
             {activeView === 'templates' && (

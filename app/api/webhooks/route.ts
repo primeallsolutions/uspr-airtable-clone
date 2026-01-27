@@ -50,6 +50,7 @@ export async function POST(request: NextRequest) {
       name,
       secret_token: secretToken,
       default_table_id: defaultTableId,
+      field_mapping: {},
       is_enabled: true
     })
     .select()
@@ -65,7 +66,7 @@ export async function POST(request: NextRequest) {
 // PUT: Update webhook
 export async function PUT(request: NextRequest) {
   const body = await request.json();
-  const { webhookId, name, is_enabled, default_table_id } = body;
+  const { webhookId, name, is_enabled, default_table_id, field_mapping } = body;
 
   if (!webhookId) {
     return NextResponse.json({ error: 'webhookId required' }, { status: 400 });
@@ -76,7 +77,8 @@ export async function PUT(request: NextRequest) {
     .update({
       name,
       is_enabled,
-      default_table_id
+      default_table_id,
+      field_mapping
     })
     .eq('id', webhookId)
     .select()

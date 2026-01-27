@@ -44,7 +44,7 @@ import {
   type FilterState,
   type SortRule
 } from "@/components/base-detail/ViewControlModals";
-import { DocumentsView } from "@/components/base-detail/DocumentsView";
+// DocumentsView removed - documents now accessed per-record in RecordDetailsModal
 
 const generateClientId = () =>
   typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
@@ -1087,6 +1087,7 @@ export default function BaseDetailPage() {
                   allFields={fields}
                   tables={tables}
                   selectedTableId={selectedTableId}
+                  baseId={baseId || ''}
                   sortFieldId={primarySortFieldId}
                   sortDirection={primarySortDirection}
                   savingCell={savingCell}
@@ -1110,6 +1111,7 @@ export default function BaseDetailPage() {
                   fields={fields}
                   tables={tables}
                   selectedTableId={selectedTableId}
+                  baseId={baseId || ''}
                   onUpdateCell={updateCell}
                   onDeleteRow={deleteRecord}
                   onAddRow={handleAddRow}
@@ -1171,13 +1173,7 @@ export default function BaseDetailPage() {
             </div>
           )}
 
-          {topTab === 'documents' && (
-            <DocumentsView
-              baseId={baseId || ''}
-              baseName={base?.name}
-              selectedTable={tables.find(t => t.id === selectedTableId) || null}
-            />
-          )}
+          {/* Documents tab removed - now accessed per-record in RecordDetailsModal */}
         </div>
       </div>
 

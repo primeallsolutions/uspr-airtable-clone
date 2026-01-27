@@ -1,11 +1,15 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { X, Save, Edit2, Loader2, Calendar, Hash, Mail, Phone, Link as LinkIcon, CheckSquare, FileText, Clock, Info, History } from "lucide-react";
+import { X, Save, Edit2, Loader2, Calendar, Hash, Mail, Phone, Link as LinkIcon, CheckSquare, FileText, Clock, Info, Paperclip, History } from "lucide-react";
 import type { RecordRow, FieldRow, SavingCell, TableRow } from "@/lib/types/base-detail";
+import type { AuditLogRow } from "@/lib/services/audit-log-service";
+import { AuditLogService } from "@/lib/services/audit-log-service";
 import { formatInTimezone } from "@/lib/utils/date-helpers";
 import { useTimezone } from "@/lib/hooks/useTimezone";
-import { AuditLogService, type AuditLogRow } from "@/lib/services/audit-log-service";
+import { RecordDocuments } from "./documents/RecordDocuments";
+import { RecordDocumentsService } from "@/lib/services/record-documents-service";
+import { getFieldTypeLabel } from "@/lib/utils/field-type-helpers";
 
 interface RecordDetailsModalProps {
   isOpen: boolean;
@@ -13,6 +17,7 @@ interface RecordDetailsModalProps {
   fields: FieldRow[];
   tables: TableRow[];
   selectedTableId: string | null;
+  baseId: string;
   savingCell: SavingCell;
   onUpdateCell: (recordId: string, fieldId: string, value: unknown) => void;
   onClose: () => void;
@@ -24,6 +29,7 @@ export const RecordDetailsModal = ({
   fields,
   tables,
   selectedTableId,
+  baseId,
   savingCell,
   onUpdateCell,
   onClose,
@@ -33,10 +39,32 @@ export const RecordDetailsModal = ({
   const [editValue, setEditValue] = useState<unknown>("");
   const [localNameValue, setLocalNameValue] = useState<string>("");
   const nameFieldRef = useRef<HTMLInputElement>(null);
+  const [activeTab, setActiveTab] = useState<"fields" | "documents">("fields");
+  const [documentCount, setDocumentCount] = useState<number>(0);
+  const [isAuditOpen, setIsAuditOpen] = useState<boolean>(false);
   const [auditLogs, setAuditLogs] = useState<AuditLogRow[]>([]);
-  const [auditLoading, setAuditLoading] = useState(false);
+  const [auditLoading, setAuditLoading] = useState<boolean>(false);
   const [auditError, setAuditError] = useState<string | null>(null);
-  const [isAuditOpen, setIsAuditOpen] = useState(false);
+
+  const loadAudit = useCallback(async () => {
+    if (!record) return;
+    setAuditLoading(true);
+    setAuditError(null);
+    try {
+      const logs = await AuditLogService.getRecordLogs(record.id);
+      setAuditLogs(logs);
+    } catch (err) {
+      setAuditError(err instanceof Error ? err.message : "Failed to load audit log");
+    } finally {
+      setAuditLoading(false);
+    }
+  }, [record]);
+
+  useEffect(() => {
+    if (isAuditOpen && record) {
+      loadAudit();
+    }
+  }, [isAuditOpen, record, loadAudit]);
 
   // Find the "Name" field
   const nameField = useMemo(() => {
@@ -49,10 +77,10 @@ export const RecordDetailsModal = ({
     return (record.values[nameField.id] as string) || "";
   }, [record, nameField]);
 
-  // Sync local name value with record value
+  // Sync local name value with record value whenever record changes
   useEffect(() => {
     setLocalNameValue(nameValue);
-  }, [nameValue]);
+  }, [nameValue, record?.id]); // Add record.id to ensure sync on record change
 
   // Fields to display (exclude Name field if it exists, as it's shown in title)
   // Sort by order_index to match table column order
@@ -141,14 +169,63 @@ export const RecordDetailsModal = ({
     }
   };
 
-  // Get field options for select fields
-  const getFieldOptions = (field: FieldRow): string[] => {
-    if (field.options && typeof field.options === "object" && "options" in field.options) {
-      const opts = (field.options as any).options;
-      if (Array.isArray(opts)) {
-        return opts.map((o: any) => (typeof o === "string" ? o : o?.label || o?.value || String(o)));
+  // Get option label for select fields (converts option ID to display label)
+  const getOptionLabel = (field: FieldRow, value: unknown): string => {
+    if (!value || typeof value !== "string") return String(value || "");
+    
+    if (!field.options || typeof field.options !== "object") {
+      return String(value);
+    }
+    
+    // Check if value is an option ID (like "option_1")
+    if (value in field.options) {
+      const optionData = field.options[value];
+      if (optionData && typeof optionData === "object") {
+        const opt = optionData as { name?: string; label?: string };
+        return opt.name || opt.label || String(value);
+      }
+      if (typeof optionData === "string") {
+        return optionData;
       }
     }
+    
+    // Value might already be the label itself
+    return String(value);
+  };
+
+  // Get field options for select fields (returns { id, label } objects)
+  const getFieldOptions = (field: FieldRow): Array<{ id: string; label: string }> => {
+    if (!field.options || typeof field.options !== "object") {
+      return [];
+    }
+    
+    // Format 1: { "choices": ["Option1", "Option2"] }
+    if ("choices" in field.options && Array.isArray(field.options.choices)) {
+      return (field.options.choices as string[]).map(choice => ({
+        id: choice,
+        label: choice
+      }));
+    }
+    
+    // Format 2: { "option_1": { "name": "Active", "color": "#..." }, ... }
+    // Extract option IDs and labels from object entries
+    const entries = Object.entries(field.options);
+    if (entries.length > 0) {
+      return entries.map(([key, value]) => {
+        if (typeof value === "string") {
+          return { id: key, label: value };
+        }
+        if (value && typeof value === "object") {
+          const opt = value as { name?: string; label?: string; value?: string };
+          return { 
+            id: key, 
+            label: opt.name || opt.label || opt.value || key 
+          };
+        }
+        return { id: key, label: key };
+      });
+    }
+    
     return [];
   };
 
@@ -156,16 +233,44 @@ export const RecordDetailsModal = ({
   const handleFieldClick = (field: FieldRow) => {
     if (!record) return;
     setEditingFieldId(field.id);
-    setEditValue(record.values[field.id] || "");
+    
+    // Initialize edit value based on field type
+    const currentValue = record.values[field.id];
+    
+    if (field.type === "checkbox") {
+      setEditValue(!!currentValue); // Convert to boolean
+    } else if (field.type === "date" && currentValue) {
+      // Convert date to YYYY-MM-DD format
+      const date = new Date(currentValue as string);
+      setEditValue(date.toISOString().split('T')[0]);
+    } else if (field.type === "datetime" && currentValue) {
+      // Convert datetime to YYYY-MM-DDTHH:mm format
+      const date = new Date(currentValue as string);
+      setEditValue(date.toISOString().slice(0, 16));
+    } else if (field.type === "multi_select" && currentValue) {
+      // Convert to array if it's a string
+      if (typeof currentValue === "string") {
+        setEditValue(currentValue.split(",").map(v => v.trim()).filter(Boolean));
+      } else if (Array.isArray(currentValue)) {
+        setEditValue(currentValue);
+      } else {
+        setEditValue([]);
+      }
+    } else {
+      setEditValue(currentValue || "");
+    }
   };
 
-  const handleFieldBlur = async (field: FieldRow) => {
+  const handleFieldBlur = async (field: FieldRow, newValue?: unknown) => {
     if (!record || editingFieldId !== field.id) return;
+    
+    // Use passed value if provided, otherwise use editValue state
+    const valueToSave = newValue !== undefined ? newValue : editValue;
     
     // Only update if value changed
     const currentValue = record.values[field.id];
-    if (currentValue !== editValue) {
-      await onUpdateCell(record.id, field.id, editValue);
+    if (currentValue !== valueToSave) {
+      await onUpdateCell(record.id, field.id, valueToSave);
     }
     
     setEditingFieldId(null);
@@ -204,37 +309,28 @@ export const RecordDetailsModal = ({
     }
   };
 
-  // Reset editing state when modal closes
+  // Reset editing state when modal closes or record changes
   useEffect(() => {
     if (!isOpen) {
       setEditingFieldId(null);
       setEditValue("");
       setLocalNameValue("");
+      setActiveTab("fields");
+    } else if (record) {
+      // If modal is open and record changes, clear editing state
+      setEditingFieldId(null);
+      setEditValue("");
     }
-  }, [isOpen]);
+  }, [isOpen, record, record?.id, record?.values]); // React to record changes
 
-  const loadAudit = useCallback(async () => {
-    if (!record?.id) return;
-    setAuditLoading(true);
-    setAuditError(null);
-    try {
-      const logs = await AuditLogService.getRecordLogs(record.id, 10);
-      setAuditLogs(logs);
-    } catch (e: unknown) {
-      setAuditError(e instanceof Error ? e.message : "Failed to load audit log");
-    } finally {
-      setAuditLoading(false);
-    }
-  }, [record?.id]);
-
+  // Load document count whenever record changes
   useEffect(() => {
-    if (isOpen && isAuditOpen) {
-      void loadAudit();
-    } else if (!isAuditOpen) {
-      setAuditLogs([]);
-      setAuditError(null);
+    if (record?.id) {
+      RecordDocumentsService.getDocumentCount(record.id).then(setDocumentCount).catch(() => {});
+    } else {
+      setDocumentCount(0);
     }
-  }, [isOpen, isAuditOpen, loadAudit]);
+  }, [record?.id, record?.values]); // Reload count if record updates
 
   if (!isOpen || !record) return null;
 
@@ -361,61 +457,91 @@ export const RecordDetailsModal = ({
 
         {/* Summary Section */}
         <div className="px-8 py-5 bg-gradient-to-r from-gray-50 to-blue-50/30 border-b border-gray-200">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 flex-1">
-              <div className="flex items-center gap-3 p-3 bg-white rounded-lg shadow-sm border border-gray-200">
-                <div className="p-2 bg-blue-100 rounded-lg">
-                  <Info className="w-5 h-5 text-blue-600" />
-                </div>
-                <div>
-                  <div className="text-xs text-gray-500 uppercase tracking-wide">Total Fields</div>
-                  <div className="text-lg font-bold text-gray-900">{fieldStats.total}</div>
-                </div>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="flex items-center gap-3 p-3 bg-white rounded-lg shadow-sm border border-gray-200">
+              <div className="p-2 bg-blue-100 rounded-lg">
+                <Info className="w-5 h-5 text-blue-600" />
               </div>
-              <div className="flex items-center gap-3 p-3 bg-white rounded-lg shadow-sm border border-gray-200">
-                <div className="p-2 bg-green-100 rounded-lg">
-                  <CheckSquare className="w-5 h-5 text-green-600" />
-                </div>
-                <div>
-                  <div className="text-xs text-gray-500 uppercase tracking-wide">Filled</div>
-                  <div className="text-lg font-bold text-gray-900">{fieldStats.filled}</div>
-                </div>
-              </div>
-              <div className="flex items-center gap-3 p-3 bg-white rounded-lg shadow-sm border border-gray-200">
-                <div className="p-2 bg-gray-100 rounded-lg">
-                  <FileText className="w-5 h-5 text-gray-600" />
-                </div>
-                <div>
-                  <div className="text-xs text-gray-500 uppercase tracking-wide">Empty</div>
-                  <div className="text-lg font-bold text-gray-900">{fieldStats.empty}</div>
-                </div>
-              </div>
-              <div className="flex items-center gap-3 p-3 bg-white rounded-lg shadow-sm border border-gray-200">
-                <div className="p-2 bg-purple-100 rounded-lg">
-                  <Hash className="w-5 h-5 text-purple-600" />
-                </div>
-                <div>
-                  <div className="text-xs text-gray-500 uppercase tracking-wide">Completion</div>
-                  <div className="text-lg font-bold text-gray-900">{fieldStats.percentage}%</div>
-                </div>
+              <div>
+                <div className="text-xs text-gray-500 uppercase tracking-wide">Total Fields</div>
+                <div className="text-lg font-bold text-gray-900">{fieldStats.total}</div>
               </div>
             </div>
+            <div className="flex items-center gap-3 p-3 bg-white rounded-lg shadow-sm border border-gray-200">
+              <div className="p-2 bg-green-100 rounded-lg">
+                <CheckSquare className="w-5 h-5 text-green-600" />
+              </div>
+              <div>
+                <div className="text-xs text-gray-500 uppercase tracking-wide">Filled</div>
+                <div className="text-lg font-bold text-gray-900">{fieldStats.filled}</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 p-3 bg-white rounded-lg shadow-sm border border-gray-200">
+              <div className="p-2 bg-gray-100 rounded-lg">
+                <FileText className="w-5 h-5 text-gray-600" />
+              </div>
+              <div>
+                <div className="text-xs text-gray-500 uppercase tracking-wide">Empty</div>
+                <div className="text-lg font-bold text-gray-900">{fieldStats.empty}</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 p-3 bg-white rounded-lg shadow-sm border border-gray-200">
+              <div className="p-2 bg-purple-100 rounded-lg">
+                <Hash className="w-5 h-5 text-purple-600" />
+              </div>
+              <div>
+                <div className="text-xs text-gray-500 uppercase tracking-wide">Completion</div>
+                <div className="text-lg font-bold text-gray-900">{fieldStats.percentage}%</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Tab Navigation */}
+        <div className="px-8 border-b border-gray-200 bg-white">
+          <div className="flex items-center gap-4">
             <button
-              onClick={() => setIsAuditOpen(true)}
-              className="inline-flex items-center gap-2 self-start md:self-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm"
+              onClick={() => setActiveTab("fields")}
+              className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === "fields"
+                  ? "border-blue-600 text-blue-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+              }`}
             >
-              <History className="w-4 h-4" />
-              View audit log
+              <span className="flex items-center gap-2">
+                <Info className="w-4 h-4" />
+                Field Details
+              </span>
+            </button>
+            <button
+              onClick={() => setActiveTab("documents")}
+              className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === "documents"
+                  ? "border-blue-600 text-blue-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+              }`}
+            >
+              <span className="flex items-center gap-2">
+                <Paperclip className="w-4 h-4" />
+                Documents
+                {documentCount > 0 && (
+                  <span className="px-1.5 py-0.5 text-xs bg-blue-100 text-blue-600 rounded-full">
+                    {documentCount}
+                  </span>
+                )}
+              </span>
             </button>
           </div>
         </div>
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-8 bg-gray-50/50">
-          <div className="mb-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Field Details</h3>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          {activeTab === "fields" ? (
+            <>
+              <div className="mb-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Field Details</h3>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             {displayFields.map((field) => {
               const value = record.values[field.id];
               const isEditing = editingFieldId === field.id;
@@ -442,17 +568,162 @@ export const RecordDetailsModal = ({
                   </div>
                   {isEditing ? (
                     <div className="space-y-2">
-                      <input
-                        type="text"
-                        value={editValue as string}
-                        onChange={(e) => setEditValue(e.target.value)}
-                        onBlur={() => handleFieldBlur(field)}
-                        onKeyDown={(e) => handleKeyDown(e, field)}
-                        className="w-full px-4 py-3 border-2 border-blue-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 text-gray-900 font-medium transition-all"
-                        autoFocus
-                      />
+                      {/* Type-specific input controls */}
+                      {field.type === "number" ? (
+                        <input
+                          type="number"
+                          value={editValue as string}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          onBlur={() => handleFieldBlur(field)}
+                          onKeyDown={(e) => handleKeyDown(e, field)}
+                          className="w-full px-4 py-3 border-2 border-blue-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 text-gray-900 font-medium transition-all"
+                          autoFocus
+                        />
+                      ) : field.type === "date" ? (
+                        <input
+                          type="date"
+                          value={editValue as string}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          onBlur={() => handleFieldBlur(field)}
+                          onKeyDown={(e) => handleKeyDown(e, field)}
+                          className="w-full px-4 py-3 border-2 border-blue-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 text-gray-900 font-medium transition-all"
+                          autoFocus
+                        />
+                      ) : field.type === "datetime" ? (
+                        <input
+                          type="datetime-local"
+                          value={editValue as string}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          onBlur={() => handleFieldBlur(field)}
+                          onKeyDown={(e) => handleKeyDown(e, field)}
+                          className="w-full px-4 py-3 border-2 border-blue-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 text-gray-900 font-medium transition-all"
+                          autoFocus
+                        />
+                      ) : field.type === "email" ? (
+                        <input
+                          type="email"
+                          value={editValue as string}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          onBlur={() => handleFieldBlur(field)}
+                          onKeyDown={(e) => handleKeyDown(e, field)}
+                          className="w-full px-4 py-3 border-2 border-blue-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 text-gray-900 font-medium transition-all"
+                          autoFocus
+                          placeholder="example@email.com"
+                        />
+                      ) : field.type === "phone" ? (
+                        <input
+                          type="tel"
+                          value={editValue as string}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          onBlur={() => handleFieldBlur(field)}
+                          onKeyDown={(e) => handleKeyDown(e, field)}
+                          className="w-full px-4 py-3 border-2 border-blue-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 text-gray-900 font-medium transition-all"
+                          autoFocus
+                          placeholder="+1 (555) 000-0000"
+                        />
+                      ) : field.type === "link" ? (
+                        <input
+                          type="url"
+                          value={editValue as string}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          onBlur={() => handleFieldBlur(field)}
+                          onKeyDown={(e) => handleKeyDown(e, field)}
+                          className="w-full px-4 py-3 border-2 border-blue-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 text-gray-900 font-medium transition-all"
+                          autoFocus
+                          placeholder="https://example.com"
+                        />
+                      ) : field.type === "checkbox" ? (
+                        <div className="flex items-center gap-3 p-3">
+                          <button
+                            onClick={() => {
+                              const newVal = !editValue;
+                              setEditValue(newVal);
+                              // Pass value directly to avoid stale closure
+                              handleFieldBlur(field, newVal);
+                            }}
+                            className={`w-12 h-12 rounded-lg border-2 flex items-center justify-center transition-all ${
+                              editValue ? "bg-blue-600 border-blue-600" : "border-gray-300 hover:border-blue-400"
+                            }`}
+                          >
+                            {(editValue as boolean) && <CheckSquare className="w-6 h-6 text-white" />}
+                          </button>
+                          <span className="text-sm text-gray-600">
+                            {editValue ? "Checked" : "Unchecked"} - Click to toggle
+                          </span>
+                        </div>
+                      ) : field.type === "single_select" && getFieldOptions(field).length > 0 ? (
+                        <select
+                          value={editValue as string}
+                          onChange={(e) => {
+                            const newVal = e.target.value;
+                            setEditValue(newVal);
+                            // Pass value directly to avoid stale closure
+                            handleFieldBlur(field, newVal);
+                          }}
+                          className="w-full px-4 py-3 border-2 border-blue-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 text-gray-900 font-medium transition-all"
+                          autoFocus
+                        >
+                          <option value="">-- Select option --</option>
+                          {getFieldOptions(field).map((option) => (
+                            <option key={option.id} value={option.id}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      ) : field.type === "multi_select" && getFieldOptions(field).length > 0 ? (
+                        <div className="space-y-2">
+                          <div className="max-h-48 overflow-y-auto border-2 border-blue-500 rounded-lg p-3 space-y-1">
+                            {getFieldOptions(field).map((option) => {
+                              const currentValues = Array.isArray(editValue) 
+                                ? editValue 
+                                : (editValue as string)?.split(",").map(v => v.trim()).filter(Boolean) || [];
+                              const isSelected = currentValues.includes(option.id) || currentValues.includes(option.label);
+                              
+                              return (
+                                <label
+                                  key={option.id}
+                                  className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded cursor-pointer"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    onChange={(e) => {
+                                      const newValues = e.target.checked
+                                        ? [...currentValues, option.id]
+                                        : currentValues.filter(v => v !== option.id && v !== option.label);
+                                      setEditValue(newValues);
+                                    }}
+                                    className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                                  />
+                                  <span className="text-sm text-gray-700">{option.label}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                          <button
+                            onClick={() => handleFieldBlur(field)}
+                            className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+                          >
+                            Save Selection
+                          </button>
+                        </div>
+                      ) : (
+                        <input
+                          type="text"
+                          value={editValue as string}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          onBlur={() => handleFieldBlur(field)}
+                          onKeyDown={(e) => handleKeyDown(e, field)}
+                          className="w-full px-4 py-3 border-2 border-blue-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 text-gray-900 font-medium transition-all"
+                          autoFocus
+                        />
+                      )}
                       <div className="flex items-center gap-2 text-xs text-gray-500">
-                        <span>Press Enter to save, Esc to cancel</span>
+                        <span>
+                          {field.type === "checkbox" || field.type === "single_select" 
+                            ? "Changes save automatically" 
+                            : "Press Enter to save, Esc to cancel"}
+                        </span>
                       </div>
                     </div>
                   ) : (
@@ -462,11 +733,12 @@ export const RecordDetailsModal = ({
                           <Loader2 className="w-4 h-4 animate-spin" />
                           <span className="italic">Saving...</span>
                         </div>
-                    ) : value !== null && value !== undefined && String(value).trim() !== "" ? (
-                      <div className="w-full">
-                        {field.type === "link" && typeof value === "string" ? (
-                          <a
-                            href={value}
+                      ) : value !== null && value !== undefined && String(value).trim() !== "" ? (
+                        <div className="w-full">
+                          {/* Type-specific display */}
+                          {field.type === "link" && typeof value === "string" ? (
+                            <a
+                              href={value}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1.5 text-base font-medium break-words"
@@ -502,6 +774,35 @@ export const RecordDetailsModal = ({
                               </div>
                               <span className="text-base font-medium">{value ? "Yes" : "No"}</span>
                             </div>
+                          ) : field.type === "date" || field.type === "datetime" ? (
+                            <div className="flex items-center gap-2">
+                              <Calendar className="w-4 h-4 text-gray-400" />
+                              <span className="text-base font-medium">
+                                {formatFieldValue(field, value)}
+                              </span>
+                            </div>
+                          ) : field.type === "number" ? (
+                            <div className="flex items-center gap-2">
+                              <Hash className="w-4 h-4 text-gray-400" />
+                              <span className="text-base font-medium">
+                                {formatFieldValue(field, value)}
+                              </span>
+                            </div>
+                          ) : field.type === "single_select" ? (
+                            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-100 text-blue-700 rounded-full text-sm font-medium">
+                              <span>{getOptionLabel(field, value)}</span>
+                            </div>
+                          ) : field.type === "multi_select" ? (
+                            <div className="flex flex-wrap gap-2">
+                              {(Array.isArray(value) ? value : String(value).split(",").map(v => v.trim())).map((item, idx) => (
+                                <span
+                                  key={idx}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-purple-100 text-purple-700 rounded-full text-sm font-medium"
+                                >
+                                  {getOptionLabel(field, item)}
+                                </span>
+                              ))}
+                            </div>
                           ) : (
                             <span className="text-base font-medium break-words">
                               {formatFieldValue(field, value)}
@@ -517,7 +818,7 @@ export const RecordDetailsModal = ({
                     {field.type && (
                       <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-gray-600 bg-gray-100 rounded-md">
                         {getFieldIcon(field.type)}
-                        {field.type.replace("_", " ")}
+                        {getFieldTypeLabel(field.type)}
                       </span>
                     )}
                     {(field.type === "single_select" || field.type === "multi_select") && getFieldOptions(field).length > 0 && (
@@ -529,11 +830,22 @@ export const RecordDetailsModal = ({
                 </div>
               );
             })}
-          </div>
-          {displayFields.length === 0 && (
-            <div className="text-center py-12">
-              <p className="text-gray-400 text-lg">No additional fields to display</p>
-            </div>
+              </div>
+              {displayFields.length === 0 && (
+                <div className="text-center py-12">
+                  <p className="text-gray-400 text-lg">No additional fields to display</p>
+                </div>
+              )}
+            </>
+          ) : (
+            <RecordDocuments
+              recordId={record.id}
+              baseId={baseId}
+              tableId={record.table_id}
+              recordName={nameValue || "Record"}
+              recordValues={record.values}
+              fields={fields}
+            />
           )}
         </div>
 

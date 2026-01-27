@@ -1,27 +1,42 @@
-import { Eye, Hash, CalendarClock, Pencil, Trash2 } from "lucide-react";
+"use client";
+
+import { Eye, Hash, CalendarClock, Pencil, Trash2, Scissors, History } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { StoredDocument } from "@/lib/services/documents-service";
 import { PdfViewer } from "../PdfViewer";
 import { isText, isPdf, isImage, isFolder } from "./utils";
 import { PreviewSkeleton } from "./DocumentsSkeleton";
+import { DocumentVersionHistory } from "./DocumentVersionHistory";
+import { TransactionMetadata } from "./TransactionMetadata";
 
 type DocumentPreviewProps = {
   selectedDoc: StoredDocument | null;
   signedUrl: string | null;
   viewerError: string | null;
+  baseId?: string;
+  tableId?: string | null;
   onRename: () => void;
   onDelete: () => void;
+  onSplit?: () => void;
   loading?: boolean;
+  // Transaction metadata support
+  recordId?: string | null;
 };
 
 export const DocumentPreview = ({
   selectedDoc,
   signedUrl,
   viewerError,
+  baseId,
+  tableId,
   onRename,
   onDelete,
+  onSplit,
   loading = false,
+  recordId,
 }: DocumentPreviewProps) => {
+  const [showVersionHistory, setShowVersionHistory] = useState(false);
+
   const [textContent, setTextContent] = useState<string | null>(null);
   const [currentDoc, setCurrentDoc] = useState<string | null>(null);
 
@@ -70,6 +85,28 @@ export const DocumentPreview = ({
               { /* only cut out the middle portion of the file name, which is likely just the unique storage ID, only show 40 characters total */ }
               <span>{selectedDoc.path.length > 40 ? selectedDoc.path.slice(0, 15) + "..." + selectedDoc.path.slice(-25) : selectedDoc.path}</span>
             </div>
+            {baseId && (
+              <button
+                onClick={() => setShowVersionHistory(!showVersionHistory)}
+                className={`p-1.5 rounded-lg transition-colors ${
+                  showVersionHistory
+                    ? "bg-purple-100 text-purple-600"
+                    : "hover:bg-purple-100 text-gray-600 hover:text-purple-600"
+                }`}
+                title="Version History"
+              >
+                <History className="w-4 h-4" />
+              </button>
+            )}
+            {isPdf(selectedDoc.mimeType) && onSplit && (
+              <button
+                onClick={onSplit}
+                className="p-1.5 hover:bg-blue-100 rounded-lg transition-colors"
+                title="Split PDF - Extract pages to a new document"
+              >
+                <Scissors className="w-4 h-4 text-blue-600" />
+              </button>
+            )}
             <button
               onClick={onRename}
               className="p-1.5 hover:bg-gray-200 rounded-lg transition-colors"
@@ -103,6 +140,16 @@ export const DocumentPreview = ({
                 </div>
               </div>
             </div>
+            
+            {/* Transaction Metadata - Show linked record data */}
+            {baseId && (
+              <TransactionMetadata
+                baseId={baseId}
+                tableId={tableId}
+                documentPath={selectedDoc.path}
+                recordId={recordId}
+              />
+            )}
             <div className="flex-1 min-h-0">
               {viewerError ? (
                 <div className="h-full flex items-center justify-center text-sm text-red-600">
@@ -160,6 +207,20 @@ export const DocumentPreview = ({
                 </div>
               )}
             </div>
+
+            {/* Version History Panel */}
+            {showVersionHistory && baseId && selectedDoc && (
+              <div className="border-t border-gray-200 p-4">
+                <DocumentVersionHistory
+                  documentPath={selectedDoc.path}
+                  baseId={baseId}
+                  tableId={tableId}
+                  onVersionRestored={() => {
+                    // Could trigger a refresh here
+                  }}
+                />
+              </div>
+            )}
           </div>
         ) : selectedDoc && isFolder(selectedDoc) ? (
           <div className="h-full flex items-center justify-center text-sm text-gray-500">
@@ -174,4 +235,3 @@ export const DocumentPreview = ({
     </div>
   );
 };
-

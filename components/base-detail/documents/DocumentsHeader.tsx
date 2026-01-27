@@ -1,4 +1,4 @@
-import { FolderPlus, FileUp, Hash, Loader2 } from "lucide-react";
+import { FolderPlus, FileUp, Hash, Loader2, FileText, PenTool, CheckCircle2, Layers } from "lucide-react";
 
 type DocumentsHeaderProps = {
   prefixLabel: string;
@@ -6,6 +6,10 @@ type DocumentsHeaderProps = {
   uploadProgress: { current: number; total: number };
   onAddFolder: () => void;
   onUpload: (files: FileList | null) => void;
+  onManageTemplates?: () => void;
+  onRequestSignature?: () => void;
+  onViewSignatures?: () => void;
+  onMergeDocuments?: () => void;
 };
 
 export const DocumentsHeader = ({
@@ -14,6 +18,10 @@ export const DocumentsHeader = ({
   uploadProgress,
   onAddFolder,
   onUpload,
+  onManageTemplates,
+  onRequestSignature,
+  onViewSignatures,
+  onMergeDocuments,
 }: DocumentsHeaderProps) => {
   return (
     <div className="flex flex-wrap items-center gap-2 border-b border-gray-200 px-4 py-3 bg-gray-50">
@@ -22,6 +30,46 @@ export const DocumentsHeader = ({
         <span className="font-semibold truncate">{prefixLabel}</span>
       </div>
       <div className="flex items-center gap-2 ml-auto">
+        {onManageTemplates && (
+          <button
+            onClick={onManageTemplates}
+            className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:border-purple-400 hover:text-purple-700 transition-colors"
+            title="Manage document templates"
+          >
+            <FileText className="w-4 h-4" />
+            Templates
+          </button>
+        )}
+        {onRequestSignature && (
+          <button
+            onClick={onRequestSignature}
+            className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-white bg-green-600 border border-green-600 rounded-lg hover:bg-green-700 transition-colors"
+            title="Request e-signature"
+          >
+            <PenTool className="w-4 h-4" />
+            Request Signature
+          </button>
+        )}
+        {onViewSignatures && (
+          <button
+            onClick={onViewSignatures}
+            className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:border-green-400 hover:text-green-700 transition-colors"
+            title="View signature requests status"
+          >
+            <CheckCircle2 className="w-4 h-4" />
+            View Signatures
+          </button>
+        )}
+        {onMergeDocuments && (
+          <button
+            onClick={onMergeDocuments}
+            className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:border-indigo-400 hover:text-indigo-700 transition-colors"
+            title="Merge PDFs with page reordering"
+          >
+            <Layers className="w-4 h-4" />
+            Merge PDFs
+          </button>
+        )}
         <button
           onClick={onAddFolder}
           className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:border-blue-400 hover:text-blue-700 transition-colors"

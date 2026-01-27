@@ -3,7 +3,7 @@ import { SortDropdown } from "../SortDropdown";
 import { ViewToggle } from "../ViewToggle";
 import { sortBases } from "@/lib/utils/sort-helpers";
 import type { BaseRecord, CollectionView, SortOption, WorkspaceRecord } from "@/lib/types/dashboard";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { WorkspaceActivityCard } from "../cards/WorkspaceActivityCard";
 import { WorkspaceAnalyticsDashboard } from "../WorkspaceAnalyticsDashboard";
 import { BaseCard } from "../BaseCard";
@@ -13,6 +13,7 @@ interface WorkspaceViewProps {
   workspaceBases: BaseRecord[];
   workspaces: WorkspaceRecord[];
   selectedWorkspaceId: string | null;
+  isTransitioning: boolean;
   collectionView: CollectionView;
   sortOption: SortOption;
   isSortOpen: boolean;
@@ -33,6 +34,7 @@ export const WorkspaceView = ({
   workspaceBases,
   workspaces,
   selectedWorkspaceId,
+  isTransitioning,
   collectionView,
   sortOption,
   isSortOpen,
@@ -44,14 +46,42 @@ export const WorkspaceView = ({
   onCreateBase,
   onBaseStarToggle,
   onBaseContextMenu,
-  canManageMembers = false,
+  canManageMembers,
   onLeaveWorkspace,
   canLeaveWorkspace = false,
 }: WorkspaceViewProps) => {
   const currentWorkspace = workspaces.find(w => w.id === selectedWorkspaceId);
   const [activeTab, setActiveTab] = useState<'bases' | 'analytics' | 'settings'>(
-    canManageMembers ? 'analytics' : 'bases'
+    (() => {
+      if (typeof window !== 'undefined') {
+        const params = new URLSearchParams(window.location.search);
+        const tab = params.get('tab');
+        if (tab === 'bases' || tab === 'analytics' || tab === 'settings') {
+          if (tab === 'analytics' && !canManageMembers) {
+            return 'bases';
+          }
+          return tab;
+        }
+      }
+      return 'bases';
+    })()
   );
+
+  useEffect(() => {
+    // Update URL with active tab
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      params.delete('view');
+      params.set('tab', activeTab);
+      window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
+    }
+  }, [activeTab]);
+  useEffect(() => {
+    if (!currentWorkspace) return;
+    if (activeTab === 'analytics' && !(currentWorkspace.accessRole === 'owner' || currentWorkspace.accessRole === 'admin')) {
+      setActiveTab('bases');
+    }
+  }, [currentWorkspace, activeTab, setActiveTab]);
 
   if (loading && !initialLoad) {
     return (
@@ -84,7 +114,7 @@ export const WorkspaceView = ({
       </div>
 
       {/* Tab Content */}
-      {activeTab === 'bases' && (
+      {!isTransitioning && activeTab === 'bases' && (
         <>
           <div className="mb-6 flex items-center justify-between">
             <SortDropdown
