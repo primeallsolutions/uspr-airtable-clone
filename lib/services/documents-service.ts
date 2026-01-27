@@ -2,8 +2,13 @@ import { supabase } from "../supabaseClient";
 
 const BUCKET = process.env.NEXT_PUBLIC_SUPABASE_DOCUMENTS_BUCKET || "documents";
 
+// Base prefix for base/table-level documents
 const basePrefix = (baseId: string, tableId?: string | null) =>
   tableId ? `bases/${baseId}/tables/${tableId}/` : `bases/${baseId}/`;
+
+// Record-scoped prefix for record-level documents
+const recordPrefix = (baseId: string, recordId: string) =>
+  `bases/${baseId}/records/${recordId}/`;
 
 // Supabase Storage keys must be URL-safe; strip/replace unsafe chars and normalize.
 const sanitizeFileName = (name: string) => {
@@ -28,7 +33,16 @@ export type StoredDocument = {
 };
 
 export const DocumentsService = {
-  async listDocuments(baseId: string, tableId?: string | null): Promise<StoredDocument[]> {
+  /**
+   * List documents for a base/table or filtered by record
+   * When recordId is provided, returns only documents linked to that specific record
+   */
+  async listDocuments(baseId: string, tableId?: string | null, recordId?: string | null): Promise<StoredDocument[]> {
+    // If recordId is provided, use record-scoped logic
+    if (recordId) {
+      return this.listRecordDocuments(baseId, recordId);
+    }
+    
     const prefix = basePrefix(baseId, tableId);
     
     // Recursively list all files in the prefix and subdirectories
@@ -90,18 +104,80 @@ export const DocumentsService = {
     return allFiles;
   },
 
+  /**
+   * List documents linked to a specific record from record_documents table
+   */
+  async listRecordDocuments(baseId: string, recordId: string): Promise<StoredDocument[]> {
+    // Get all document links from record_documents table
+    const { data: recordDocs, error } = await supabase
+      .from("record_documents")
+      .select("document_path, document_name, mime_type, size_bytes, created_at")
+      .eq("record_id", recordId)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("Failed to fetch record documents:", error);
+      throw new Error(error.message);
+    }
+
+    if (!recordDocs || recordDocs.length === 0) {
+      return [];
+    }
+
+    // Convert to StoredDocument format
+    // Extract relative path from full storage path for display
+    const prefix = recordPrefix(baseId, recordId);
+    return recordDocs.map((doc) => {
+      // The document_path is the full storage path, make it relative for display
+      let relativePath = doc.document_path;
+      if (relativePath.startsWith(prefix)) {
+        relativePath = relativePath.slice(prefix.length);
+      }
+      
+      return {
+        path: relativePath,
+        size: doc.size_bytes || 0,
+        mimeType: doc.mime_type || "application/octet-stream",
+        createdAt: doc.created_at || new Date().toISOString(),
+      };
+    });
+  },
+
+  /**
+   * List folders for a record (from record_documents paths)
+   */
+  async listRecordFolders(baseId: string, recordId: string): Promise<Array<{ name: string; path: string; parent_path: string | null }>> {
+    // Query document_folders scoped to record
+    const { data, error } = await supabase
+      .from("document_folders")
+      .select("name, path, parent_path")
+      .eq("base_id", baseId)
+      .eq("record_id", recordId)
+      .order("name", { ascending: true });
+
+    if (error) {
+      console.error("Failed to fetch record folders:", error);
+      return [];
+    }
+
+    return data || [];
+  },
+
   async uploadDocument(params: {
     baseId: string;
     tableId?: string | null;
+    recordId?: string | null; // When provided, uploads to record-scoped path and links to record
     folderPath?: string;
     file: File;
     preserveName?: boolean; // If true, keeps the original filename without timestamp prefix
   }): Promise<string> {
-    const { baseId, tableId, folderPath = "", file, preserveName = false } = params;
+    const { baseId, tableId, recordId, folderPath = "", file, preserveName = false } = params;
     if (!file || file.size === 0) {
       throw new Error("Empty file or missing file data");
     }
-    const prefix = basePrefix(baseId, tableId);
+    
+    // Use record-scoped prefix if recordId is provided
+    const prefix = recordId ? recordPrefix(baseId, recordId) : basePrefix(baseId, tableId);
     const safeFolder = folderPath ? (folderPath.endsWith("/") ? folderPath : `${folderPath}/`) : "";
     const safeName = sanitizeFileName(file.name);
     
@@ -115,11 +191,69 @@ export const DocumentsService = {
       contentType: file.type || "application/octet-stream"
     });
     if (error) throw error;
+    
+    // If recordId is provided, also link the document to the record
+    if (recordId) {
+      await this.linkDocumentToRecord({
+        recordId,
+        baseId,
+        tableId,
+        documentPath: fullPath,
+        documentName: file.name,
+        mimeType: file.type,
+        sizeBytes: file.size,
+      });
+    }
+    
     return `${safeFolder}${finalName}`;
   },
+  
+  /**
+   * Link an uploaded document to a record in record_documents table
+   */
+  async linkDocumentToRecord(params: {
+    recordId: string;
+    baseId: string;
+    tableId?: string | null;
+    documentPath: string;
+    documentName: string;
+    mimeType?: string;
+    sizeBytes?: number;
+  }): Promise<void> {
+    // Get current user
+    const { data: { user } } = await supabase.auth.getUser();
+    let uploadedBy: string | null = null;
+    if (user?.id) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("id", user.id)
+        .single();
+      uploadedBy = profile?.id || null;
+    }
 
-  async createFolder(baseId: string, tableId: string | null, parentPath: string, name: string): Promise<string> {
-    const prefix = basePrefix(baseId, tableId);
+    const { error } = await supabase
+      .from("record_documents")
+      .insert({
+        record_id: params.recordId,
+        base_id: params.baseId,
+        table_id: params.tableId || null,
+        document_path: params.documentPath,
+        document_name: params.documentName,
+        mime_type: params.mimeType || null,
+        size_bytes: params.sizeBytes || null,
+        uploaded_by: uploadedBy,
+      });
+
+    if (error) {
+      console.error("Failed to link document to record:", error);
+      // Don't throw - the file is already uploaded, just log the error
+    }
+  },
+
+  async createFolder(baseId: string, tableId: string | null, parentPath: string, name: string, recordId?: string | null): Promise<string> {
+    // Use record-scoped prefix if recordId is provided
+    const prefix = recordId ? recordPrefix(baseId, recordId) : basePrefix(baseId, tableId);
     const safeParent = parentPath ? (parentPath.endsWith("/") ? parentPath : `${parentPath}/`) : "";
     const safeName = sanitizeFileName(name);
     const fullPath = `${prefix}${safeParent}${safeName}/.keep`;
@@ -127,28 +261,60 @@ export const DocumentsService = {
       .from(BUCKET)
       .upload(fullPath, new Blob([""], { type: "text/plain" }), { upsert: true, contentType: "text/plain" });
     if (error) throw error;
+    
     // persist folder metadata for richer permissions/sharing
-    await supabase
+    // Check if folder already exists first, then insert or ignore
+    const folderPath = `${safeParent}${safeName}/`;
+    
+    // Check if this folder already exists
+    let existingQuery = supabase
       .from("document_folders")
-      .upsert(
-        {
-          base_id: baseId,
-          table_id: tableId,
-          path: `${safeParent}${safeName}/`,
-          name: safeName,
-          parent_path: safeParent || null
-        },
-        {
-          onConflict: "base_id,table_id,path",
-          ignoreDuplicates: true
-        }
-      )
-      .throwOnError();
-    return `${safeParent}${safeName}/`;
+      .select("id")
+      .eq("base_id", baseId)
+      .eq("path", folderPath);
+    
+    if (recordId) {
+      existingQuery = existingQuery.eq("record_id", recordId);
+    } else if (tableId) {
+      existingQuery = existingQuery.eq("table_id", tableId).is("record_id", null);
+    } else {
+      existingQuery = existingQuery.is("table_id", null).is("record_id", null);
+    }
+    
+    const { data: existing } = await existingQuery.single();
+    
+    // If folder already exists, just return the path
+    if (existing) {
+      return folderPath;
+    }
+    
+    // Insert new folder
+    const folderData: Record<string, unknown> = {
+      base_id: baseId,
+      table_id: tableId,
+      path: folderPath,
+      name: safeName,
+      parent_path: safeParent || null,
+    };
+    if (recordId) {
+      folderData.record_id = recordId;
+    }
+    
+    const { error: insertError } = await supabase
+      .from("document_folders")
+      .insert(folderData);
+    
+    // Ignore duplicate key errors (folder was created by another request)
+    if (insertError && insertError.code !== '23505') {
+      throw insertError;
+    }
+    
+    return folderPath;
   },
 
-  async getSignedUrl(baseId: string, tableId: string | null, relativePath: string, expiresIn = 600) {
-    const prefix = basePrefix(baseId, tableId);
+  async getSignedUrl(baseId: string, tableId: string | null, relativePath: string, expiresIn = 600, recordId?: string | null) {
+    // Use record-scoped prefix if recordId is provided
+    const prefix = recordId ? recordPrefix(baseId, recordId) : basePrefix(baseId, tableId);
     
     // Ensure relativePath doesn't start with a slash (to avoid double slashes)
     const cleanPath = relativePath.startsWith("/") ? relativePath.slice(1) : relativePath;
@@ -180,21 +346,54 @@ export const DocumentsService = {
     }
   },
 
-  async deleteDocument(baseId: string, tableId: string | null, relativePath: string) {
-    const prefix = basePrefix(baseId, tableId);
-    const { error } = await supabase.storage.from(BUCKET).remove([`${prefix}${relativePath}`]);
+  async deleteDocument(baseId: string, tableId: string | null, relativePath: string, recordId?: string | null) {
+    // Use record-scoped prefix if recordId is provided
+    const prefix = recordId ? recordPrefix(baseId, recordId) : basePrefix(baseId, tableId);
+    const fullPath = `${prefix}${relativePath}`;
+    
+    const { error } = await supabase.storage.from(BUCKET).remove([fullPath]);
     if (error) throw error;
+    
+    // If recordId is provided, also remove the link from record_documents
+    if (recordId) {
+      await supabase
+        .from("record_documents")
+        .delete()
+        .eq("record_id", recordId)
+        .eq("document_path", fullPath)
+        .throwOnError();
+    }
   },
 
-  async renameDocument(baseId: string, tableId: string | null, oldRelativePath: string, newRelativePath: string) {
-    const prefix = basePrefix(baseId, tableId);
+  async renameDocument(baseId: string, tableId: string | null, oldRelativePath: string, newRelativePath: string, recordId?: string | null) {
+    // Use record-scoped prefix if recordId is provided
+    const prefix = recordId ? recordPrefix(baseId, recordId) : basePrefix(baseId, tableId);
+    const oldFullPath = `${prefix}${oldRelativePath}`;
+    const newFullPath = `${prefix}${newRelativePath}`;
+    
     const { error } = await supabase.storage
       .from(BUCKET)
-      .move(`${prefix}${oldRelativePath}`, `${prefix}${newRelativePath}`);
+      .move(oldFullPath, newFullPath);
     if (error) throw error;
+    
+    // If recordId is provided, update the path in record_documents
+    if (recordId) {
+      const newName = newRelativePath.split("/").pop() || newRelativePath;
+      await supabase
+        .from("record_documents")
+        .update({ document_path: newFullPath, document_name: newName })
+        .eq("record_id", recordId)
+        .eq("document_path", oldFullPath)
+        .throwOnError();
+    }
   },
 
-  async listFolders(baseId: string, tableId: string | null, parentPath: string | null = null, includeAll: boolean = false) {
+  async listFolders(baseId: string, tableId: string | null, parentPath: string | null = null, includeAll: boolean = false, recordId?: string | null) {
+    // If recordId is provided, use record-scoped folder listing
+    if (recordId) {
+      return this.listRecordFolders(baseId, recordId);
+    }
+    
     let query = supabase
       .from("document_folders")
       .select("name, path, parent_path")
@@ -221,6 +420,96 @@ export const DocumentsService = {
     const { data, error } = await query;
     if (error) throw error;
     return data || [];
+  },
+
+  async deleteFolder(baseId: string, tableId: string | null, folderPath: string) {
+    const prefix = basePrefix(baseId, tableId);
+    
+    // Delete the .keep file from storage
+    const keepFilePath = `${prefix}${folderPath}.keep`;
+    const { error: storageError } = await supabase.storage.from(BUCKET).remove([keepFilePath]);
+    if (storageError) throw storageError;
+    
+    // Delete folder metadata from database
+    let query = supabase
+      .from("document_folders")
+      .delete()
+      .eq("base_id", baseId)
+      .eq("path", folderPath);
+    
+    if (tableId) {
+      query = query.eq("table_id", tableId);
+    } else {
+      query = query.is("table_id", null);
+    }
+    
+    const { error: dbError } = await query;
+    if (dbError) throw dbError;
+  },
+
+  async renameFolder(baseId: string, tableId: string | null, oldPath: string, newName: string) {
+    const prefix = basePrefix(baseId, tableId);
+    const safeName = sanitizeFileName(newName);
+    
+    // Extract parent path from old path
+    const parentPath = oldPath.split("/").slice(0, -1).join("/");
+    const newPath = parentPath ? `${parentPath}/${safeName}/` : `${safeName}/`;
+    
+    // Move the .keep file in storage
+    const oldKeepPath = `${prefix}${oldPath}.keep`;
+    const newKeepPath = `${prefix}${newPath}.keep`;
+    
+    const { error: moveError } = await supabase.storage
+      .from(BUCKET)
+      .move(oldKeepPath, newKeepPath);
+    if (moveError) throw moveError;
+    
+    // Update folder metadata in database
+    let query = supabase
+      .from("document_folders")
+      .update({
+        name: safeName,
+        path: newPath,
+      })
+      .eq("base_id", baseId)
+      .eq("path", oldPath);
+    
+    if (tableId) {
+      query = query.eq("table_id", tableId);
+    } else {
+      query = query.is("table_id", null);
+    }
+    
+    const { error: updateError } = await query;
+    if (updateError) throw updateError;
+    
+    // Update paths for all child folders (recursively)
+    const { data: childFolders } = await supabase
+      .from("document_folders")
+      .select("path, parent_path")
+      .eq("base_id", baseId)
+      .like("path", `${oldPath}%`);
+    
+    if (childFolders && childFolders.length > 0) {
+      for (const child of childFolders) {
+        const newChildPath = child.path.replace(oldPath, newPath);
+        // Calculate new parent_path: if parent was oldPath, it's now newPath, otherwise update the path segment
+        const newParentPath = child.parent_path === oldPath 
+          ? newPath 
+          : child.parent_path?.replace(oldPath, newPath) || null;
+        
+        await supabase
+          .from("document_folders")
+          .update({ 
+            path: newChildPath,
+            parent_path: newParentPath
+          })
+          .eq("base_id", baseId)
+          .eq("path", child.path);
+      }
+    }
+    
+    return newPath;
   }
 };
 

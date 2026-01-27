@@ -96,6 +96,9 @@ export const PdfEditor = ({
   const [currentPage, setCurrentPage] = useState(1);
   const [pageRendering, setPageRendering] = useState(false);
   
+  // Render coordination state
+  const [renderInProgress, setRenderInProgress] = useState(false);
+  
   // View state
   const [zoomIndex, setZoomIndex] = useState(DEFAULT_ZOOM_INDEX);
   const [rotation, setRotation] = useState(0);
@@ -105,6 +108,20 @@ export const PdfEditor = ({
   const [activeTool, setActiveTool] = useState<Tool>("select");
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
   const [showSignatureCapture, setShowSignatureCapture] = useState(false);
+  const [showContentOutlines, setShowContentOutlines] = useState(true);
+  
+  // Drag and drop state
+  const [draggedBlock, setDraggedBlock] = useState<{
+    id: string;
+    type: 'text' | 'image' | 'annotation';
+    originalX: number;
+    originalY: number;
+    offsetX: number;
+    offsetY: number;
+  } | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [panStart, setPanStart] = useState<{ x: number; y: number } | null>(null);
+  const [viewportOffset, setViewportOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   
   // Drawing state for annotations
   const [isDrawing, setIsDrawing] = useState(false);
@@ -125,13 +142,31 @@ export const PdfEditor = ({
     originalText: string;
   } | null>(null);
   
+  // Content outline state
+  const [contentBlocks, setContentBlocks] = useState<Map<number, Array<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    type: 'text' | 'image' | 'annotation';
+    id: string;
+  }>>>(new Map());
+  
+  // Container refs for panning
+  const viewerContainerRef = useRef<HTMLDivElement>(null);
+  
   // Refs
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const annotationCanvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const thumbnailRefs = useRef<Map<number, HTMLCanvasElement>>(new Map());
   const renderTaskRef = useRef<any>(null);
+  const currentRenderPageRef = useRef<number | null>(null);
   const thumbnailTasksRef = useRef<Map<number, any>>(new Map());
+  
+  // Render queue to prevent concurrent operations
+  const renderQueueRef = useRef<Array<{pageNum: number, resolve: () => void}>>([]);
+  const isProcessingRenderRef = useRef<boolean>(false);
   
   const zoom = ZOOM_LEVELS[zoomIndex];
 
@@ -146,6 +181,11 @@ export const PdfEditor = ({
       }
       renderTaskRef.current = null;
     }
+    
+    // Clear render queue
+    renderQueueRef.current = [];
+    isProcessingRenderRef.current = false;
+    
     thumbnailTasksRef.current.forEach((task) => {
       try {
         task.cancel();
@@ -160,6 +200,9 @@ export const PdfEditor = ({
       setPdfDoc(null);
       setPdfBytes(null);
       setAnnotations([]);
+      // Clear text items as well
+      setTextItems(new Map());
+      setEditingText(null);
       return;
     }
 
@@ -200,31 +243,88 @@ export const PdfEditor = ({
 
     loadPdf();
   }, [isOpen, signedUrl, document]);
+  
+  // Cleanup on unmount
+  useEffect(() => {
+    const taskRef = thumbnailTasksRef.current;
+    return () => {
+      // Cancel any remaining render tasks
+      if (renderTaskRef.current) {
+        try {
+          renderTaskRef.current.cancel();
+        } catch {
+          // Ignore
+        }
+        renderTaskRef.current = null;
+      }
+      taskRef.forEach((task) => {
+        try {
+          task.cancel();
+        } catch {
+          // Ignore
+        }
+      });
+      taskRef.clear();
+      
+      // Clear render queue
+      renderQueueRef.current = [];
+      isProcessingRenderRef.current = false;
+      
+      // Clear current render page tracking
+      currentRenderPageRef.current = null;
+      
+      // Also clean up any ongoing drag operations
+      setIsDragging(false);
+      setDraggedBlock(null);
+      setPanStart(null);
+      setRenderInProgress(false);
+      
+      // Clean up any temporary drag annotations
+      setAnnotations(prev => prev.filter(a => !a.id.startsWith('drag_')));
+      
+      // Reset drag update throttle
+      lastDragUpdateRef.current = 0;
+    };
+  }, []);
 
-  // Render current page
-  const renderPage = useCallback(async (pageNum: number) => {
+  // Actual render implementation
+  const performRender = useCallback(async (pageNum: number) => {
     if (!pdfDoc || !canvasRef.current) return;
     
-    // Cancel any existing render task
-    if (renderTaskRef.current) {
-      try {
-        renderTaskRef.current.cancel();
-      } catch {
-        // Ignore cancellation errors
-      }
-      renderTaskRef.current = null;
+    // Prevent multiple concurrent renders
+    if (renderInProgress) {
+      console.debug("Render already in progress, skipping");
+      return;
     }
     
-    setPageRendering(true);
+    // Check if this page is already being rendered
+    if (currentRenderPageRef.current === pageNum) {
+      console.debug(`Page ${pageNum} is already being rendered, skipping`);
+      return;
+    }
+    
+    setRenderInProgress(true);
+    
+    // Track which page is currently being rendered
+    currentRenderPageRef.current = pageNum;
     
     try {
       const page = await pdfDoc.getPage(pageNum);
       const viewport = page.getViewport({ scale: zoom, rotation });
       
       const canvas = canvasRef.current;
+      if (!canvas) {
+        console.warn("Canvas ref became null during render preparation");
+        return;
+      }
+      
       const context = canvas.getContext("2d");
-      if (!context) return;
+      if (!context) {
+        console.warn("Could not get 2D context from canvas");
+        return;
+      }
 
+      // Set canvas dimensions
       canvas.width = viewport.width;
       canvas.height = viewport.height;
 
@@ -234,20 +334,29 @@ export const PdfEditor = ({
         annotationCanvasRef.current.height = viewport.height;
       }
 
-      // Create render task and store reference
+      // Create render task with explicit cancellation protection
       const renderTask = page.render({
         canvasContext: context,
         viewport,
         canvas,
       });
+      
+      // Store render task reference temporarily
       renderTaskRef.current = renderTask;
       
+      // Wait for render to complete
       await renderTask.promise;
+      
+      // Clear the render task reference after completion
+      if (renderTaskRef.current === renderTask) {
+        renderTaskRef.current = null;
+      }
 
       // Extract text content for editing
       try {
         const textContent = await page.getTextContent();
         const rawItems: TextItem[] = [];
+        const pageContentBlocks: Array<{x: number; y: number; width: number; height: number; type: 'text' | 'image' | 'annotation'; id: string;}> = [];
         
         for (const item of textContent.items) {
           if ('str' in item && item.str.trim()) {
@@ -257,7 +366,7 @@ export const PdfEditor = ({
             const x = tx[4];
             const y = tx[5];
             
-            rawItems.push({
+            const textItem = {
               str: item.str,
               x: x,
               y: viewport.height / zoom - y - fontSize, // Convert to top-down coordinates
@@ -265,6 +374,18 @@ export const PdfEditor = ({
               height: fontSize * 1.2,
               fontSize: fontSize,
               fontName: (item as any).fontName || 'Helvetica',
+            };
+            
+            rawItems.push(textItem);
+            
+            // Add text block to content outlines
+            pageContentBlocks.push({
+              x: textItem.x,
+              y: textItem.y,
+              width: textItem.width,
+              height: textItem.height,
+              type: 'text',
+              id: `text-${pageNum}-${rawItems.length - 1}`
             });
           }
         }
@@ -292,6 +413,23 @@ export const PdfEditor = ({
         }
         
         setTextItems(prev => new Map(prev).set(pageNum, deduplicatedItems));
+        
+        // Add annotation blocks to content outlines
+        const pageAnnotations = annotations.filter(a => a.pageIndex === pageNum - 1);
+        pageAnnotations.forEach(ann => {
+          pageContentBlocks.push({
+            x: ann.x,
+            y: ann.y,
+            width: ann.width,
+            height: ann.height,
+            type: 'annotation',
+            id: ann.id
+          });
+        });
+        
+        // Update content blocks for this page
+        setContentBlocks(prev => new Map(prev).set(pageNum, pageContentBlocks));
+        
       } catch (textErr) {
         console.error("Failed to extract text:", textErr);
       }
@@ -305,15 +443,60 @@ export const PdfEditor = ({
         console.error("Failed to render page:", err);
       }
     } finally {
+      // Clear the current render page tracking
+      if (currentRenderPageRef.current === pageNum) {
+        currentRenderPageRef.current = null;
+      }
       setPageRendering(false);
-      renderTaskRef.current = null;
+      setRenderInProgress(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pdfDoc, zoom, rotation]);
+  }, [pdfDoc, zoom, rotation, annotations]);
+  
+  // Process render queue sequentially
+  const processRenderQueue = useCallback(async () => {
+    if (isProcessingRenderRef.current || renderQueueRef.current.length === 0) {
+      return;
+    }
+    
+    isProcessingRenderRef.current = true;
+    
+    while (renderQueueRef.current.length > 0) {
+      const { pageNum, resolve } = renderQueueRef.current.shift()!;
+      
+      try {
+        await performRender(pageNum);
+      } catch (error) {
+        console.error("Render queue error:", error);
+      } finally {
+        resolve();
+      }
+    }
+    
+    isProcessingRenderRef.current = false;
+  }, [performRender]);
+
+  // Queue-based render function to prevent concurrent operations
+  const queueRender = useCallback((pageNum: number): Promise<void> => {
+    return new Promise((resolve) => {
+      // Add to queue
+      renderQueueRef.current.push({ pageNum, resolve });
+      
+      // Process queue if not already processing
+      if (!isProcessingRenderRef.current) {
+        processRenderQueue();
+      }
+    });
+  }, [processRenderQueue]);
+  
+  // Public render function that uses the queue
+  const renderPage = useCallback(async (pageNum: number) => {
+    await queueRender(pageNum);
+  }, [queueRender]);
 
   // Render annotations overlay
   const renderAnnotations = useCallback((pageNum: number, viewport: any) => {
-    if (!annotationCanvasRef.current) return;
+    if (!annotationCanvasRef.current || !pdfDoc || pageRendering || isDragging || renderInProgress) return;
     
     const canvas = annotationCanvasRef.current;
     const ctx = canvas.getContext("2d");
@@ -338,6 +521,11 @@ export const PdfEditor = ({
         ctx.font = `${14 * zoom}px Arial`;
         ctx.fillStyle = ann.color || "#000000";
         ctx.fillText(ann.content, scaledX, scaledY + 14 * zoom);
+      } else if (ann.type === "textEdit" && ann.content) {
+        // For text edits, draw them on the canvas as well
+        ctx.font = `${ann.fontSize || 12 * zoom}px Arial`;
+        ctx.fillStyle = ann.color || "#000000";
+        ctx.fillText(ann.content, scaledX, scaledY + (ann.fontSize || 12) * zoom);
       } else if (ann.type === "signature" && ann.imageData) {
         const img = new Image();
         img.onload = () => {
@@ -357,37 +545,155 @@ export const PdfEditor = ({
         currentHighlight.height * zoom
       );
     }
-  }, [annotations, zoom, currentHighlight, activeTool]);
+  }, [annotations, zoom, currentHighlight, activeTool, pdfDoc, pageRendering, isDragging, renderInProgress]);
 
-  // Re-render when page changes
+  // Re-render when page/zoom/rotation changes
   useEffect(() => {
-    if (pdfDoc && currentPage) {
+    if (pdfDoc && currentPage && !pageRendering && !isDragging && !renderInProgress) {
       renderPage(currentPage);
     }
-  }, [pdfDoc, currentPage, renderPage]);
-
-  // Re-render annotations when they change
-  useEffect(() => {
-    if (pdfDoc && canvasRef.current) {
-      const canvas = canvasRef.current;
-      renderAnnotations(currentPage, { width: canvas.width, height: canvas.height });
+  }, [pdfDoc, currentPage, zoom, rotation, renderPage, pageRendering, isDragging, renderInProgress]);
+  
+  // Memoize content blocks calculation to prevent unnecessary updates
+  const calculateContentBlocks = useCallback(() => {
+    if (!pdfDoc || pageRendering || isDragging || renderInProgress) return;
+    
+    const newContentBlocks = new Map<number, Array<{x: number; y: number; width: number; height: number; type: 'text' | 'image' | 'annotation'; id: string;}>>();
+    
+    // For each page, collect content blocks
+    for (let pageNum = 1; pageNum <= numPages; pageNum++) {
+      const pageContentBlocks: Array<{x: number; y: number; width: number; height: number; type: 'text' | 'image' | 'annotation'; id: string;}> = [];
+      
+      // Add text items
+      const pageTextItems = textItems.get(pageNum) || [];
+      pageTextItems.forEach((item, idx) => {
+        pageContentBlocks.push({
+          x: item.x,
+          y: item.y,
+          width: item.width,
+          height: item.height,
+          type: 'text',
+          id: `text-${pageNum}-${idx}`
+        });
+      });
+      
+      // Add annotations
+      const pageAnnotations = annotations.filter(a => a.pageIndex === pageNum - 1);
+      pageAnnotations.forEach(ann => {
+        pageContentBlocks.push({
+          x: ann.x,
+          y: ann.y,
+          width: ann.width,
+          height: ann.height,
+          type: 'annotation',
+          id: ann.id
+        });
+      });
+      
+      newContentBlocks.set(pageNum, pageContentBlocks);
     }
-  }, [annotations, currentPage, renderAnnotations, pdfDoc]);
+    
+    return newContentBlocks;
+  }, [annotations, textItems, numPages, pdfDoc, pageRendering, isDragging, renderInProgress]);
+
+  // Re-render annotations when they change (only if PDF is already rendered)
+  // Prevent re-render spam by adding drag state and render coordination guards
+  useEffect(() => {
+    if (pdfDoc && canvasRef.current && annotationCanvasRef.current && !pageRendering && !isDragging && !renderInProgress) {
+      const canvas = canvasRef.current;
+      const viewport = { width: canvas.width, height: canvas.height };
+      renderAnnotations(currentPage, viewport);
+    }
+  }, [annotations, currentPage, renderAnnotations, pdfDoc, pageRendering, isDragging, renderInProgress]);
+  
+  // Update content blocks when annotations/textItems change
+  // Only update when NOT dragging to prevent re-render spam
+  useEffect(() => {
+    if (!pdfDoc || pageRendering || isDragging || renderInProgress) return;  // Don't update while page is rendering, dragging, or render in progress
+    
+    const newContentBlocks = calculateContentBlocks();
+    if (!newContentBlocks) return;
+    
+    // Only update if content blocks actually changed
+    let contentChanged = false;
+    if (contentBlocks.size !== newContentBlocks.size) {
+      contentChanged = true;
+    } else {
+      for (const [pageNum, blocks] of newContentBlocks) {
+        const existingBlocks = contentBlocks.get(pageNum);
+        if (!existingBlocks || existingBlocks.length !== blocks.length) {
+          contentChanged = true;
+          break;
+        }
+        
+        for (let i = 0; i < blocks.length; i++) {
+          const newBlock = blocks[i];
+          const existingBlock = existingBlocks[i];
+          if (
+            newBlock.x !== existingBlock.x ||
+            newBlock.y !== existingBlock.y ||
+            newBlock.width !== existingBlock.width ||
+            newBlock.height !== existingBlock.height ||
+            newBlock.type !== existingBlock.type ||
+            newBlock.id !== existingBlock.id
+          ) {
+            contentChanged = true;
+            break;
+          }
+        }
+        if (contentChanged) break;
+      }
+    }
+    
+    if (contentChanged) {
+      setContentBlocks(newContentBlocks);
+    }
+  }, [calculateContentBlocks, contentBlocks, pdfDoc, pageRendering, isDragging, renderInProgress]);
+  
+  // Special content blocks update during drag operations
+  // Updates only the specific dragged block to prevent ghost outlines
+  useEffect(() => {
+    if (!pdfDoc || pageRendering || !isDragging || !draggedBlock || renderInProgress) return;
+    
+    // During drag, update only the specific dragged content block
+    const newContentBlocks = new Map(contentBlocks);
+    const currentPageBlocks = newContentBlocks.get(currentPage) || [];
+    
+    // Find the dragged block in content blocks
+    const blockIndex = currentPageBlocks.findIndex(block => block.id === draggedBlock.id);
+    if (blockIndex !== -1) {
+      // Get the current annotation position for the dragged block
+      const currentAnnotation = annotations.find(a => a.id === draggedBlock.id);
+      if (currentAnnotation) {
+        // Update the content block with current annotation position
+        const updatedBlock = {
+          ...currentPageBlocks[blockIndex],
+          x: currentAnnotation.x,
+          y: currentAnnotation.y
+        };
+        
+        // Create new array with updated block
+        const updatedPageBlocks = [...currentPageBlocks];
+        updatedPageBlocks[blockIndex] = updatedBlock;
+        newContentBlocks.set(currentPage, updatedPageBlocks);
+        
+        setContentBlocks(newContentBlocks);
+      }
+    }
+  }, [annotations, draggedBlock, currentPage, contentBlocks, pdfDoc, pageRendering, isDragging, renderInProgress]);
+  
+  // Update editing text position when zoom changes
+  useEffect(() => {
+    if (editingText && zoom) {
+      // When zoom changes, we need to potentially update the editor position
+      // but we shouldn't interrupt active editing
+      // Just make sure the editor stays visible
+    }
+  }, [zoom, editingText]);
 
   // Render thumbnails
   const renderThumbnail = useCallback(async (pageNum: number, canvas: HTMLCanvasElement) => {
     if (!pdfDoc) return;
-    
-    // Cancel any existing thumbnail render for this page
-    const existingTask = thumbnailTasksRef.current.get(pageNum);
-    if (existingTask) {
-      try {
-        existingTask.cancel();
-      } catch {
-        // Ignore cancellation errors
-      }
-      thumbnailTasksRef.current.delete(pageNum);
-    }
     
     try {
       const page = await pdfDoc.getPage(pageNum);
@@ -404,11 +710,18 @@ export const PdfEditor = ({
         viewport,
         canvas,
       });
+      
+      // Store the task temporarily
       thumbnailTasksRef.current.set(pageNum, renderTask);
       
       await renderTask.promise;
+      
+      // Remove the task after completion
       thumbnailTasksRef.current.delete(pageNum);
     } catch (err: any) {
+      // Remove the task if there's an error
+      thumbnailTasksRef.current.delete(pageNum);
+      
       // Ignore cancellation errors
       if (err?.name !== "RenderingCancelledException") {
         console.error("Failed to render thumbnail:", err);
@@ -434,67 +747,215 @@ export const PdfEditor = ({
   // Rotation handler
   const rotate = () => setRotation(r => (r + 90) % 360);
 
-  // Mouse handlers for annotations
+  // Mouse handlers for annotations and interactions
   const handleCanvasMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (activeTool !== "highlight") return;
-    
     const canvas = annotationCanvasRef.current;
-    if (!canvas) return;
+    if (!canvas || pageRendering || renderInProgress) return; // Don't process if page is rendering or render in progress
     
     const rect = canvas.getBoundingClientRect();
     const x = (e.clientX - rect.left) / zoom;
     const y = (e.clientY - rect.top) / zoom;
     
-    setIsDrawing(true);
-    setDrawStart({ x, y });
-    setCurrentHighlight({ x, y, width: 0, height: 0 });
+    if (activeTool === "highlight") {
+      setIsDrawing(true);
+      setDrawStart({ x, y });
+      setCurrentHighlight({ x, y, width: 0, height: 0 });
+    } else if (activeTool === "pan") {
+      // Start panning
+      setIsDragging(true);
+      setPanStart({ x: e.clientX, y: e.clientY });
+      e.preventDefault();
+    } else if (activeTool === "select") {
+      // Check if clicking on a content block for dragging
+      const currentPageBlocks = contentBlocks.get(currentPage) || [];
+      
+      for (const block of currentPageBlocks) {
+        if (x >= block.x && x <= block.x + block.width &&
+            y >= block.y && y <= block.y + block.height) {
+          
+          // Allow dragging both annotation and text blocks
+          const offsetX = x - block.x;
+          const offsetY = y - block.y;
+          
+          setDraggedBlock({
+            id: block.id,
+            type: block.type,
+            originalX: block.x,
+            originalY: block.y,
+            offsetX,
+            offsetY
+          });
+          setIsDragging(true);
+          e.preventDefault();
+          break;
+        }
+      }
+    }
   };
 
+  // Ref to store last drag update timestamp to prevent excessive updates
+  const lastDragUpdateRef = useRef<number>(0);
+  
   const handleCanvasMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!isDrawing || activeTool !== "highlight" || !drawStart) return;
-    
     const canvas = annotationCanvasRef.current;
-    if (!canvas) return;
+    if (!canvas || pageRendering || renderInProgress) return; // Don't process if page is rendering or render in progress
     
     const rect = canvas.getBoundingClientRect();
-    const x = (e.clientX - rect.left) / zoom;
-    const y = (e.clientY - rect.top) / zoom;
     
-    setCurrentHighlight({
-      x: Math.min(drawStart.x, x),
-      y: Math.min(drawStart.y, y),
-      width: Math.abs(x - drawStart.x),
-      height: Math.abs(y - drawStart.y),
-    });
+    if (isDrawing && activeTool === "highlight" && drawStart) {
+      const x = (e.clientX - rect.left) / zoom;
+      const y = (e.clientY - rect.top) / zoom;
+      
+      setCurrentHighlight({
+        x: Math.min(drawStart.x, x),
+        y: Math.min(drawStart.y, y),
+        width: Math.abs(x - drawStart.x),
+        height: Math.abs(y - drawStart.y),
+      });
+    } else if (isDragging && activeTool === "pan" && panStart && viewerContainerRef.current) {
+      // Handle panning
+      const deltaX = (e.clientX - panStart.x) / zoom;
+      const deltaY = (e.clientY - panStart.y) / zoom;
+      
+      setViewportOffset(prev => ({
+        x: prev.x + deltaX,
+        y: prev.y + deltaY
+      }));
+      
+      setPanStart({ x: e.clientX, y: e.clientY });
+      e.preventDefault();
+    } else if (isDragging && draggedBlock && activeTool === "select") {
+      // Throttle drag updates to prevent excessive state changes
+      const now = Date.now();
+      if (now - lastDragUpdateRef.current < 16) { // ~60fps max
+        return;
+      }
+      lastDragUpdateRef.current = now;
+      
+      // Handle content block dragging
+      const x = (e.clientX - rect.left) / zoom - draggedBlock.offsetX;
+      const y = (e.clientY - rect.top) / zoom - draggedBlock.offsetY;
+      
+      if (draggedBlock.type === 'annotation') {
+        // Update annotation position - batch update to prevent re-renders
+        setAnnotations(prev => {
+          const updated = [...prev];
+          const index = updated.findIndex(ann => ann.id === draggedBlock.id);
+          if (index !== -1) {
+            updated[index] = { ...updated[index], x, y };
+          }
+          return updated;
+        });
+      } else if (draggedBlock.type === 'text') {
+        // For text items, create or update a textEdit annotation to reposition the text
+        // Find the text item based on the block ID
+        const textItemMatch = draggedBlock.id.match(/text-(\d+)-(\d+)/);
+        if (textItemMatch) {
+          const pageIdx = parseInt(textItemMatch[1], 10);
+          const itemIdx = parseInt(textItemMatch[2], 10);
+          const textItemsOnPage = textItems.get(pageIdx) || [];
+          const textItem = textItemsOnPage[itemIdx];
+          
+          if (textItem) {
+            // Create or update a textEdit annotation to reposition the text
+            // First, check if we already have a textEdit annotation for this drag operation
+            const dragAnnotationId = `drag_${draggedBlock.id}`;
+            
+            const newAnnotation: Annotation = {
+              id: dragAnnotationId, // Use a consistent ID for this drag operation
+              type: 'textEdit',
+              pageIndex: currentPage - 1,
+              x,
+              y,
+              width: textItem.width,
+              height: textItem.height,
+              content: textItem.str,
+              originalText: textItem.str,
+              fontSize: textItem.fontSize,
+              color: '#000000'
+            };
+            
+            // Batch update to prevent re-renders
+            setAnnotations(prev => {
+              const index = prev.findIndex(a => a.id === dragAnnotationId);
+              if (index !== -1) {
+                // Update existing annotation
+                const updated = [...prev];
+                updated[index] = newAnnotation;
+                return updated;
+              } else {
+                // Add new annotation
+                return [...prev, newAnnotation];
+              }
+            });
+          }
+        }
+      } else if (draggedBlock.type === 'image') {
+        // For future image dragging functionality
+        // Currently not implemented, but placeholder for consistency
+      }
+      
+      e.preventDefault();
+    }
   };
 
   const handleCanvasMouseUp = () => {
-    if (!isDrawing || activeTool !== "highlight" || !currentHighlight) {
-      setIsDrawing(false);
-      return;
+    if (isDrawing && activeTool === "highlight" && currentHighlight) {
+      // Only add if it's a meaningful size
+      if (currentHighlight.width > 5 && currentHighlight.height > 5) {
+        const newAnnotation: Annotation = {
+          id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+          type: "highlight",
+          pageIndex: currentPage - 1,
+          x: currentHighlight.x,
+          y: currentHighlight.y,
+          width: currentHighlight.width,
+          height: currentHighlight.height,
+          color: "rgba(255, 255, 0, 0.3)",
+        };
+        setAnnotations(prev => [...prev, newAnnotation]);
+      }
     }
     
-    // Only add if it's a meaningful size
-    if (currentHighlight.width > 5 && currentHighlight.height > 5) {
-      const newAnnotation: Annotation = {
-        id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-        type: "highlight",
-        pageIndex: currentPage - 1,
-        x: currentHighlight.x,
-        y: currentHighlight.y,
-        width: currentHighlight.width,
-        height: currentHighlight.height,
-        color: "rgba(255, 255, 0, 0.3)",
-      };
-      setAnnotations(prev => [...prev, newAnnotation]);
+    // Finalize text dragging if applicable
+    if (isDragging && draggedBlock && draggedBlock.type === 'text') {
+      // Convert the temporary drag annotation to a permanent one
+      const dragAnnotationId = `drag_${draggedBlock.id}`;
+      const tempAnnotation = annotations.find(a => a.id === dragAnnotationId);
+      
+      if (tempAnnotation) {
+        // Create a permanent annotation with a unique ID
+        const permanentAnnotation: Annotation = {
+          ...tempAnnotation,
+          id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, // New unique ID
+        };
+        
+        // Remove the temporary annotation and add the permanent one
+        setAnnotations(prev => {
+          const filtered = prev.filter(a => a.id !== dragAnnotationId);
+          return [...filtered, permanentAnnotation];
+        });
+      }
     }
     
+    // Reset all drag/drawing states
     setIsDrawing(false);
+    setIsDragging(false);
+    setDraggedBlock(null);
     setDrawStart(null);
     setCurrentHighlight(null);
+    setPanStart(null);
+    
+    // Reset drag update throttle
+    lastDragUpdateRef.current = 0;
   };
 
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (pageRendering || renderInProgress) return; // Don't process if page is rendering or render in progress
+    
+    // Reset drag update throttle on click
+    lastDragUpdateRef.current = 0;
+    
     if (activeTool === "text") {
       const canvas = annotationCanvasRef.current;
       if (!canvas) return;
@@ -518,6 +979,49 @@ export const PdfEditor = ({
         };
         setAnnotations(prev => [...prev, newAnnotation]);
       }
+    } else if (activeTool === "edit") {
+      // Handle text editing in edit mode
+      const canvas = annotationCanvasRef.current;
+      if (!canvas) return;
+      
+      const rect = canvas.getBoundingClientRect();
+      const x = (e.clientX - rect.left) / zoom;
+      const y = (e.clientY - rect.top) / zoom;
+      
+      // Check if click is on existing text that can be edited
+      const currentPageTextItems = textItems.get(currentPage) || [];
+      
+      for (let i = 0; i < currentPageTextItems.length; i++) {
+        const item = currentPageTextItems[i];
+        // Check if click is within the bounds of the text item
+        // Use a slightly larger hit area for better UX
+        const hitMargin = 5; // pixels
+        if (x >= item.x - hitMargin && x <= item.x + item.width + hitMargin && 
+            y >= item.y - hitMargin && y <= item.y + item.height + hitMargin) {
+          
+          // Check if this text has already been edited
+          const existingTextEdit = annotations.find(
+            a => a.type === "textEdit" && 
+                 a.pageIndex === currentPage - 1 && 
+                 a.originalText === item.str &&
+                 Math.abs(a.x - item.x) < 5 &&
+                 Math.abs(a.y - item.y) < 5
+          );
+          
+          setEditingText({
+            pageIndex: currentPage - 1,
+            itemIndex: i,
+            text: existingTextEdit?.content || item.str,
+            x: item.x,
+            y: item.y,
+            width: item.width,
+            height: item.height,
+            fontSize: item.fontSize,
+            originalText: item.str,
+          });
+          return; // Exit early to prevent other actions
+        }
+      }
     } else if (activeTool === "signature") {
       setShowSignatureCapture(true);
     }
@@ -526,7 +1030,11 @@ export const PdfEditor = ({
   // Signature handler
   const handleSignatureSave = (imageData: string) => {
     const canvas = annotationCanvasRef.current;
-    if (!canvas) return;
+    if (!canvas) {
+      setShowSignatureCapture(false);
+      setActiveTool("select");
+      return;
+    }
     
     // Place signature at center of visible area
     const x = (canvas.width / zoom) / 2 - 100;
@@ -741,14 +1249,14 @@ export const PdfEditor = ({
               <button
                 onClick={() => setActiveTool("select")}
                 className={`p-1.5 rounded ${activeTool === "select" ? "bg-blue-600" : "hover:bg-gray-600"}`}
-                title="Select"
+                title="Select & Move - Drag both text and annotation blocks to reposition them"
               >
                 <MousePointer className="w-4 h-4 text-white" />
               </button>
               <button
                 onClick={() => setActiveTool("pan")}
                 className={`p-1.5 rounded ${activeTool === "pan" ? "bg-blue-600" : "hover:bg-gray-600"}`}
-                title="Pan"
+                title="Pan - Click and drag to move the entire document view"
               >
                 <Hand className="w-4 h-4 text-white" />
               </button>
@@ -784,6 +1292,18 @@ export const PdfEditor = ({
 
             <div className="w-px h-6 bg-gray-600" />
 
+            <button
+              onClick={() => setShowContentOutlines(!showContentOutlines)}
+              className={`p-2 rounded-lg ${showContentOutlines ? "bg-blue-600" : "hover:bg-gray-700"}`}
+              title={showContentOutlines ? "Hide Content Outlines" : "Show Content Outlines"}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                <line x1="3" y1="9" x2="21" y2="9"/>
+                <line x1="9" y1="21" x2="9" y2="9"/>
+              </svg>
+            </button>
+            
             <button
               onClick={() => setIsFullscreen(!isFullscreen)}
               className="p-2 hover:bg-gray-700 rounded-lg"
@@ -855,8 +1375,12 @@ export const PdfEditor = ({
 
           {/* PDF Viewer */}
           <div
-            ref={containerRef}
+            ref={viewerContainerRef}
             className="flex-1 overflow-auto bg-gray-600 flex items-start justify-center p-8"
+            style={{
+              cursor: activeTool === "pan" ? "grab" : "default",
+              transform: `translate(${viewportOffset.x * zoom}px, ${viewportOffset.y * zoom}px)`
+            }}
           >
             {loading ? (
               <div className="flex items-center justify-center h-full">
@@ -872,7 +1396,7 @@ export const PdfEditor = ({
                 <canvas
                   ref={canvasRef}
                   className="bg-white"
-                  style={{ display: "block" }}
+                  style={{ display: "block", zIndex: 1 }}
                 />
                 
                 {/* Annotation Overlay Canvas */}
@@ -880,22 +1404,68 @@ export const PdfEditor = ({
                   ref={annotationCanvasRef}
                   className="absolute top-0 left-0"
                   style={{
-                    cursor: activeTool === "highlight" ? "crosshair" :
+                    cursor: isDragging ? "grabbing" :
+                            activeTool === "highlight" ? "crosshair" :
                             activeTool === "text" ? "text" :
                             activeTool === "signature" ? "pointer" :
                             activeTool === "edit" ? "text" :
-                            activeTool === "pan" ? "grab" : "default"
+                            activeTool === "pan" ? "grab" : "default",
+                    zIndex: 10,
+                    pointerEvents: 'auto'
                   }}
                   onMouseDown={handleCanvasMouseDown}
                   onMouseMove={handleCanvasMouseMove}
                   onMouseUp={handleCanvasMouseUp}
-                  onMouseLeave={handleCanvasMouseUp}
+                  onMouseLeave={() => {
+                    setIsDrawing(false);
+                    setIsDragging(false);
+                    setDraggedBlock(null);
+                    setDrawStart(null);
+                    setCurrentHighlight(null);
+                    setPanStart(null);
+                                       
+                    // Reset drag update throttle
+                    lastDragUpdateRef.current = 0;
+                                       
+                    // Clean up any temporary drag annotations
+                    setAnnotations(prev => prev.filter(a => !a.id.startsWith('drag_')));
+                  }}
                   onClick={handleCanvasClick}
                 />
 
+                {/* Content Outlines Layer */}
+                {showContentOutlines && contentBlocks.get(currentPage) && (
+                  <div className="absolute top-0 left-0 w-full h-full" style={{ zIndex: 4 }}>
+                    {contentBlocks.get(currentPage)!.map((block, idx) => (
+                      <div
+                        key={`${block.id}-${idx}`}
+                        className={`absolute border border-dashed transition-all duration-150 ${
+                          activeTool === 'select' 
+                            ? 'hover:border-solid hover:cursor-move hover:shadow-md hover:scale-[1.02]' 
+                            : ''
+                        } ${isDragging && draggedBlock?.id === block.id ? 'opacity-100 border-solid shadow-lg' : ''}`}
+                        style={{
+                          left: block.x * zoom,
+                          top: block.y * zoom,
+                          width: block.width * zoom,
+                          height: block.height * zoom,
+                          borderColor: block.type === 'text' ? '#4ade80' : 
+                                     block.type === 'annotation' ? '#60a5fa' : '#f87171',
+                          borderWidth: '1px',
+                          opacity: isDragging && draggedBlock?.id === block.id ? 1 : 0.7,
+                          pointerEvents: activeTool === 'select' ? 'auto' : 'none',
+                          transform: isDragging && draggedBlock?.id === block.id ? 'scale(1.05)' : 'none',
+                          transition: 'all 0.1s ease-out',
+                        }}
+                        title={`${block.type.charAt(0).toUpperCase() + block.type.slice(1)} block${activeTool === 'select' ? ' - Click and drag to move' : ''}`}
+                      />
+                    ))}
+                  </div>
+                )}
+                
                 {/* Text Layer - Shows editable text overlay */}
                 {textItems.get(currentPage) && (
-                  <div className="absolute top-0 left-0 w-full h-full pointer-events-none">
+                  <div className="absolute top-0 left-0 w-full h-full pointer-events-none" style={{ zIndex: 5 }}>
                     {textItems.get(currentPage)!.map((item, idx) => {
                       // Check if this text has been edited (cached)
                       const editedAnnotation = annotations.find(
@@ -1005,7 +1575,7 @@ export const PdfEditor = ({
                     style={{
                       left: editingText.x * zoom - 2,
                       top: editingText.y * zoom - 2,
-                      zIndex: 100,
+                      zIndex: 1000,
                     }}
                   >
                     <input
@@ -1108,9 +1678,13 @@ export const PdfEditor = ({
             )}
           </div>
           <div className="flex items-center gap-4 text-gray-400">
-            <span>Tool: {activeTool}</span>
+            <span>Tool: {activeTool === "select" ? "Select & Move" : activeTool === "pan" ? "Pan View" : activeTool.charAt(0).toUpperCase() + activeTool.slice(1)}</span>
             <span>Zoom: {Math.round(zoom * 100)}%</span>
+            <span>Outlines: {showContentOutlines ? 'ON' : 'OFF'}</span>
+            {activeTool === "select" && <span className="text-blue-400">Click and drag green (text) or blue (annotation) outlined blocks to move them</span>}
+            {activeTool === "pan" && <span className="text-blue-400">Click and drag anywhere to pan the document view</span>}
             {activeTool === "edit" && <span className="text-blue-400">Click on text to edit • Enter to confirm • Esc to cancel</span>}
+            {activeTool === "highlight" && <span className="text-blue-400">Click and drag to create highlight annotations</span>}
           </div>
         </div>
       </div>

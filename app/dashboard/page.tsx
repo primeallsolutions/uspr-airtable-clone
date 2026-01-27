@@ -398,13 +398,14 @@ function DashboardContent() {
         case 'starred': switchToStarredView(); break;
         case 'shared': switchToSharedView(); break;
         case 'templates': switchToTemplatesView(); break;
+        case 'marketing': switchToMarketingView(); break;
         case 'account': switchToAccountView(); break;
       }
       initializeDashboard();
       return;
     }
     initializeDashboard(workspaceIdFromQuery);
-  }, [initializeDashboard, viewFromQuery, workspaceIdFromQuery, switchToHomeView, switchToStarredView, switchToSharedView, switchToTemplatesView, switchToAccountView]);
+  }, [initializeDashboard, viewFromQuery, workspaceIdFromQuery, switchToHomeView, switchToStarredView, switchToSharedView, switchToTemplatesView, switchToMarketingView, switchToAccountView]);
 
   if (authLoading) {
     return (

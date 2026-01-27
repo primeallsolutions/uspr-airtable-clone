@@ -84,7 +84,7 @@ export const TopNavigation = ({
   if (showFormsTab) {
     tabs.push({ id: 'forms', label: 'Forms' });
   }
-  tabs.push({ id: 'documents', label: 'Documents' });
+  // Removed 'documents' tab - documents are now accessed per-record in RecordDetailsModal
 
   return (
     <div className="border-b border-gray-200 bg-white">

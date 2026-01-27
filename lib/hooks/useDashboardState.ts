@@ -105,6 +105,15 @@ export const useDashboardState = () => {
 
   const switchToMarketingView = useCallback(() => {
     setActiveView('marketing');
+
+    // Update URL with current view
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      params.delete('workspaceId');
+      params.delete('tab');
+      params.set('view', 'marketing');
+      window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
+    }
   }, []);
 
   const openCreateModal = useCallback(() => {
