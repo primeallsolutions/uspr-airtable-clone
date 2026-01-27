@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import type { ActiveView, WorkspaceRecord, CreateBaseFormData } from "@/lib/types/dashboard";
 import type { Template } from "@/lib/types/templates";
-import { TemplateService } from "@/lib/services/template-service";
+import { TemplateService } from "@/lib/services/dashboard-template-service";
 import { Building2, Kanban, Package, Calendar, FileText, Sparkles } from "lucide-react";
 
 interface CreateBaseModalProps {
