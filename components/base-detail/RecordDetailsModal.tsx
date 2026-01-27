@@ -320,7 +320,7 @@ export const RecordDetailsModal = ({
       setEditingFieldId(null);
       setEditValue("");
     }
-  }, [isOpen, record?.id, record?.values]); // React to record changes
+  }, [isOpen, record, record?.id, record?.values]); // React to record changes
 
   // Load document count whenever record changes
   useEffect(() => {

@@ -635,7 +635,7 @@ export const TemplateFieldEditor = ({
         setFieldBounds(newBounds);
       });
     }
-  }, [draggingField, resizingField, dragStart, fields, pdfDoc, currentPage, snapToGrid, snapToGridValue, gridSize, fieldBounds, initialDragBounds]);
+  }, [draggingField, resizingField, dragStart, fields, pdfDoc, snapToGrid, snapToGridValue, fieldBounds, initialDragBounds]);
 
   const handleMouseUp = useCallback(async () => {
     // Cancel any pending animation frame

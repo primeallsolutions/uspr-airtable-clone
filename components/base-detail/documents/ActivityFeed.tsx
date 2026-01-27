@@ -141,7 +141,7 @@ export const ActivityFeed = ({ baseId, tableId, recordId, className = "" }: Acti
         unsubscribeRef.current();
       }
     };
-  }, [baseId, tableId, loadActivities]);
+  }, [baseId, tableId, recordId, loadActivities]);
 
   // Render activity icon
   const renderIcon = (action: DocumentActivityAction) => {

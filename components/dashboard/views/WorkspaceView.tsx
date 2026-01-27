@@ -81,7 +81,7 @@ export const WorkspaceView = ({
     if (activeTab === 'analytics' && !(currentWorkspace.accessRole === 'owner' || currentWorkspace.accessRole === 'admin')) {
       setActiveTab('bases');
     }
-  }, [currentWorkspace]);
+  }, [currentWorkspace, activeTab]);
 
   if (loading && !initialLoad) {
     return (

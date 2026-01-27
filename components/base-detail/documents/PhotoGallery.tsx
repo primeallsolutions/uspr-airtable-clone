@@ -119,15 +119,15 @@ export const PhotoGallery = ({
   const selectedPhoto = selectedIndex !== null ? photos[selectedIndex] : null;
   const selectedUrl = selectedPhoto ? signedUrls.get(selectedPhoto.path) : null;
 
-  const goToPrevious = () => {
+  const goToPrevious = useCallback(() => {
     if (selectedIndex === null) return;
     setSelectedIndex((prev) => (prev !== null && prev > 0 ? prev - 1 : photos.length - 1));
-  };
+  }, [selectedIndex, photos.length]);
 
-  const goToNext = () => {
+  const goToNext = useCallback(() => {
     if (selectedIndex === null) return;
     setSelectedIndex((prev) => (prev !== null && prev < photos.length - 1 ? prev + 1 : 0));
-  };
+  }, [selectedIndex, photos.length]);
 
   const closeLightbox = () => {
     setSelectedIndex(null);
@@ -141,7 +141,7 @@ export const PhotoGallery = ({
       if (e.key === "ArrowRight") goToNext();
       if (e.key === "Escape") closeLightbox();
     },
-    [selectedIndex]
+    [selectedIndex, goToPrevious, goToNext]
   );
 
   // Handle file input

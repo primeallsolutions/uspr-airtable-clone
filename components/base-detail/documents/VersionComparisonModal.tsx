@@ -190,14 +190,14 @@ export const VersionComparisonModal = ({
     if (leftPdfRef.current && leftCanvasRef.current) {
       renderPage(leftPdfRef.current, leftCanvasRef.current, leftPage, leftRenderTaskRef);
     }
-  }, [leftPdfRef.current, leftPage, renderPage]);
+  }, [leftPage, renderPage]);
 
   // Render right page
   useEffect(() => {
     if (rightPdfRef.current && rightCanvasRef.current) {
       renderPage(rightPdfRef.current, rightCanvasRef.current, rightPage, rightRenderTaskRef);
     }
-  }, [rightPdfRef.current, rightPage, renderPage]);
+  }, [rightPage, renderPage]);
 
   // Sync page navigation
   const handlePageChange = (side: "left" | "right", newPage: number) => {

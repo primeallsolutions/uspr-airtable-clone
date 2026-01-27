@@ -246,6 +246,7 @@ export const PdfEditor = ({
   
   // Cleanup on unmount
   useEffect(() => {
+    const taskRef = thumbnailTasksRef.current;
     return () => {
       // Cancel any remaining render tasks
       if (renderTaskRef.current) {
@@ -256,14 +257,14 @@ export const PdfEditor = ({
         }
         renderTaskRef.current = null;
       }
-      thumbnailTasksRef.current.forEach((task) => {
+      taskRef.forEach((task) => {
         try {
           task.cancel();
         } catch {
           // Ignore
         }
       });
-      thumbnailTasksRef.current.clear();
+      taskRef.clear();
       
       // Clear render queue
       renderQueueRef.current = [];
@@ -286,42 +287,6 @@ export const PdfEditor = ({
     };
   }, []);
 
-  // Queue-based render function to prevent concurrent operations
-  const queueRender = useCallback((pageNum: number): Promise<void> => {
-    return new Promise((resolve) => {
-      // Add to queue
-      renderQueueRef.current.push({ pageNum, resolve });
-      
-      // Process queue if not already processing
-      if (!isProcessingRenderRef.current) {
-        processRenderQueue();
-      }
-    });
-  }, []);
-  
-  // Process render queue sequentially
-  const processRenderQueue = useCallback(async () => {
-    if (isProcessingRenderRef.current || renderQueueRef.current.length === 0) {
-      return;
-    }
-    
-    isProcessingRenderRef.current = true;
-    
-    while (renderQueueRef.current.length > 0) {
-      const { pageNum, resolve } = renderQueueRef.current.shift()!;
-      
-      try {
-        await performRender(pageNum);
-      } catch (error) {
-        console.error("Render queue error:", error);
-      } finally {
-        resolve();
-      }
-    }
-    
-    isProcessingRenderRef.current = false;
-  }, []);
-  
   // Actual render implementation
   const performRender = useCallback(async (pageNum: number) => {
     if (!pdfDoc || !canvasRef.current) return;
@@ -487,6 +452,42 @@ export const PdfEditor = ({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pdfDoc, zoom, rotation, annotations]);
+  
+  // Process render queue sequentially
+  const processRenderQueue = useCallback(async () => {
+    if (isProcessingRenderRef.current || renderQueueRef.current.length === 0) {
+      return;
+    }
+    
+    isProcessingRenderRef.current = true;
+    
+    while (renderQueueRef.current.length > 0) {
+      const { pageNum, resolve } = renderQueueRef.current.shift()!;
+      
+      try {
+        await performRender(pageNum);
+      } catch (error) {
+        console.error("Render queue error:", error);
+      } finally {
+        resolve();
+      }
+    }
+    
+    isProcessingRenderRef.current = false;
+  }, [performRender]);
+
+  // Queue-based render function to prevent concurrent operations
+  const queueRender = useCallback((pageNum: number): Promise<void> => {
+    return new Promise((resolve) => {
+      // Add to queue
+      renderQueueRef.current.push({ pageNum, resolve });
+      
+      // Process queue if not already processing
+      if (!isProcessingRenderRef.current) {
+        processRenderQueue();
+      }
+    });
+  }, [processRenderQueue]);
   
   // Public render function that uses the queue
   const renderPage = useCallback(async (pageNum: number) => {

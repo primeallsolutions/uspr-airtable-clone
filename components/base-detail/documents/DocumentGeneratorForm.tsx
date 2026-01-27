@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { X, FileDown, Loader2, Type, Hash, Calendar, CheckSquare, PenTool, Image, Save, Eye, ZoomIn, ZoomOut, FileImage, MousePointer } from "lucide-react";
+import { X, FileDown, Loader2, Type, Hash, Calendar, CheckSquare, PenTool, Save, Eye, ZoomIn, ZoomOut, FileImage, MousePointer } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import type { DocumentTemplate, TemplateField } from "@/lib/services/template-service";
 import { DocumentsService } from "@/lib/services/documents-service";
@@ -1352,7 +1352,7 @@ export const DocumentGeneratorForm = ({
                           <div className="flex-1 flex items-center gap-2">
                             {fieldValues[field.field_key] ? (
                               <div className="flex-1 flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg bg-gray-50">
-                                <Image className="w-4 h-4 text-green-600" />
+                                <FileImage className="w-4 h-4 text-green-600" />
                                 <span className="text-sm text-gray-600">Signature captured</span>
                                 <button
                                   onClick={() => handleFieldChange(field.field_key, "")}

@@ -100,7 +100,7 @@ export default function RecordDocumentsPage() {
     };
 
     loadData();
-  }, [baseId, recordId, tableId]);
+  }, [baseId, record, recordId, selectedTitleFieldId, tableId]);
 
   // Get record name based on selected field (defaults to 1st column)
   const recordName = useMemo(() => {
