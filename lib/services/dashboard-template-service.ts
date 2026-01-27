@@ -443,19 +443,73 @@ export const TemplateService = {
   },
 
   /**
-   * Create a template from a base
+   * Create a template (in `templates` table) from a base
    * This exports the base structure and saves it as a reusable template
    */
-static getTemplateStats(template: Template): {
-  tableCount: number;
-  fieldCount: number;
-  recordCount: number;
-} {
-  const templateData = template.template_data;
+  async createTemplateFromBase(
+    baseId: string,
+    data: {
+      name: string;
+      description: string;
+      category: TemplateCategory;
+      icon: string;
+      includeRecords: boolean;
+    }
+  ): Promise<void> {
+    // Export the base
+    const exported = await BaseExportService.exportBase(baseId, data.includeRecords, data.name);
 
-  return {
-    tableCount: templateData?.tables?.length ?? 0,
-    fieldCount: templateData?.fields?.length ?? 0,
-    recordCount: templateData?.records?.length ?? 0,
-  };
-}
+    // Get current user
+    const { data: profile } = await supabase.auth.getUser();
+    if (!profile?.user) {
+      throw new Error("User not authenticated");
+    }
+
+    // Save to templates table
+    const { error } = await supabase.from("templates").insert({
+      name: data.name,
+      description: data.description,
+      category: data.category,
+      icon: data.icon,
+      is_global: false,
+      created_by: profile.user.id,
+      template_data: exported,
+    });
+
+    if (error) {
+      throw new Error(`Failed to create template: ${error.message}`);
+    }
+  },
+
+  /**
+   * Get base templates (from `templates` table, not `document_templates`)
+   * Returns global templates and user's custom templates
+   */
+  async getTemplates(userId?: string): Promise<Template[]> {
+    let query = supabase
+      .from("templates")
+      .select("*")
+      .or(`is_global.eq.true${userId ? `,created_by.eq.${userId}` : ""}`)
+      .order("created_at", { ascending: false });
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return (data || []) as Template[];
+  },
+
+  /**
+   * Get template statistics (table count, field count, record count)
+   */
+  getTemplateStats(template: Template): {
+    tableCount: number;
+    fieldCount: number;
+    recordCount: number;
+  } {
+    const templateData = template.template_data;
+    return {
+      tableCount: templateData?.tables?.length || 0,
+      fieldCount: templateData?.fields?.length || 0,
+      recordCount: templateData?.records?.length || 0,
+    };
+  },
+};

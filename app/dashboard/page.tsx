@@ -405,7 +405,7 @@ function DashboardContent() {
       return;
     }
     initializeDashboard(workspaceIdFromQuery);
-  }, [initializeDashboard, viewFromQuery, workspaceIdFromQuery, switchToHomeView, switchToStarredView, switchToSharedView, switchToTemplatesView, switchToAccountView]);
+  }, [initializeDashboard, viewFromQuery, workspaceIdFromQuery, switchToHomeView, switchToStarredView, switchToSharedView, switchToTemplatesView, switchToMarketingView, switchToAccountView]);
 
   if (authLoading) {
     return (
