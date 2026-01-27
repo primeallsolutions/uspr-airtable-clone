@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { X, Building2, Kanban, Package, Calendar, FileText, Sparkles } from 'lucide-react';
 import type { Template } from '@/lib/types/templates';
 import type { WorkspaceRecord } from '@/lib/types/dashboard';
-import { TemplateService } from '@/lib/services/template-service';
+import { TemplateService } from '@/lib/services/dashboard-template-service';
 import { getFieldTypeLabel } from '@/lib/utils/field-type-helpers';
 import type { FieldType } from '@/lib/types/base-detail';
 
