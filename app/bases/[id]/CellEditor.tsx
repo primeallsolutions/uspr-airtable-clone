@@ -476,6 +476,9 @@ export default function CellEditor({
       if (isNaN(num)) return '';
       return num.toFixed(2);
     };
+    useEffect(() => {
+      setLocal(formatMonetary(String(value || '')));
+    }, [value]);
 
     const handleMonetaryCommit = () => {
       const cleanValue = local.replace(/[^\d.-]/g, '');
@@ -489,19 +492,19 @@ export default function CellEditor({
         <input
           type="text"
           className={baseInputClass}
-          value={formatMonetary(local)}
+          value={local}
           onChange={(e) => setLocal(e.target.value)}
           onBlur={() => {
             setLocal(formatMonetary(local));
             handleMonetaryCommit();
           }}
-        onKeyDown={(e) => { 
-          if (e.key === 'Enter') {
-            setLocal(formatMonetary(local));
-            handleMonetaryCommit();
-          }
-        }}
-        disabled={isSaving}
+          onKeyDown={(e) => { 
+            if (e.key === 'Enter') {
+              setLocal(formatMonetary(local));
+              handleMonetaryCommit();
+            }
+          }}
+          disabled={isSaving}
           placeholder={isEmptyValue ? EMPTY_LABEL : "0.00"}
       />
     </div>
