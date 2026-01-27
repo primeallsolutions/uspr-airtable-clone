@@ -36,6 +36,11 @@ CREATE INDEX IF NOT EXISTS idx_document_activity_document_path ON public.documen
 ALTER TABLE public.document_activity_log ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies
+-- Drop existing policies if they exist (for idempotency)
+
+DROP POLICY IF EXISTS "Users can view document activity for accessible bases" ON public.document_activity_log;
+DROP POLICY IF EXISTS "Users can create document activity for accessible bases" ON public.document_activity_log;
+DROP POLICY IF EXISTS "Service role has full access to document activity" ON public.document_activity_log;
 
 -- Users can view activity for bases they have access to
 CREATE POLICY "Users can view document activity for accessible bases"
@@ -85,8 +90,18 @@ CREATE POLICY "Service role has full access to document activity"
   USING (auth.jwt() ->> 'role' = 'service_role')
   WITH CHECK (auth.jwt() ->> 'role' = 'service_role');
 
--- Enable Realtime for activity feed
-ALTER PUBLICATION supabase_realtime ADD TABLE public.document_activity_log;
+-- Enable Realtime for activity feed (idempotent)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime'
+    AND tablename = 'document_activity_log'
+    AND schemaname = 'public'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.document_activity_log;
+  END IF;
+END $$;
 
 -- Comment
 COMMENT ON TABLE public.document_activity_log IS 'Tracks all document-related activities for the Activity Feed feature';

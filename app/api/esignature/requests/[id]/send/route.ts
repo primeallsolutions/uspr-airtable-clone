@@ -206,9 +206,21 @@ export async function POST(
     // Update request status to "sent"
     await ESignatureService.updateRequestStatus(id, "sent", undefined, supabase);
 
-    const updatedRequest = await ESignatureService.getSignatureRequest(id, supabase);
+    // Try to get the updated request, but don't fail if this errors
+    // since the emails have already been sent successfully
+    let updatedRequest = null;
+    try {
+      updatedRequest = await ESignatureService.getSignatureRequest(id, supabase);
+    } catch (fetchError) {
+      console.warn("Failed to fetch updated request after send, but emails were sent:", fetchError);
+    }
 
-    return NextResponse.json({ request: updatedRequest });
+    return NextResponse.json({ 
+      request: updatedRequest,
+      success: true,
+      emailsSent: successfulSends.length,
+      emailsFailed: failedSends.length,
+    });
   } catch (error: any) {
     console.error("Failed to send signature request:", error);
     const errorMessage = error instanceof Error ? error.message : String(error);

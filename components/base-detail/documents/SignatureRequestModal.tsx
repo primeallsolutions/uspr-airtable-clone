@@ -676,7 +676,12 @@ export const SignatureRequestModal = ({
         toast.warning("Request created but failed to send emails. You can try sending again from the status view.");
         console.error("Failed to send request:", errorData);
       } else {
-        toast.success("Signature request created and sent successfully!");
+        const sendData = await sendResponse.json();
+        if (sendData.emailsFailed > 0 && sendData.emailsSent > 0) {
+          toast.warning(`Request created. Sent ${sendData.emailsSent} email(s), but ${sendData.emailsFailed} failed.`);
+        } else {
+          toast.success(`Signature request created and sent to ${sendData.emailsSent || validSigners.length} signer(s)!`);
+        }
       }
 
       if (onRequestCreated) {

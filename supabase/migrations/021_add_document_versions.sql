@@ -31,6 +31,12 @@ CREATE INDEX IF NOT EXISTS idx_document_versions_current ON document_versions(is
 ALTER TABLE document_versions ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies
+-- Drop existing policies if they exist (for idempotency)
+
+DROP POLICY IF EXISTS "Users can view document versions for accessible bases" ON document_versions;
+DROP POLICY IF EXISTS "Users can insert document versions for accessible bases" ON document_versions;
+DROP POLICY IF EXISTS "Users can update document versions for accessible bases" ON document_versions;
+DROP POLICY IF EXISTS "Users can delete document versions for accessible bases" ON document_versions;
 
 -- Users can view document versions if they have access to the base
 CREATE POLICY "Users can view document versions for accessible bases"
@@ -110,7 +116,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Create trigger for auto-versioning
+-- Create trigger for auto-versioning (idempotent)
+DROP TRIGGER IF EXISTS trigger_document_version_number ON document_versions;
 CREATE TRIGGER trigger_document_version_number
   BEFORE INSERT ON document_versions
   FOR EACH ROW

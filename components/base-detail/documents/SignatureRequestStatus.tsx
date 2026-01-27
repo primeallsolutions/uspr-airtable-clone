@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { CheckCircle2, Clock, XCircle, Mail, Eye, FileText, Loader2, RefreshCw, X, Trash2 } from "lucide-react";
+import { CheckCircle2, Clock, XCircle, Mail, Eye, FileText, Loader2, RefreshCw, X, Trash2, Send } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { ESignatureService, SignatureRequest } from "@/lib/services/esign-service";
 import { toast } from "sonner";
@@ -142,6 +142,55 @@ export const SignatureRequestStatus = ({
     } catch (error: any) {
       console.error("Failed to delete signature request:", error);
       toast.error(error.message || "Failed to delete signature request");
+    }
+  };
+
+  const [sendingRequestId, setSendingRequestId] = useState<string | null>(null);
+
+  const handleSendRequest = async (request: SignatureRequest) => {
+    if (!request.id) {
+      toast.error("Invalid request");
+      return;
+    }
+
+    if (!request.signers || request.signers.length === 0) {
+      toast.error("No signers added to this request");
+      return;
+    }
+
+    try {
+      setSendingRequestId(request.id);
+      
+      const { data: { session } } = await supabase.auth.getSession();
+      const headers: HeadersInit = {};
+      if (session?.access_token) {
+        headers.Authorization = `Bearer ${session.access_token}`;
+      }
+
+      const response = await fetch(`/api/esignature/requests/${request.id}/send`, {
+        method: "POST",
+        headers,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to send signature request");
+      }
+
+      const data = await response.json();
+      
+      if (data.emailsFailed > 0 && data.emailsSent > 0) {
+        toast.warning(`Sent ${data.emailsSent} email(s), but ${data.emailsFailed} failed`);
+      } else {
+        toast.success(`Signature request sent to ${data.emailsSent || request.signers.length} signer(s)`);
+      }
+      
+      await loadRequests();
+    } catch (error: any) {
+      console.error("Failed to send signature request:", error);
+      toast.error(error.message || "Failed to send signature request");
+    } finally {
+      setSendingRequestId(null);
     }
   };
 
@@ -305,6 +354,30 @@ export const SignatureRequestStatus = ({
 
                 {/* Actions */}
                 <div className="flex items-center gap-2 ml-4">
+                  {/* Send button for draft requests */}
+                  {request.status === "draft" && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleSendRequest(request);
+                      }}
+                      disabled={sendingRequestId === request.id}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-green-600 hover:text-green-700 hover:bg-green-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Send Signature Request"
+                    >
+                      {sendingRequestId === request.id ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Sending...
+                        </>
+                      ) : (
+                        <>
+                          <Send className="w-4 h-4" />
+                          Send
+                        </>
+                      )}
+                    </button>
+                  )}
                   {(request.status === "completed" || request.status === "in_progress") && (
                     <button
                       onClick={(e) => {

@@ -29,6 +29,12 @@ CREATE INDEX IF NOT EXISTS idx_record_documents_created ON record_documents(crea
 ALTER TABLE record_documents ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies
+-- Drop existing policies if they exist (for idempotency)
+
+DROP POLICY IF EXISTS "Users can view record documents for accessible bases" ON record_documents;
+DROP POLICY IF EXISTS "Users can insert record documents for accessible bases" ON record_documents;
+DROP POLICY IF EXISTS "Users can update record documents for accessible bases" ON record_documents;
+DROP POLICY IF EXISTS "Users can delete record documents for accessible bases" ON record_documents;
 
 -- Users can view record documents if they have access to the base
 CREATE POLICY "Users can view record documents for accessible bases"
@@ -91,7 +97,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Create trigger for updated_at
+-- Create trigger for updated_at (idempotent)
+DROP TRIGGER IF EXISTS trigger_record_documents_updated_at ON record_documents;
 CREATE TRIGGER trigger_record_documents_updated_at
   BEFORE UPDATE ON record_documents
   FOR EACH ROW
