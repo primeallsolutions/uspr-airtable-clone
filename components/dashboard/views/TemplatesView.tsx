@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Search, Building2, Kanban, Package, Calendar, FileText, Sparkles } from 'lucide-react';
 import type { Template, TemplateCategory, CategoryInfo } from '@/lib/types/templates';
-import { TemplateService } from '@/lib/services/template-service';
+import { TemplateService } from '@/lib/services/dashboard-template-service';
 import { toast } from 'sonner';
 import type { CollectionView } from "@/lib/types/dashboard";
 import { ViewToggle } from '../ViewToggle';

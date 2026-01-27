@@ -3,7 +3,9 @@ import { useState, useEffect } from 'react';
 import { X, Building2, Kanban, Package, Calendar, FileText, Sparkles } from 'lucide-react';
 import type { Template } from '@/lib/types/templates';
 import type { WorkspaceRecord } from '@/lib/types/dashboard';
-import { TemplateService } from '@/lib/services/template-service';
+import { TemplateService } from '@/lib/services/dashboard-template-service';
+import { getFieldTypeLabel } from '@/lib/utils/field-type-helpers';
+import type { FieldType } from '@/lib/types/base-detail';
 
 interface TemplatePreviewModalProps {
   template: Template | null;
@@ -149,7 +151,7 @@ export const TemplatePreviewModal = ({
                           key={fieldIdx}
                           className="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded"
                         >
-                          {field.name} ({field.type.replace('_', ' ') /* convert from internal value to display value */})
+                          {field.name} ({getFieldTypeLabel(field.type as FieldType)})
                         </span>
                       ))}
                     </div>

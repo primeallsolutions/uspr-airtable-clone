@@ -9,6 +9,7 @@ import { formatInTimezone } from "@/lib/utils/date-helpers";
 import { useTimezone } from "@/lib/hooks/useTimezone";
 import { RecordDocuments } from "./documents/RecordDocuments";
 import { RecordDocumentsService } from "@/lib/services/record-documents-service";
+import { getFieldTypeLabel } from "@/lib/utils/field-type-helpers";
 
 interface RecordDetailsModalProps {
   isOpen: boolean;
@@ -817,7 +818,7 @@ export const RecordDetailsModal = ({
                     {field.type && (
                       <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-gray-600 bg-gray-100 rounded-md">
                         {getFieldIcon(field.type)}
-                        {field.type.replace("_", " ")}
+                        {getFieldTypeLabel(field.type)}
                       </span>
                     )}
                     {(field.type === "single_select" || field.type === "multi_select") && getFieldOptions(field).length > 0 && (

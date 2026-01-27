@@ -29,7 +29,7 @@ import { ImportBaseModal } from "@/components/dashboard/modals/ImportBaseModal";
 import { TemplatePreviewModal } from "@/components/dashboard/modals/TemplatePreviewModal";
 import { CreateTemplateModal } from "@/components/dashboard/modals/CreateTemplateModal";
 import type { Template } from "@/lib/types/templates";
-import { TemplateService } from "@/lib/services/template-service";
+import { TemplateService } from "@/lib/services/dashboard-template-service";
 
 // Utils
 import { getBaseContextMenuOptions } from "@/lib/utils/context-menu-helpers";
@@ -405,7 +405,7 @@ function DashboardContent() {
       return;
     }
     initializeDashboard(workspaceIdFromQuery);
-  }, [initializeDashboard, viewFromQuery, workspaceIdFromQuery, switchToHomeView, switchToStarredView, switchToSharedView, switchToTemplatesView, switchToMarketingView, switchToAccountView]);
+  }, [initializeDashboard, viewFromQuery, workspaceIdFromQuery, switchToHomeView, switchToStarredView, switchToSharedView, switchToTemplatesView, switchToAccountView]);
 
   if (authLoading) {
     return (

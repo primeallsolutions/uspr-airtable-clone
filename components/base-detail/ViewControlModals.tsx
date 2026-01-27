@@ -20,6 +20,7 @@ import {
   ListPlus
 } from "lucide-react";
 import type { FieldRow, SortDirection } from "@/lib/types/base-detail";
+import { getFieldTypeLabel } from "@/lib/utils/field-type-helpers";
 
 const generateId = () =>
   typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
@@ -196,7 +197,7 @@ export const HideFieldsPanel = ({
               >
                 <div>
                   <p className="text-sm font-medium text-gray-900">{field.name}</p>
-                  <p className="text-xs text-gray-500 capitalize">{field.type.replace("_", " ")}</p>
+                  <p className="text-xs text-gray-500">{getFieldTypeLabel(field.type)}</p>
                 </div>
                 <label className="inline-flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
                   <span>{isHidden ? "Hidden" : "Visible"}</span>
@@ -532,7 +533,7 @@ export const GroupPanel = ({
               <p className="text-sm font-medium text-gray-900">
                 {index + 1}. {field.name}
               </p>
-              <p className="text-xs text-gray-500 capitalize">{field.type.replace("_", " ")}</p>
+              <p className="text-xs text-gray-500">{getFieldTypeLabel(field.type)}</p>
             </div>
             <div className="flex items-center gap-1">
               <button
@@ -578,7 +579,7 @@ export const GroupPanel = ({
             >
               <div>
                 <p className="text-sm font-medium text-gray-900">{field.name}</p>
-                <p className="text-xs text-gray-500 capitalize">{field.type.replace("_", " ")}</p>
+                <p className="text-xs text-gray-500">{getFieldTypeLabel(field.type)}</p>
               </div>
               <span className="text-xs font-semibold text-blue-600">Add</span>
             </button>
