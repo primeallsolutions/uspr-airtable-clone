@@ -96,14 +96,14 @@ export const GridView = ({
       .map(id => recordsById.get(id))
       .filter((r): r is RecordRow => r !== undefined);
     
-    // Add any new records that weren't in the initial order (append to end)
+    // Add any new records that weren't in the initial order (PREPEND to start - newest first)
     const existingIds = new Set(initialOrderRef.current);
     const newRecords = records.filter(r => !existingIds.has(r.id));
     
     if (newRecords.length > 0) {
-      // Update the initial order ref to include new records
-      initialOrderRef.current = [...initialOrderRef.current.filter(id => recordsById.has(id)), ...newRecords.map(r => r.id)];
-      return [...orderedRecords, ...newRecords];
+      // Update the initial order ref to include new records at the BEGINNING
+      initialOrderRef.current = [...newRecords.map(r => r.id), ...initialOrderRef.current.filter(id => recordsById.has(id))];
+      return [...newRecords, ...orderedRecords];
     }
     
     // If the ordered records length doesn't match records length, there might be an inconsistency
