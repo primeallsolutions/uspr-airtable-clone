@@ -32,6 +32,18 @@ export default function CellEditor({
     setLocal(value == null ? "" : String(value));
   }, [value]);
 
+  // Special formatting for monetary fields
+  useEffect(() => {
+    if (field.type === 'monetary') {
+      const formatMonetary = (val: string) => {
+        const num = parseFloat(val.replace(/[^\d.-]/g, ''));
+        if (isNaN(num)) return '';
+        return num.toFixed(2);
+      };
+      setLocal(formatMonetary(String(value || '')));
+    }
+  }, [value, field.type]);
+
   const SelectDropdown = ({ 
     value,
     onUpdate,
@@ -476,9 +488,6 @@ export default function CellEditor({
       if (isNaN(num)) return '';
       return num.toFixed(2);
     };
-    useEffect(() => {
-      setLocal(formatMonetary(String(value || '')));
-    }, [value]);
 
     const handleMonetaryCommit = () => {
       const cleanValue = local.replace(/[^\d.-]/g, '');

@@ -396,7 +396,8 @@ export const useBaseDetail = (baseId: string | null) => {
       setError(null);
       const newRecord = await BaseDetailService.createRecord(selectedTableId, values);
       setRecords(prev => {
-        const next = [...prev, newRecord];
+        // Add new record at the beginning (top) since records are ordered by created_at DESC
+        const next = [newRecord, ...prev];
         recordsCache.current.set(selectedTableId, next);
         return next;
       });

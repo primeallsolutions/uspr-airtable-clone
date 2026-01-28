@@ -621,63 +621,64 @@ export class BaseDetailService {
     const isSelectField = fieldMeta.type === 'single_select' || fieldMeta.type === 'multi_select';
     if (tableMeta.is_master_list && isSelectField && updates.options) {
       console.log(`🔄 Propagating options for masterlist field "${fieldMeta.name}" (${fieldMeta.type}) to other tables`);
-      try {
-        const { data: peerTables, error: peerTablesError } = await supabase
-          .from("tables")
-          .select("id, name")
-          .eq("base_id", tableMeta.base_id)
-          .eq("is_master_list", false);
+      // Run propagation in background - don't wait for it to avoid blocking the UI
+      Promise.resolve().then(async () => {
+        try {
+          const { data: peerTables, error: peerTablesError } = await supabase
+            .from("tables")
+            .select("id, name")
+            .eq("base_id", tableMeta.base_id)
+            .eq("is_master_list", false);
 
-        if (peerTablesError) {
-          console.error('❌ Failed to fetch peer tables:', peerTablesError);
-          throw peerTablesError;
+          if (peerTablesError) {
+            console.error('❌ Failed to fetch peer tables:', peerTablesError);
+            return;
+          }
+
+          const peerTableIds = (peerTables ?? []).map(t => t.id);
+          console.log(`📋 Found ${peerTableIds.length} non-masterlist tables:`, peerTables?.map(t => t.name));
+          
+          if (peerTableIds.length === 0) {
+            console.log('⚠️ No non-masterlist tables found to propagate to');
+            return;
+          }
+
+          const { data: siblingFields, error: siblingFieldsError } = await supabase
+            .from("fields")
+            .select("id, name, table_id")
+            .eq("name", fieldMeta.name)
+            .eq("type", fieldMeta.type)
+            .in("table_id", peerTableIds);
+
+          if (siblingFieldsError) {
+            console.error('❌ Failed to fetch sibling fields:', siblingFieldsError);
+            return;
+          }
+
+          const siblingIds = (siblingFields ?? []).map(f => f.id);
+          console.log(`🎯 Found ${siblingIds.length} sibling fields with name "${fieldMeta.name}":`, 
+            siblingFields?.map(f => ({ id: f.id, table: peerTables?.find(t => t.id === f.table_id)?.name }))
+          );
+          
+          if (siblingIds.length === 0) {
+            console.log(`⚠️ No fields with name "${fieldMeta.name}" and type "${fieldMeta.type}" found in non-masterlist tables`);
+            return;
+          }
+
+          const { error: propagateError } = await supabase
+            .from("fields")
+            .update({ options: updates.options })
+            .in("id", siblingIds);
+
+          if (propagateError) {
+            console.error('❌ Failed to propagate select options to sibling fields:', propagateError);
+          } else {
+            console.log(`✅ Successfully propagated options to ${siblingIds.length} sibling field(s)`);
+          }
+        } catch (propErr) {
+          console.error('❌ Failed to sync select options from masterlist to other tables:', propErr);
         }
-
-        const peerTableIds = (peerTables ?? []).map(t => t.id);
-        console.log(`📋 Found ${peerTableIds.length} non-masterlist tables:`, peerTables?.map(t => t.name));
-        
-        if (peerTableIds.length === 0) {
-          console.log('⚠️ No non-masterlist tables found to propagate to');
-          return;
-        }
-
-        const { data: siblingFields, error: siblingFieldsError } = await supabase
-          .from("fields")
-          .select("id, name, table_id")
-          .eq("name", fieldMeta.name)
-          .eq("type", fieldMeta.type)
-          .in("table_id", peerTableIds);
-
-        if (siblingFieldsError) {
-          console.error('❌ Failed to fetch sibling fields:', siblingFieldsError);
-          throw siblingFieldsError;
-        }
-
-        const siblingIds = (siblingFields ?? []).map(f => f.id);
-        console.log(`🎯 Found ${siblingIds.length} sibling fields with name "${fieldMeta.name}":`, 
-          siblingFields?.map(f => ({ id: f.id, table: peerTables?.find(t => t.id === f.table_id)?.name }))
-        );
-        
-        if (siblingIds.length === 0) {
-          console.log(`⚠️ No fields with name "${fieldMeta.name}" and type "${fieldMeta.type}" found in non-masterlist tables`);
-          return;
-        }
-
-        const { error: propagateError } = await supabase
-          .from("fields")
-          .update({ options: updates.options })
-          .in("id", siblingIds);
-
-        if (propagateError) {
-          console.error('❌ Failed to propagate select options to sibling fields:', propagateError);
-          throw propagateError;
-        } else {
-          console.log(`✅ Successfully propagated options to ${siblingIds.length} sibling field(s)`);
-        }
-      } catch (propErr) {
-        console.error('❌ Failed to sync select options from masterlist to other tables:', propErr);
-        // Don't throw - the main update was successful
-      }
+      });
     }
   }
 
@@ -1217,44 +1218,47 @@ export class BaseDetailService {
     }
 
     // If updating masterlist, propagate value to active non-masterlist copies (match by field name)
+    // Run this in the background to avoid blocking the UI
     if (isMasterlist && baseId && masterFieldName) {
-      try {
-        const { data: masterFieldMeta } = await supabase
-          .from("fields")
-          .select("id, name, type, options")
-          .eq("id", fieldId)
-          .maybeSingle();
+      Promise.resolve().then(async () => {
+        try {
+          const { data: masterFieldMeta } = await supabase
+            .from("fields")
+            .select("id, name, type, options")
+            .eq("id", fieldId)
+            .maybeSingle();
 
-        const { data: copies } = await supabase
-          .from("records")
-          .select("id, table_id, values")
-          .eq("values->>_source_record_id", recordId);
+          const { data: copies } = await supabase
+            .from("records")
+            .select("id, table_id, values")
+            .eq("values->>_source_record_id", recordId);
 
-        if (copies && copies.length > 0) {
-          for (const copy of copies) {
-            const { data: targetField } = await supabase
-              .from("fields")
-              .select("id, name, type, options")
-              .eq("table_id", copy.table_id)
-              .eq("name", masterFieldName)
-              .maybeSingle();
-            if (!targetField?.id) continue;
+          if (copies && copies.length > 0) {
+            for (const copy of copies) {
+              const { data: targetField } = await supabase
+                .from("fields")
+                .select("id, name, type, options")
+                .eq("table_id", copy.table_id)
+                .eq("name", masterFieldName)
+                .maybeSingle();
+              if (!targetField?.id) continue;
 
-            const newCopyValues = {
-              ...(copy.values || {}),
-              [targetField.id]: this.mapSelectValueBetweenFields(value, masterFieldMeta || undefined, targetField),
-              _source_record_id: recordId
-            };
-            await supabase
-              .from("records")
-              .update({ values: newCopyValues })
-              .eq("id", copy.id)
-              .eq("table_id", copy.table_id);
+              const newCopyValues = {
+                ...(copy.values || {}),
+                [targetField.id]: this.mapSelectValueBetweenFields(value, masterFieldMeta || undefined, targetField),
+                _source_record_id: recordId
+              };
+              await supabase
+                .from("records")
+                .update({ values: newCopyValues })
+                .eq("id", copy.id)
+                .eq("table_id", copy.table_id);
+            }
           }
+        } catch (propError) {
+          console.error('Failed to propagate masterlist change to copies:', propError);
         }
-      } catch (propError) {
-        console.error('Failed to propagate masterlist change to copies:', propError);
-      }
+      });
     }
 
     // Check and execute automations after successful cell update
