@@ -20,6 +20,7 @@ interface GridViewProps {
   onUpdateCell: (recordId: string, fieldId: string, value: unknown) => void;
   onBulkDelete: (recordIds: string[]) => void;
   onAddRow: (values?: Record<string, unknown>) => void | Promise<void>;
+  addingRow?: boolean;
   onAddField: () => void;
   onFieldContextMenu: (e: React.MouseEvent, field: FieldRow) => void;
   onRowContextMenu: (e: React.MouseEvent, record: RecordRow) => void;
@@ -45,6 +46,7 @@ export const GridView = ({
   onUpdateCell,
   onBulkDelete,
   onAddRow,
+  addingRow = false,
   onAddField,
   onFieldContextMenu,
   onRowContextMenu,
@@ -367,9 +369,15 @@ export const GridView = ({
                   <p className="text-gray-500 mb-4">Get started by adding your first record</p>
                   <button
                     onClick={() => onAddRow()}
-                    className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    className={`inline-flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors ${
+                      addingRow ? 'cursor-not-allowed opacity-70' : ''
+                    }`}
                   >
-                    <Plus size={16} />
+                    {addingRow ? (
+                      <div className="w-4 h-4 border-2 border-white-600 border-t-transparent rounded-full animate-spin"></div>
+                    ) : (
+                      <Plus size={16} />
+                    )}
                     Add Row
                   </button>
                 </div>
@@ -384,9 +392,15 @@ export const GridView = ({
                 <div className="pointer-events-none fixed bottom-2 right-6 z-20">
                   <button
                     onClick={() => onAddRow()}
-                    className="pointer-events-auto inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg shadow-lg hover:bg-blue-700 transition-colors"
+                    className={`pointer-events-auto inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg shadow-lg hover:bg-blue-700 transition-colors ${
+                      addingRow ? 'cursor-not-allowed opacity-70' : ''
+                    }`}
                   >
-                    <Plus size={16} />
+                    {addingRow ? (
+                      <div className="w-4 h-4 border-2 border-white-600 border-t-transparent rounded-full animate-spin"></div>
+                    ) : (
+                      <Plus size={16} />
+                    )}
                     <span>Add Row</span>
                   </button>
                 </div>
@@ -480,9 +494,15 @@ export const GridView = ({
             {/* Add Row button */}
             <button
               onClick={() => onAddRow()}
-              className="pointer-events-auto inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg shadow-lg hover:bg-blue-700 transition-colors cursor-pointer"
+              className={`pointer-events-auto inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg shadow-lg hover:bg-blue-700 transition-colors ${
+                addingRow ? 'cursor-not-allowed opacity-70' : ''
+              }`}
             >
-              <Plus size={16} />
+              {addingRow ? (
+                <div className="w-4 h-4 border-2 border-white-600 border-t-transparent rounded-full animate-spin"></div>
+              ) : (
+                <Plus size={16} />
+              )}
               <span>Add Row</span>
             </button>
           </div>
