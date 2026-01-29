@@ -374,7 +374,7 @@ export const GridView = ({
                     }`}
                   >
                     {addingRow ? (
-                      <div className="w-4 h-4 border-4 border-white-600 border-t-transparent rounded-full animate-spin"></div>
+                      <div className="w-4 h-4 border-2 border-white-600 border-t-transparent rounded-full animate-spin"></div>
                     ) : (
                       <Plus size={16} />
                     )}
@@ -397,7 +397,7 @@ export const GridView = ({
                     }`}
                   >
                     {addingRow ? (
-                      <div className="w-4 h-4 border-4 border-white-600 border-t-transparent rounded-full animate-spin"></div>
+                      <div className="w-4 h-4 border-2 border-white-600 border-t-transparent rounded-full animate-spin"></div>
                     ) : (
                       <Plus size={16} />
                     )}
@@ -499,7 +499,7 @@ export const GridView = ({
               }`}
             >
               {addingRow ? (
-                <div className="w-4 h-4 border-4 border-white-600 border-t-transparent rounded-full animate-spin"></div>
+                <div className="w-4 h-4 border-2 border-white-600 border-t-transparent rounded-full animate-spin"></div>
               ) : (
                 <Plus size={16} />
               )}
