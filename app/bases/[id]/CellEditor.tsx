@@ -330,7 +330,7 @@ export default function CellEditor({
           isSaving={isSaving}
         />
 
-        {selectedValues.length > 0 && (
+        {(selectedValues.length > 0 || (isSaving && tempValue)) && (
           <div className="flex flex-wrap gap-1 mt-1 justify-center">
             {(isSaving && tempValue ?
               isRemoving ? selectedValues.filter(key => key !== tempValue) : [...selectedValues, tempValue] :
