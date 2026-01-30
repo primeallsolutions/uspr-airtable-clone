@@ -1325,13 +1325,14 @@ export const PdfEditor = ({
               className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${
                 annotations.length > 0 ? "bg-green-600 hover:bg-green-700" : "bg-blue-600 hover:bg-blue-700"
               }`}
+              title="Save changes in place (original will be saved to version history)"
             >
               {isSaving ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
                 <Save className="w-4 h-4" />
               )}
-              {annotations.length > 0 ? "Save Changes" : "Save"}
+              {isSaving ? "Saving..." : annotations.length > 0 ? "Save" : "No Changes"}
             </button>
 
             <button
@@ -1672,6 +1673,7 @@ export const PdfEditor = ({
                     <>{annotations.filter(a => a.type === "textEdit").length} text edit{annotations.filter(a => a.type === "textEdit").length !== 1 ? "s" : ""}</>
                   )}
                 </span>
+                <span className="text-green-400 ml-2">• Original will be preserved in version history</span>
               </span>
             ) : (
               <span className="text-gray-400">No unsaved changes</span>

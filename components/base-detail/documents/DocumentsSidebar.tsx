@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { ChevronRight, ChevronDown, Folder, FolderOpen, MoreVertical, Pencil, Trash2 } from "lucide-react";
+import { ChevronRight, ChevronDown, Folder, FolderOpen, MoreVertical, Pencil, Trash2, Inbox } from "lucide-react";
 import { FolderSkeleton } from "./DocumentsSkeleton";
 
 type FolderNode = {
@@ -16,6 +16,7 @@ type DocumentsSidebarProps = {
   onFolderRename?: (folderPath: string, folderName: string) => void;
   onFolderDelete?: (folderPath: string, folderName: string) => void;
   loading?: boolean;
+  uncategorizedCount?: number; // Count of files in root (no folder)
 };
 
 const FolderItem = ({
@@ -165,6 +166,7 @@ export const DocumentsSidebar = ({
   onFolderRename,
   onFolderDelete,
   loading = false,
+  uncategorizedCount = 0,
 }: DocumentsSidebarProps) => {
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
 
@@ -194,6 +196,9 @@ export const DocumentsSidebar = ({
     });
   };
 
+  // Check if "Uncategorized" (root) is selected
+  const isUncategorizedSelected = currentPrefix === "";
+
   return (
     <div className="w-64 border-r border-gray-200 bg-gray-50 flex-shrink-0 overflow-y-auto">
       <div className="p-3 space-y-2">
@@ -201,22 +206,54 @@ export const DocumentsSidebar = ({
         <div className="space-y-1">
           {loading ? (
             <FolderSkeleton count={8} />
-          ) : folderTree.length === 0 ? (
-            <div className="text-xs text-gray-500">No folders yet.</div>
           ) : (
-            folderTree.map((folder) => (
-              <FolderItem
-                key={folder.path}
-                folder={folder}
-                level={0}
-                currentPrefix={currentPrefix}
-                onFolderSelect={onFolderSelect}
-                onFolderRename={onFolderRename}
-                onFolderDelete={onFolderDelete}
-                expandedFolders={expandedFolders}
-                toggleFolder={toggleFolder}
-              />
-            ))
+            <>
+              {/* Uncategorized files (root folder) */}
+              <button
+                onClick={() => onFolderSelect("")}
+                className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
+                  isUncategorizedSelected
+                    ? "bg-amber-100 text-amber-800"
+                    : "hover:bg-white text-gray-700"
+                }`}
+              >
+                <Inbox className="w-4 h-4 flex-shrink-0" />
+                <span className="truncate">Uncategorized</span>
+                {uncategorizedCount > 0 && (
+                  <span className={`ml-auto text-xs px-1.5 py-0.5 rounded-full ${
+                    isUncategorizedSelected
+                      ? "bg-amber-200 text-amber-900"
+                      : "bg-gray-200 text-gray-600"
+                  }`}>
+                    {uncategorizedCount}
+                  </span>
+                )}
+              </button>
+              
+              {/* Divider if there are folders */}
+              {folderTree.length > 0 && (
+                <div className="border-t border-gray-200 my-2" />
+              )}
+              
+              {/* Folder tree */}
+              {folderTree.length === 0 ? (
+                <div className="text-xs text-gray-500 pl-3">No folders yet.</div>
+              ) : (
+                folderTree.map((folder) => (
+                  <FolderItem
+                    key={folder.path}
+                    folder={folder}
+                    level={0}
+                    currentPrefix={currentPrefix}
+                    onFolderSelect={onFolderSelect}
+                    onFolderRename={onFolderRename}
+                    onFolderDelete={onFolderDelete}
+                    expandedFolders={expandedFolders}
+                    toggleFolder={toggleFolder}
+                  />
+                ))
+              )}
+            </>
           )}
         </div>
       </div>

@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabaseClient";
 import type { TableRow } from "@/lib/types/base-detail";
 import { DocumentsService, type StoredDocument } from "@/lib/services/documents-service";
 import { DocumentActivityService } from "@/lib/services/document-activity-service";
+import { DocumentVersionService } from "@/lib/services/document-version-service";
 import { DocumentsHeader } from "./documents/DocumentsHeader";
 import { DocumentsSidebar } from "./documents/DocumentsSidebar";
 import { DocumentsList } from "./documents/DocumentsList";
@@ -337,16 +338,32 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
       .filter((doc) => {
         // Only include files, not folders
         if (isFolder(doc)) return false;
+        
+        // For root (uncategorized) - show files with no folder prefix
+        if (currentPrefix === "") {
+          // File is in root if it has no "/" in the path (just a filename)
+          return !doc.path.includes("/");
+        }
+        
         // Only include files in the current folder (not subfolders)
         if (!doc.path.startsWith(currentPrefix)) return false;
         const relative = doc.path.slice(prefixLen);
         return !relative.includes("/"); // Exclude files in subfolders
       })
       .map((doc) => {
-        const relative = doc.path.slice(prefixLen);
+        const relative = currentPrefix === "" ? doc.path : doc.path.slice(prefixLen);
         return { ...doc, relative };
       });
   }, [allDocs, currentPrefix]);
+
+  // Count files in root (uncategorized) - no folder prefix
+  const uncategorizedCount = useMemo(() => {
+    return allDocs.filter((doc) => {
+      if (isFolder(doc)) return false;
+      // File is in root if it has no "/" in the path (just a filename)
+      return !doc.path.includes("/");
+    }).length;
+  }, [allDocs]);
 
   // Build folder tree structure
   const folderTree = useMemo((): FolderNode[] => {
@@ -464,13 +481,16 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
     ensureDefaultFolders();
   }, [baseId, selectedTable?.id, recordId, rootFolders.length, defaultFolderEnsured, refresh, defaultFolders]);
 
-  // Auto-select the first folder when none selected
+  // Auto-select behavior: if there are uncategorized files, stay on root
+  // Otherwise, select the first folder
   useEffect(() => {
-    if (!folderPath && rootFolders.length > 0) {
+    // Only auto-select if folderPath hasn't been explicitly set yet (initial load)
+    // and we're not already showing uncategorized files
+    if (folderPath === "" && uncategorizedCount === 0 && rootFolders.length > 0) {
       setFolderPath(`${rootFolders[0]}/`);
       setSelectedDocPath(null);
     }
-  }, [folderPath, rootFolders]);
+  }, [folderPath, rootFolders, uncategorizedCount]);
 
   const selectedDoc = useMemo(() => {
     if (!selectedDocPath) return null;
@@ -781,19 +801,79 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
       const originalPath = editorDoc.path;
       const originalFileName = originalPath.split("/").pop() || file.name;
       
-      // Delete the old file first
+      // Build the full document path for version tracking
+      const prefix = recordId 
+        ? `bases/${baseId}/records/${recordId}/`
+        : selectedTable?.id 
+          ? `bases/${baseId}/tables/${selectedTable.id}/`
+          : `bases/${baseId}/`;
+      const fullDocPath = `${prefix}${originalPath}`;
+      
+      // Download and save original file as a version BEFORE editing
+      try {
+        const originalUrl = await DocumentsService.getSignedUrl(
+          baseId, 
+          selectedTable?.id ?? null, 
+          originalPath, 
+          600, 
+          recordId
+        );
+        const response = await fetch(originalUrl);
+        const originalBlob = await response.blob();
+        const originalFile = new File([originalBlob], originalFileName, { 
+          type: editorDoc.mimeType || "application/pdf" 
+        });
+        
+        // Create version of the original file before replacing
+        await DocumentVersionService.createVersion({
+          documentPath: fullDocPath,
+          baseId,
+          tableId: selectedTable?.id,
+          file: originalFile,
+          notes: "Original version before edit",
+        });
+      } catch (versionErr) {
+        console.warn("Failed to create version of original file:", versionErr);
+        // Continue with save even if version creation fails
+      }
+      
+      // Delete the old file
       await DocumentsService.deleteDocument(baseId, selectedTable?.id ?? null, originalPath, recordId);
       
       // Upload the edited file with the SAME name (preserving original filename)
       const editedFile = new File([file], originalFileName, { type: file.type });
       
-      const newPath = await DocumentsService.uploadDocument({
+      await DocumentsService.uploadDocument({
         baseId,
         tableId: selectedTable?.id,
         recordId, // Pass recordId for record-scoped uploads
         folderPath: currentPrefix,
         file: editedFile,
         preserveName: true, // Keep the original filename
+      });
+      
+      // Create version of the edited file as the new current version
+      try {
+        await DocumentVersionService.createVersion({
+          documentPath: fullDocPath,
+          baseId,
+          tableId: selectedTable?.id,
+          file: editedFile,
+          notes: "Edited version",
+        });
+      } catch (versionErr) {
+        console.warn("Failed to create version of edited file:", versionErr);
+        // Continue even if version creation fails
+      }
+      
+      // Log activity for the edit
+      await DocumentActivityService.logActivity({
+        baseId,
+        tableId: selectedTable?.id,
+        action: 'edit',
+        documentPath: fullDocPath,
+        documentName: originalFileName,
+        metadata: { editType: 'pdf_annotation' },
       });
       
       // Refresh to show updated document
@@ -804,6 +884,10 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
       if (selectedDocPath === originalPath) {
         setSelectedDocPath(fullNewPath);
       }
+      
+      toast.success("Document saved", {
+        description: "Your changes have been saved with version history.",
+      });
     } catch (err) {
       console.error("Failed to save edited document", err);
       throw err; // Re-throw to let PdfEditor handle the error
@@ -867,6 +951,7 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
           onFolderRename={handleFolderRename}
           onFolderDelete={handleFolderDelete}
           loading={loading && isInitialLoad}
+          uncategorizedCount={uncategorizedCount}
         />
 
         {/* Tab Navigation */}
