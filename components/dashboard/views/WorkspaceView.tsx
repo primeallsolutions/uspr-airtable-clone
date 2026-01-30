@@ -124,13 +124,15 @@ export const WorkspaceView = ({
               setIsOpen={onSortToggle}
             />
             <div className="flex items-center gap-3">
-              <button
-                onClick={onCreateBase}
-                className="flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 cursor-pointer"
-              >
-                <Plus size={16} />
-                Create base
-              </button>
+              {workspaceBases.length > 0 && (
+                <button
+                  onClick={onCreateBase}
+                  className="flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 cursor-pointer"
+                >
+                  <Plus size={16} />
+                  Create base
+                </button>
+              )}
               <ViewToggle
                 collectionView={collectionView}
                 setCollectionView={onCollectionViewChange}
@@ -142,7 +144,7 @@ export const WorkspaceView = ({
               ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4'
               : 'space-y-3'
             }>
-              {sortBases(workspaceBases, sortOption).map(
+              {workspaceBases.length > 0 ? sortBases(workspaceBases, sortOption).map(
                 (base) => (
                   <BaseCard
                     key={base.id}
@@ -152,6 +154,17 @@ export const WorkspaceView = ({
                     onContextMenu={onBaseContextMenu}
                   />
                 )
+              ) : (
+                <div className="rounded-lg border border-gray-200 bg-white p-6 text-sm text-gray-500">
+                  No bases found in this workspace.
+                  <button
+                    onClick={onCreateBase}
+                    className="flex items-center mt-2 gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 cursor-pointer"
+                  >
+                    <Plus size={16} />
+                    Create your first base
+                  </button>
+                </div>
               )}
             </div>
           </div>

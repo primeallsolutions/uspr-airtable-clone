@@ -1,3 +1,4 @@
+import { Plus } from "lucide-react";
 import { SortDropdown } from "../SortDropdown";
 import { ViewToggle } from "../ViewToggle";
 import { sortBases } from "@/lib/utils/sort-helpers";
@@ -15,6 +16,7 @@ interface HomeViewProps {
   onCollectionViewChange: (view: CollectionView) => void;
   onSortOptionChange: (option: SortOption) => void;
   onSortToggle: (open: boolean) => void;
+  onCreateBase: () => void;
   onBaseStarToggle?: (base: BaseRecord) => void;
   onBaseContextMenu: (e: React.MouseEvent, base: BaseRecord) => void;
 }
@@ -29,6 +31,7 @@ export const HomeView = ({
   onCollectionViewChange,
   onSortOptionChange,
   onSortToggle,
+  onCreateBase,
   onBaseStarToggle,
   onBaseContextMenu
 }: HomeViewProps) => {
@@ -68,46 +71,63 @@ export const HomeView = ({
 
       <div className="space-y-8">
         {/* Today */}
-        <div>
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Today</h2>
-          <div className={collectionView === 'grid' 
-            ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4'
-            : 'space-y-3'
-          }>
-            {sortBases(today, sortOption).map(
-              (base) => (
-                <BaseCard
-                  key={base.id}
-                  base={base}
-                  view={collectionView}
-                  onStarToggle={onBaseStarToggle}
-                  onContextMenu={onBaseContextMenu}
-                />
-              )
-            )}
+        {today.length > 0 && (
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Today</h2>
+            <div className={collectionView === 'grid' 
+              ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4'
+              : 'space-y-3'
+            }>
+              {sortBases(today, sortOption).map(
+                (base) => (
+                  <BaseCard
+                    key={base.id}
+                    base={base}
+                    view={collectionView}
+                    onStarToggle={onBaseStarToggle}
+                    onContextMenu={onBaseContextMenu}
+                  />
+                )
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Earlier */}
-        <div>
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Earlier</h2>
-          <div className={collectionView === 'grid'
-            ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4'
-            : 'space-y-3'
-          }>
-            {sortBases(earlier, sortOption).map(
-              (base) => (
-                <BaseCard
-                  key={base.id}
-                  base={base}
-                  view={collectionView}
-                  onStarToggle={onBaseStarToggle}
-                  onContextMenu={onBaseContextMenu}
-                />
-              )
-            )}
+        {earlier.length > 0 && (
+          <div>
+            {today.length > 0 && <h2 className="text-lg font-semibold text-gray-900 mb-4">Earlier</h2>}
+            <div className={collectionView === 'grid'
+              ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4'
+              : 'space-y-3'
+            }>
+              {sortBases(earlier, sortOption).map(
+                (base) => (
+                  <BaseCard
+                    key={base.id}
+                    base={base}
+                    view={collectionView}
+                    onStarToggle={onBaseStarToggle}
+                    onContextMenu={onBaseContextMenu}
+                  />
+                )
+              )}
+            </div>
           </div>
-        </div>
+        )}
+
+        {today.length === 0 && earlier.length === 0 && (
+          <div className="rounded-lg border border-gray-200 bg-white p-6 text-sm text-gray-500 w-1/3">
+            No bases found in this workspace.
+            <button
+              onClick={onCreateBase}
+              className="flex items-center mt-2 gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 cursor-pointer"
+            >
+              <Plus size={16} />
+              Create your first base
+            </button>
+          </div>
+        )}
       </div>
     </>
   );
