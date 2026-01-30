@@ -62,7 +62,7 @@ export const StarredView = ({
             ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4'
             : 'space-y-3'
           }>
-            {sortBases(starredBases, sortOption).map(
+            {starredBases.length ? sortBases(starredBases, sortOption).map(
               (base) => (
                 <BaseCard
                   key={base.id}
@@ -72,6 +72,8 @@ export const StarredView = ({
                   onContextMenu={onBaseContextMenu}
                 />
               )
+            ) : (
+              <div className="text-sm text-gray-500">You have no starred bases.</div>
             )}
           </div>
         </div>
