@@ -191,7 +191,7 @@ export const DocumentVersionHistory = ({
         </div>
         <div className="flex items-center gap-2">
           {versions.length >= 2 && (
-            <button
+            <span
               onClick={(e) => {
                 e.stopPropagation();
                 setShowComparison(true);
@@ -201,7 +201,7 @@ export const DocumentVersionHistory = ({
             >
               <GitCompare className="w-3.5 h-3.5" />
               Compare
-            </button>
+            </span>
           )}
           {expanded ? (
             <ChevronUp className="w-5 h-5 text-gray-400" />

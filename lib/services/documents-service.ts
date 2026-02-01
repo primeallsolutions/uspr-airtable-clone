@@ -510,6 +510,109 @@ export const DocumentsService = {
     }
     
     return newPath;
+  },
+
+  /**
+   * Copy a document to a different folder
+   */
+  async copyDocument(params: {
+    baseId: string;
+    tableId?: string | null;
+    recordId?: string | null;
+    sourceRelativePath: string;
+    targetFolderPath: string;
+    newFileName?: string;
+  }): Promise<string> {
+    const { baseId, tableId, recordId, sourceRelativePath, targetFolderPath, newFileName } = params;
+    const prefix = recordId ? recordPrefix(baseId, recordId) : basePrefix(baseId, tableId);
+    
+    const sourceFullPath = `${prefix}${sourceRelativePath}`;
+    
+    // Extract filename from source if newFileName not provided
+    const fileName = newFileName || sourceRelativePath.split("/").pop() || "copy";
+    const targetFolder = targetFolderPath.endsWith("/") ? targetFolderPath : `${targetFolderPath}/`;
+    const targetFullPath = `${prefix}${targetFolder}${fileName}`;
+    
+    // Download the source file
+    const { data: fileData, error: downloadError } = await supabase.storage
+      .from(BUCKET)
+      .download(sourceFullPath);
+    
+    if (downloadError || !fileData) {
+      throw new Error(`Failed to download source document: ${downloadError?.message}`);
+    }
+    
+    // Upload to target location
+    const { error: uploadError } = await supabase.storage
+      .from(BUCKET)
+      .upload(targetFullPath, fileData, {
+        cacheControl: "3600",
+        upsert: false,
+        contentType: fileData.type || "application/octet-stream"
+      });
+    
+    if (uploadError) {
+      throw new Error(`Failed to upload copied document: ${uploadError.message}`);
+    }
+    
+    // If recordId is provided, also link the copied document to the record
+    if (recordId) {
+      const mimeType = (fileData as any).type || "application/octet-stream";
+      await this.linkDocumentToRecord({
+        recordId,
+        baseId,
+        tableId,
+        documentPath: targetFullPath,
+        documentName: fileName,
+        mimeType,
+        sizeBytes: fileData.size,
+      });
+    }
+    
+    return `${targetFolder}${fileName}`;
+  },
+
+  /**
+   * Move a document to a different folder
+   */
+  async moveDocument(params: {
+    baseId: string;
+    tableId?: string | null;
+    recordId?: string | null;
+    sourceRelativePath: string;
+    targetFolderPath: string;
+    newFileName?: string;
+  }): Promise<string> {
+    const { baseId, tableId, recordId, sourceRelativePath, targetFolderPath, newFileName } = params;
+    const prefix = recordId ? recordPrefix(baseId, recordId) : basePrefix(baseId, tableId);
+    
+    const sourceFullPath = `${prefix}${sourceRelativePath}`;
+    
+    // Extract filename from source if newFileName not provided
+    const fileName = newFileName || sourceRelativePath.split("/").pop() || "file";
+    const targetFolder = targetFolderPath.endsWith("/") ? targetFolderPath : `${targetFolderPath}/`;
+    const targetFullPath = `${prefix}${targetFolder}${fileName}`;
+    
+    // Move the file in storage
+    const { error: moveError } = await supabase.storage
+      .from(BUCKET)
+      .move(sourceFullPath, targetFullPath);
+    
+    if (moveError) {
+      throw new Error(`Failed to move document: ${moveError.message}`);
+    }
+    
+    // If recordId is provided, update the path in record_documents
+    if (recordId) {
+      await supabase
+        .from("record_documents")
+        .update({ document_path: targetFullPath, document_name: fileName })
+        .eq("record_id", recordId)
+        .eq("document_path", sourceFullPath)
+        .throwOnError();
+    }
+    
+    return `${targetFolder}${fileName}`;
   }
 };
 
