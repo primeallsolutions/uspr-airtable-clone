@@ -1,6 +1,6 @@
 "use client";
 
-import { Eye, Hash, CalendarClock, Pencil, Trash2, Scissors, History } from "lucide-react";
+import { Eye, Hash, CalendarClock, Pencil, Trash2, Scissors, History, PenTool } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { StoredDocument } from "@/lib/services/documents-service";
 import { PdfViewer } from "../PdfViewer";
@@ -21,6 +21,8 @@ type DocumentPreviewProps = {
   loading?: boolean;
   // Transaction metadata support
   recordId?: string | null;
+  // Signature request support
+  onRequestSignature?: (doc: StoredDocument) => void;
 };
 
 export const DocumentPreview = ({
@@ -34,6 +36,7 @@ export const DocumentPreview = ({
   onSplit,
   loading = false,
   recordId,
+  onRequestSignature,
 }: DocumentPreviewProps) => {
   const [showVersionHistory, setShowVersionHistory] = useState(false);
 
@@ -105,6 +108,16 @@ export const DocumentPreview = ({
                 title="Split PDF - Extract pages to a new document"
               >
                 <Scissors className="w-4 h-4 text-blue-600" />
+              </button>
+            )}
+            {isPdf(selectedDoc.mimeType) && onRequestSignature && (
+              <button
+                onClick={() => onRequestSignature(selectedDoc)}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                title="Send for E-Signature"
+              >
+                <PenTool className="w-3.5 h-3.5" />
+                <span>Send for Signature</span>
               </button>
             )}
             <button

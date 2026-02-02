@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { ChevronRight, ChevronDown, Folder, FolderOpen, MoreVertical, Pencil, Trash2, Inbox } from "lucide-react";
+import { ChevronRight, ChevronDown, Folder, FolderOpen, MoreVertical, Pencil, Trash2, Inbox, Clock, Files } from "lucide-react";
 import { FolderSkeleton } from "./DocumentsSkeleton";
 
 type FolderNode = {
@@ -9,6 +9,8 @@ type FolderNode = {
   children: FolderNode[];
 };
 
+export type DocumentView = 'recent' | 'all' | 'folder';
+
 type DocumentsSidebarProps = {
   folderTree: FolderNode[];
   currentPrefix: string;
@@ -17,6 +19,10 @@ type DocumentsSidebarProps = {
   onFolderDelete?: (folderPath: string, folderName: string) => void;
   loading?: boolean;
   uncategorizedCount?: number; // Count of files in root (no folder)
+  recentCount?: number;        // Count of recent uploads (last 7 days)
+  totalDocCount?: number;      // Total document count
+  currentView?: DocumentView;  // Current active view
+  onViewChange?: (view: DocumentView) => void;  // Handler for view changes
 };
 
 const FolderItem = ({
@@ -167,12 +173,16 @@ export const DocumentsSidebar = ({
   onFolderDelete,
   loading = false,
   uncategorizedCount = 0,
+  recentCount = 0,
+  totalDocCount = 0,
+  currentView = 'folder',
+  onViewChange,
 }: DocumentsSidebarProps) => {
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
 
   // Auto-expand folders that contain the current prefix
   useEffect(() => {
-    if (currentPrefix) {
+    if (currentPrefix && currentView === 'folder') {
       const parts = currentPrefix.split("/").filter(Boolean);
       const pathsToExpand = new Set<string>();
       let currentPath = "";
@@ -182,7 +192,7 @@ export const DocumentsSidebar = ({
       });
       setExpandedFolders(pathsToExpand);
     }
-  }, [currentPrefix]);
+  }, [currentPrefix, currentView]);
 
   const toggleFolder = (path: string) => {
     setExpandedFolders((prev) => {
@@ -197,64 +207,132 @@ export const DocumentsSidebar = ({
   };
 
   // Check if "Uncategorized" (root) is selected
-  const isUncategorizedSelected = currentPrefix === "";
+  const isUncategorizedSelected = currentView === 'folder' && currentPrefix === "";
+
+  // Handle view selection
+  const handleViewSelect = (view: DocumentView) => {
+    if (onViewChange) {
+      onViewChange(view);
+    }
+  };
+
+  // Handle folder selection (switches to folder view)
+  const handleFolderSelect = (folder: string) => {
+    if (onViewChange) {
+      onViewChange('folder');
+    }
+    onFolderSelect(folder);
+  };
 
   return (
     <div className="w-64 border-r border-gray-200 bg-gray-50 flex-shrink-0 overflow-y-auto">
-      <div className="p-3 space-y-2">
-        <div className="text-xs font-semibold text-gray-600 uppercase">Folders</div>
-        <div className="space-y-1">
-          {loading ? (
-            <FolderSkeleton count={8} />
-          ) : (
-            <>
-              {/* Uncategorized files (root folder) */}
-              <button
-                onClick={() => onFolderSelect("")}
-                className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
-                  isUncategorizedSelected
-                    ? "bg-amber-100 text-amber-800"
-                    : "hover:bg-white text-gray-700"
-                }`}
-              >
-                <Inbox className="w-4 h-4 flex-shrink-0" />
-                <span className="truncate">Uncategorized</span>
-                {uncategorizedCount > 0 && (
-                  <span className={`ml-auto text-xs px-1.5 py-0.5 rounded-full ${
+      <div className="p-3 space-y-4">
+        {/* Quick Access Section */}
+        <div className="space-y-2">
+          <div className="text-xs font-semibold text-gray-600 uppercase">Quick Access</div>
+          <div className="space-y-1">
+            {/* Recent Uploads */}
+            <button
+              onClick={() => handleViewSelect('recent')}
+              className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
+                currentView === 'recent'
+                  ? "bg-blue-100 text-blue-800"
+                  : "hover:bg-white text-gray-700"
+              }`}
+            >
+              <Clock className="w-4 h-4 flex-shrink-0" />
+              <span className="truncate">Recent Uploads</span>
+              {recentCount > 0 && (
+                <span className={`ml-auto text-xs px-1.5 py-0.5 rounded-full ${
+                  currentView === 'recent'
+                    ? "bg-blue-200 text-blue-900"
+                    : "bg-gray-200 text-gray-600"
+                }`}>
+                  {recentCount}
+                </span>
+              )}
+            </button>
+            
+            {/* All Documents */}
+            <button
+              onClick={() => handleViewSelect('all')}
+              className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
+                currentView === 'all'
+                  ? "bg-purple-100 text-purple-800"
+                  : "hover:bg-white text-gray-700"
+              }`}
+            >
+              <Files className="w-4 h-4 flex-shrink-0" />
+              <span className="truncate">All Documents</span>
+              {totalDocCount > 0 && (
+                <span className={`ml-auto text-xs px-1.5 py-0.5 rounded-full ${
+                  currentView === 'all'
+                    ? "bg-purple-200 text-purple-900"
+                    : "bg-gray-200 text-gray-600"
+                }`}>
+                  {totalDocCount}
+                </span>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* Folders Section */}
+        <div className="space-y-2">
+          <div className="text-xs font-semibold text-gray-600 uppercase">Folders</div>
+          <div className="space-y-1">
+            {loading ? (
+              <FolderSkeleton count={8} />
+            ) : (
+              <>
+                {/* Uncategorized files (root folder) */}
+                <button
+                  onClick={() => handleFolderSelect("")}
+                  className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
                     isUncategorizedSelected
-                      ? "bg-amber-200 text-amber-900"
-                      : "bg-gray-200 text-gray-600"
-                  }`}>
-                    {uncategorizedCount}
-                  </span>
+                      ? "bg-amber-100 text-amber-800"
+                      : "hover:bg-white text-gray-700"
+                  }`}
+                >
+                  <Inbox className="w-4 h-4 flex-shrink-0" />
+                  <span className="truncate">Uncategorized</span>
+                  {uncategorizedCount > 0 && (
+                    <span className={`ml-auto text-xs px-1.5 py-0.5 rounded-full ${
+                      isUncategorizedSelected
+                        ? "bg-amber-200 text-amber-900"
+                        : "bg-gray-200 text-gray-600"
+                    }`}>
+                      {uncategorizedCount}
+                    </span>
+                  )}
+                </button>
+                
+                {/* Divider if there are folders */}
+                {folderTree.length > 0 && (
+                  <div className="border-t border-gray-200 my-2" />
                 )}
-              </button>
-              
-              {/* Divider if there are folders */}
-              {folderTree.length > 0 && (
-                <div className="border-t border-gray-200 my-2" />
-              )}
-              
-              {/* Folder tree */}
-              {folderTree.length === 0 ? (
-                <div className="text-xs text-gray-500 pl-3">No folders yet.</div>
-              ) : (
-                folderTree.map((folder) => (
-                  <FolderItem
-                    key={folder.path}
-                    folder={folder}
-                    level={0}
-                    currentPrefix={currentPrefix}
-                    onFolderSelect={onFolderSelect}
-                    onFolderRename={onFolderRename}
-                    onFolderDelete={onFolderDelete}
-                    expandedFolders={expandedFolders}
-                    toggleFolder={toggleFolder}
-                  />
-                ))
-              )}
-            </>
-          )}
+                
+                {/* Folder tree */}
+                {folderTree.length === 0 ? (
+                  <div className="text-xs text-gray-500 pl-3">No folders yet.</div>
+                ) : (
+                  folderTree.map((folder) => (
+                    <FolderItem
+                      key={folder.path}
+                      folder={folder}
+                      level={0}
+                      currentPrefix={currentPrefix}
+                      onFolderSelect={handleFolderSelect}
+                      onFolderRename={onFolderRename}
+                      onFolderDelete={onFolderDelete}
+                      expandedFolders={expandedFolders}
+                      toggleFolder={toggleFolder}
+                    />
+                  ))
+                )}
+              </>
+            )}
+          </div>
         </div>
       </div>
     </div>

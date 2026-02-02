@@ -140,6 +140,7 @@ export const PdfEditor = ({
     height: number;
     fontSize: number;
     originalText: string;
+    annotationId: string;  // Stable ID for the editing session
   } | null>(null);
   
   // Content outline state
@@ -564,12 +565,23 @@ export const PdfEditor = ({
     for (let pageNum = 1; pageNum <= numPages; pageNum++) {
       const pageContentBlocks: Array<{x: number; y: number; width: number; height: number; type: 'text' | 'image' | 'annotation'; id: string;}> = [];
       
-      // Add text items
+      // Add text items (check for moved/edited positions via annotations)
       const pageTextItems = textItems.get(pageNum) || [];
       pageTextItems.forEach((item, idx) => {
+        // Check if this text has a textEdit annotation (may have been moved)
+        const editAnnotation = annotations.find(
+          a => a.type === "textEdit" && 
+               a.pageIndex === pageNum - 1 && 
+               a.originalText === item.str
+        );
+        
+        // Use annotation position if text was moved, otherwise use original
+        const blockX = editAnnotation?.x ?? item.x;
+        const blockY = editAnnotation?.y ?? item.y;
+        
         pageContentBlocks.push({
-          x: item.x,
-          y: item.y,
+          x: blockX,
+          y: blockY,
           width: item.width,
           height: item.height,
           type: 'text',
@@ -577,8 +589,10 @@ export const PdfEditor = ({
         });
       });
       
-      // Add annotations
-      const pageAnnotations = annotations.filter(a => a.pageIndex === pageNum - 1);
+      // Add non-textEdit annotations (highlights, signatures, etc.)
+      const pageAnnotations = annotations.filter(
+        a => a.pageIndex === pageNum - 1 && a.type !== "textEdit"
+      );
       pageAnnotations.forEach(ann => {
         pageContentBlocks.push({
           x: ann.x,
@@ -857,19 +871,28 @@ export const PdfEditor = ({
           const textItem = textItemsOnPage[itemIdx];
           
           if (textItem) {
-            // Create or update a textEdit annotation to reposition the text
-            // First, check if we already have a textEdit annotation for this drag operation
             const dragAnnotationId = `drag_${draggedBlock.id}`;
             
+            // Check if there's already an existing textEdit annotation for this text
+            const existingAnnotation = annotations.find(
+              a => a.type === "textEdit" && 
+                   a.pageIndex === currentPage - 1 && 
+                   a.originalText === textItem.str &&
+                   !a.id.startsWith('drag_')
+            );
+            
+            // Use existing annotation's content if available (preserves edits during drag)
+            const content = existingAnnotation?.content ?? textItem.str;
+            
             const newAnnotation: Annotation = {
-              id: dragAnnotationId, // Use a consistent ID for this drag operation
+              id: dragAnnotationId, // Use consistent ID for this drag operation
               type: 'textEdit',
               pageIndex: currentPage - 1,
               x,
               y,
               width: textItem.width,
               height: textItem.height,
-              content: textItem.str,
+              content: content,
               originalText: textItem.str,
               fontSize: textItem.fontSize,
               color: '#000000'
@@ -877,15 +900,20 @@ export const PdfEditor = ({
             
             // Batch update to prevent re-renders
             setAnnotations(prev => {
-              const index = prev.findIndex(a => a.id === dragAnnotationId);
+              // Remove existing permanent annotation (will be recreated in mouseUp)
+              let updated = existingAnnotation 
+                ? prev.filter(a => a.id !== existingAnnotation.id)
+                : prev;
+              
+              const index = updated.findIndex(a => a.id === dragAnnotationId);
               if (index !== -1) {
-                // Update existing annotation
-                const updated = [...prev];
+                // Update existing drag annotation
+                updated = [...updated];
                 updated[index] = newAnnotation;
                 return updated;
               } else {
-                // Add new annotation
-                return [...prev, newAnnotation];
+                // Add new drag annotation
+                return [...updated, newAnnotation];
               }
             });
           }
@@ -924,16 +952,36 @@ export const PdfEditor = ({
       const tempAnnotation = annotations.find(a => a.id === dragAnnotationId);
       
       if (tempAnnotation) {
-        // Create a permanent annotation with a unique ID
-        const permanentAnnotation: Annotation = {
-          ...tempAnnotation,
-          id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, // New unique ID
-        };
+        // Check if there's already an existing textEdit annotation for this originalText
+        // (could be from a previous edit or drag)
+        const existingAnnotation = annotations.find(
+          a => a.type === "textEdit" && 
+               a.pageIndex === tempAnnotation.pageIndex && 
+               a.originalText === tempAnnotation.originalText &&
+               a.id !== dragAnnotationId
+        );
         
-        // Remove the temporary annotation and add the permanent one
         setAnnotations(prev => {
-          const filtered = prev.filter(a => a.id !== dragAnnotationId);
-          return [...filtered, permanentAnnotation];
+          // Remove the temporary drag annotation
+          let filtered = prev.filter(a => a.id !== dragAnnotationId);
+          
+          if (existingAnnotation) {
+            // Update existing annotation with new position
+            filtered = filtered.map(a => 
+              a.id === existingAnnotation.id 
+                ? { ...a, x: tempAnnotation.x, y: tempAnnotation.y }
+                : a
+            );
+          } else {
+            // Create a new permanent annotation
+            const permanentAnnotation: Annotation = {
+              ...tempAnnotation,
+              id: `edit-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+            };
+            filtered = [...filtered, permanentAnnotation];
+          }
+          
+          return filtered;
         });
       }
     }
@@ -999,25 +1047,28 @@ export const PdfEditor = ({
         if (x >= item.x - hitMargin && x <= item.x + item.width + hitMargin && 
             y >= item.y - hitMargin && y <= item.y + item.height + hitMargin) {
           
-          // Check if this text has already been edited
+          // Check if this text has already been edited (match by originalText, not position)
           const existingTextEdit = annotations.find(
             a => a.type === "textEdit" && 
                  a.pageIndex === currentPage - 1 && 
-                 a.originalText === item.str &&
-                 Math.abs(a.x - item.x) < 5 &&
-                 Math.abs(a.y - item.y) < 5
+                 a.originalText === item.str
           );
+          
+          // Use annotation position if it exists (supports moved text)
+          const editX = existingTextEdit?.x ?? item.x;
+          const editY = existingTextEdit?.y ?? item.y;
           
           setEditingText({
             pageIndex: currentPage - 1,
             itemIndex: i,
             text: existingTextEdit?.content || item.str,
-            x: item.x,
-            y: item.y,
+            x: editX,
+            y: editY,
             width: item.width,
             height: item.height,
             fontSize: item.fontSize,
             originalText: item.str,
+            annotationId: existingTextEdit?.id || `edit-${Date.now()}-${Math.random().toString(36).slice(2)}`,
           });
           return; // Exit early to prevent other actions
         }
@@ -1468,61 +1519,85 @@ export const PdfEditor = ({
                 {textItems.get(currentPage) && (
                   <div className="absolute top-0 left-0 w-full h-full pointer-events-none" style={{ zIndex: 5 }}>
                     {textItems.get(currentPage)!.map((item, idx) => {
-                      // Check if this text has been edited (cached)
+                      // Check if this text has been edited or moved
+                      // Match by originalText and original position (stored in annotation)
                       const editedAnnotation = annotations.find(
                         a => a.type === "textEdit" && 
                         a.pageIndex === currentPage - 1 && 
-                        a.originalText === item.str &&
-                        Math.abs(a.x - item.x) < 5 &&
-                        Math.abs(a.y - item.y) < 5
+                        a.originalText === item.str
                       );
                       
                       const isCurrentlyEditing = editingText && 
                         editingText.itemIndex === idx && 
                         editingText.pageIndex === currentPage - 1;
                       
-                      // Show edited text as overlay (real-time cached display)
-                      // Must cover the FULL width of the original text
+                      // Check if text was moved (annotation position differs from original)
+                      const wasMoved = editedAnnotation && (
+                        Math.abs(editedAnnotation.x - item.x) > 5 ||
+                        Math.abs(editedAnnotation.y - item.y) > 5
+                      );
+                      
+                      // Show edited/moved text as overlay
                       if (editedAnnotation && !isCurrentlyEditing) {
                         // Calculate width to cover original text completely
                         const originalTextWidth = item.str.length * item.fontSize * 0.65;
                         const coverWidth = Math.max(item.width, originalTextWidth) + 5;
                         
+                        // Use annotation position (supports both edit-in-place and drag)
+                        const renderX = editedAnnotation.x;
+                        const renderY = editedAnnotation.y;
+                        
                         return (
-                          <div
-                            key={idx}
-                            className={`absolute ${activeTool === "edit" ? "pointer-events-auto cursor-text" : "pointer-events-none"}`}
-                            style={{
-                              left: (item.x - 1) * zoom,
-                              top: (item.y - 1) * zoom,
-                              minWidth: coverWidth * zoom,
-                              height: (item.height + 2) * zoom,
-                              fontSize: item.fontSize * zoom,
-                              lineHeight: 1,
-                              backgroundColor: 'white',
-                              padding: `${zoom}px ${2 * zoom}px`,
-                            }}
-                            onClick={(e) => {
-                              if (activeTool === "edit") {
-                                e.stopPropagation();
-                                setEditingText({
-                                  pageIndex: currentPage - 1,
-                                  itemIndex: idx,
-                                  text: editedAnnotation.content || item.str,
-                                  x: item.x,
-                                  y: item.y,
-                                  width: item.width,
-                                  height: item.height,
-                                  fontSize: item.fontSize,
-                                  originalText: item.str,
-                                });
-                              }
-                            }}
-                          >
-                            <span className="text-black whitespace-nowrap" style={{ fontFamily: 'Helvetica, Arial, sans-serif' }}>
-                              {editedAnnotation.content}
-                            </span>
-                          </div>
+                          <React.Fragment key={idx}>
+                            {/* Cover original text location with white when moved */}
+                            {wasMoved && (
+                              <div
+                                className="absolute pointer-events-none"
+                                style={{
+                                  left: (item.x - 2) * zoom,
+                                  top: (item.y - 2) * zoom,
+                                  width: (coverWidth + 4) * zoom,
+                                  height: (item.height + 6) * zoom,
+                                  backgroundColor: 'white',
+                                }}
+                              />
+                            )}
+                            {/* Render text at new/current position */}
+                            <div
+                              className={`absolute ${activeTool === "edit" || activeTool === "select" ? "pointer-events-auto cursor-text" : "pointer-events-none"}`}
+                              style={{
+                                left: (renderX - 1) * zoom,
+                                top: (renderY - 1) * zoom,
+                                minWidth: coverWidth * zoom,
+                                height: (item.height + 2) * zoom,
+                                fontSize: item.fontSize * zoom,
+                                lineHeight: 1,
+                                backgroundColor: wasMoved ? 'transparent' : 'white',
+                                padding: `${zoom}px ${2 * zoom}px`,
+                              }}
+                              onClick={(e) => {
+                                if (activeTool === "edit") {
+                                  e.stopPropagation();
+                                  setEditingText({
+                                    pageIndex: currentPage - 1,
+                                    itemIndex: idx,
+                                    text: editedAnnotation.content || item.str,
+                                    x: renderX,
+                                    y: renderY,
+                                    width: item.width,
+                                    height: item.height,
+                                    fontSize: item.fontSize,
+                                    originalText: item.str,
+                                    annotationId: editedAnnotation.id,
+                                  });
+                                }
+                              }}
+                            >
+                              <span className="text-black whitespace-nowrap" style={{ fontFamily: 'Helvetica, Arial, sans-serif' }}>
+                                {editedAnnotation.content}
+                              </span>
+                            </div>
+                          </React.Fragment>
                         );
                       }
                       
@@ -1553,6 +1628,7 @@ export const PdfEditor = ({
                                 height: item.height,
                                 fontSize: item.fontSize,
                                 originalText: item.str,
+                                annotationId: `edit-${Date.now()}-${Math.random().toString(36).slice(2)}`,
                               });
                             }}
                             title="Click to edit"
@@ -1587,49 +1663,37 @@ export const PdfEditor = ({
                         const newText = e.target.value;
                         setEditingText({ ...editingText, text: newText });
                         
-                        // Real-time cache: update annotations immediately as user types
-                        const filteredAnnotations = annotations.filter(
-                          a => !(a.type === "textEdit" && 
-                            a.pageIndex === editingText.pageIndex && 
-                            a.originalText === editingText.originalText &&
-                            Math.abs(a.x - editingText.x) < 5 &&
-                            Math.abs(a.y - editingText.y) < 5)
-                        );
-                        
-                        // Only add annotation if text changed from original
-                        if (newText !== editingText.originalText) {
-                          const newAnnotation: Annotation = {
-                            id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-                            type: "textEdit",
-                            pageIndex: editingText.pageIndex,
-                            x: editingText.x,
-                            y: editingText.y,
-                            width: editingText.width,
-                            height: editingText.height,
-                            content: newText,
-                            originalText: editingText.originalText,
-                            fontSize: editingText.fontSize,
-                          };
-                          setAnnotations([...filteredAnnotations, newAnnotation]);
-                        } else {
-                          // If reverted to original, remove the edit annotation
-                          setAnnotations(filteredAnnotations);
-                        }
+                        // Use stable annotation ID for consistent tracking
+                        setAnnotations(prev => {
+                          // Remove existing annotation with this ID
+                          const filtered = prev.filter(a => a.id !== editingText.annotationId);
+                          
+                          // Only add annotation if text changed from original
+                          if (newText !== editingText.originalText) {
+                            return [...filtered, {
+                              id: editingText.annotationId,  // Reuse stable ID
+                              type: "textEdit" as const,
+                              pageIndex: editingText.pageIndex,
+                              x: editingText.x,
+                              y: editingText.y,
+                              width: editingText.width,
+                              height: editingText.height,
+                              content: newText,
+                              originalText: editingText.originalText,
+                              fontSize: editingText.fontSize,
+                            }];
+                          }
+                          // If reverted to original, just return filtered (annotation removed)
+                          return filtered;
+                        });
                       }}
                       onKeyDown={(e) => {
                         if (e.key === "Enter" || e.key === "Tab") {
                           e.preventDefault();
                           setEditingText(null);
                         } else if (e.key === "Escape") {
-                          // Revert changes on escape
-                          const filteredAnnotations = annotations.filter(
-                            a => !(a.type === "textEdit" && 
-                              a.pageIndex === editingText.pageIndex && 
-                              a.originalText === editingText.originalText &&
-                              Math.abs(a.x - editingText.x) < 5 &&
-                              Math.abs(a.y - editingText.y) < 5)
-                          );
-                          setAnnotations(filteredAnnotations);
+                          // Revert changes on escape - use stable ID for reliable removal
+                          setAnnotations(prev => prev.filter(a => a.id !== editingText.annotationId));
                           setEditingText(null);
                         }
                       }}
