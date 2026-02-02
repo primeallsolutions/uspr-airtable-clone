@@ -1,11 +1,12 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
-import { FileText, Image as ImageIcon, File, Loader2, Trash2, Search, X, LayoutGrid, List, ArrowUpDown, Clock, Files } from "lucide-react";
+import { FileText, Image as ImageIcon, File, Loader2, Trash2, Search, X, LayoutGrid, List, ArrowUpDown, Clock, Files, FilePen, Copy, FolderOutput } from "lucide-react";
 import type { StoredDocument } from "@/lib/services/documents-service";
 import { DocumentsService } from "@/lib/services/documents-service";
 import { formatSize, isImage, isPdf, isFolder } from "./utils";
 import { DocumentSkeleton } from "./DocumentsSkeleton";
 import { DocumentThumbnail } from "./DocumentThumbnail";
 import type { DocumentView } from "./DocumentsSidebar";
+import { CopyMoveModal } from "./CopyMoveModal";
 
 type SortOption = 'date-desc' | 'date-asc' | 'name-asc' | 'name-desc' | 'size-desc' | 'size-asc';
 
@@ -20,6 +21,7 @@ const SORT_OPTIONS: { value: SortOption; label: string }[] = [
 
 type DocumentsListProps = {
   documents: Array<StoredDocument & { relative: string }>;
+  allDocs: StoredDocument[];
   selectedDocPath: string | null;
   loading: boolean;
   error: string | null;
@@ -42,6 +44,7 @@ const renderDocIcon = (mimeType: string) => {
 
 export const DocumentsList = ({
   documents,
+  allDocs,
   selectedDocPath,
   loading,
   error,
@@ -58,8 +61,15 @@ export const DocumentsList = ({
   const [searchQuery, setSearchQuery] = useState("");
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
+  
+  // Sorting state (from HEAD)
   const [sortBy, setSortBy] = useState<SortOption>('date-desc');
   const [showSortMenu, setShowSortMenu] = useState(false);
+  
+  // Copy/Move state (from remote)
+  const [copyMoveModalOpen, setCopyMoveModalOpen] = useState(false);
+  const [selectedDocForCopyMove, setSelectedDocForCopyMove] = useState<(StoredDocument & { relative: string }) | null>(null);
+  const [folders, setFolders] = useState<Array<{ name: string; path: string, parent_path: string | null }>>([]);
 
   // Filter documents by search query
   const filteredDocuments = useMemo(() => {
@@ -143,6 +153,29 @@ export const DocumentsList = ({
       });
     }
   }, [viewMode, sortedDocuments, loadSignedUrl, signedUrls]);
+
+  // Load folders for copy/move modal
+  useEffect(() => {
+    const loadFolders = async () => {
+      try {
+        const folderList = await DocumentsService.listFolders(baseId, tableId ?? null, null, true, recordId);
+        setFolders(folderList);
+      } catch (err) {
+        console.error("Failed to load folders:", err);
+      }
+    };
+    loadFolders();
+  }, [baseId, tableId, recordId]);
+
+  const openCopyMoveModal = useCallback((doc: StoredDocument & { relative: string }) => {
+    setSelectedDocForCopyMove(doc);
+    setCopyMoveModalOpen(true);
+  }, []);
+
+  const closeCopyMoveModal = useCallback(() => {
+    setCopyMoveModalOpen(false);
+    setSelectedDocForCopyMove(null);
+  }, []);
 
   return (
     <div className="border-r border-gray-200 min-h-0 overflow-y-auto flex flex-col">
@@ -243,6 +276,7 @@ export const DocumentsList = ({
         Drag and drop files anywhere in this panel to upload. You can also forward email
         attachments to your ingest address (e.g., tc@allprime.com) to auto-save here.
       </div>
+      
       {shouldShowDocuments ? (
         <div className="divide-y divide-gray-100">
           {loading ? (
@@ -285,7 +319,7 @@ export const DocumentsList = ({
                     }`}
                     title={isPdf(doc.mimeType) ? "Double-click to edit" : ""}
                   >
-                    <div className="flex-shrink-0">{renderDocIcon(doc.mimeType)}</div>
+                    <div className="shrink-0">{renderDocIcon(doc.mimeType)}</div>
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-semibold text-gray-900 truncate">
                         {doc.relative}
@@ -295,6 +329,30 @@ export const DocumentsList = ({
                         <span>•</span>
                         <span>{new Date(doc.createdAt).toLocaleString()}</span>
                       </div>
+                    </div>
+                    <div className="shrink-0 flex items-center gap-1">
+                      {onDocumentEdit && isPdf(doc.mimeType) && (
+                        <span
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDocumentEdit(doc);
+                          }}
+                          className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          title="Edit document"
+                        >
+                          <FilePen className="w-4 h-4" />
+                        </span>
+                      )}
+                      <span
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openCopyMoveModal(doc);
+                        }}
+                        className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                        title="Copy or move document"
+                      >
+                        <FolderOutput className="w-4 h-4" />
+                      </span>
                     </div>
                   </button>
                 );
@@ -317,13 +375,38 @@ export const DocumentsList = ({
                           onDocumentEdit(doc);
                         }
                       }}
-                      className={`relative p-2 rounded-lg border transition-all hover:shadow-md ${
+                      className={`group relative p-2 rounded-lg border transition-all hover:shadow-md ${
                         selectedDocPath === doc.path
                           ? "border-blue-500 bg-blue-50 ring-2 ring-blue-200"
                           : "border-gray-200 hover:border-gray-300 bg-white"
                       }`}
                       title={isPdf(doc.mimeType) ? "Double-click to edit" : ""}
                     >
+                      {/* Action Buttons - appear on hover */}
+                      <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                        {onDocumentEdit && isPdf(doc.mimeType) && (
+                          <span
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onDocumentEdit(doc);
+                            }}
+                            className="p-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors shadow-sm"
+                            title="Edit document"
+                          >
+                            <FilePen className="w-3 h-3" />
+                          </span>
+                        )}
+                        <span
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openCopyMoveModal(doc);
+                          }}
+                          className="p-1.5 bg-green-600 hover:bg-green-700 text-white rounded-md transition-colors shadow-sm"
+                          title="Copy or move document"
+                        >
+                          <FolderOutput className="w-3 h-3" />
+                        </span>
+                      </div>
                       {/* Thumbnail */}
                       <DocumentThumbnail
                         documentPath={doc.path}
@@ -332,7 +415,7 @@ export const DocumentsList = ({
                         signedUrl={signedUrls[doc.path]}
                         mimeType={doc.mimeType}
                         fileName={doc.relative}
-                        className="w-full aspect-[3/4] mb-2"
+                        className="w-full aspect-3/4 mb-2"
                       />
                       {/* File Info */}
                       <div className="text-left">
@@ -353,7 +436,19 @@ export const DocumentsList = ({
       ) : (
         <div className="p-6 text-sm text-gray-500">Select a folder to view documents.</div>
       )}
+      
+      <CopyMoveModal
+        isOpen={copyMoveModalOpen}
+        onClose={closeCopyMoveModal}
+        document={selectedDocForCopyMove}
+        documents={allDocs}
+        folders={folders}
+        baseId={baseId}
+        tableId={tableId}
+        recordId={recordId}
+        currentFolderPath={folderPath}
+        onSuccess={() => window.location.reload()}
+      />
     </div>
   );
 };
-

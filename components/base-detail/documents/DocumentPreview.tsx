@@ -225,7 +225,7 @@ export const DocumentPreview = ({
             {showVersionHistory && baseId && selectedDoc && (
               <div className="border-t border-gray-200 p-4">
                 <DocumentVersionHistory
-                  documentPath={selectedDoc.path}
+                  documentPath={`bases/${baseId}/records/${recordId}/${selectedDoc.path}` /* hardcoded to assume we are in a record */}
                   baseId={baseId}
                   tableId={tableId}
                   onVersionRestored={() => {

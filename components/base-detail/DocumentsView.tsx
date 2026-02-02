@@ -175,10 +175,10 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
       await DocumentActivityService.logActivity({
         baseId,
         tableId: selectedTable?.id,
+        recordId,
         action: 'folder_create',
         folderPath: currentPrefix + name + "/",
-        documentName: name,
-        ...(recordId && { metadata: { recordId } }),
+        documentName: name
       });
       
       toast.success("Folder created successfully", {
@@ -285,6 +285,7 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
         await DocumentActivityService.logActivity({
           baseId,
           tableId: selectedTable?.id,
+          recordId,
           action: 'upload',
           documentPath: currentPrefix + file.name,
           documentName: file.name,
@@ -613,6 +614,7 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
       await DocumentActivityService.logActivity({
         baseId,
         tableId: selectedTable?.id,
+        recordId,
         action: 'delete',
         documentPath: selectedDoc.path,
         documentName: fileName,
@@ -685,6 +687,7 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
       await DocumentActivityService.logActivity({
         baseId,
         tableId: selectedTable?.id,
+        recordId,
         action: 'rename',
         documentPath: newRelative,
         documentName: newName,
@@ -747,6 +750,7 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
       await DocumentActivityService.logActivity({
         baseId,
         tableId: selectedTable?.id,
+        recordId,
         action: 'folder_rename',
         folderPath: selectedFolder.path,
         documentName: newName,
@@ -796,6 +800,7 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
       await DocumentActivityService.logActivity({
         baseId,
         tableId: selectedTable?.id,
+        recordId,
         action: 'folder_delete',
         folderPath: selectedFolder.path,
         documentName: selectedFolder.name,
@@ -928,6 +933,7 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
       await DocumentActivityService.logActivity({
         baseId,
         tableId: selectedTable?.id,
+        recordId,
         action: 'edit',
         documentPath: fullDocPath,
         documentName: originalFileName,
@@ -1073,6 +1079,7 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
               <>
                 <DocumentsList
                   documents={visibleDocs}
+                  allDocs={allDocs}
                   selectedDocPath={selectedDocPath}
                   loading={loading && isInitialLoad}
                   error={error}

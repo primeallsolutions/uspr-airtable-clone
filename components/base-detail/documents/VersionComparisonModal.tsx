@@ -44,6 +44,7 @@ export const VersionComparisonModal = ({
   const [rightTotalPages, setRightTotalPages] = useState(0);
   const [zoom, setZoom] = useState(1);
   const [syncScroll, setSyncScroll] = useState(true);
+  const [pdfsLoaded, setPdfsLoaded] = useState(false); // Track when PDFs are loaded
   
   const leftCanvasRef = useRef<HTMLCanvasElement>(null);
   const rightCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -113,9 +114,11 @@ export const VersionComparisonModal = ({
       setRightTotalPages(rightPdf.numPages);
       setLeftPage(1);
       setRightPage(1);
+      setPdfsLoaded(true); // Signal that PDFs are ready to render
     } catch (error) {
       console.error("Failed to load comparison:", error);
       toast.error("Failed to load comparison");
+      setPdfsLoaded(false);
     } finally {
       setComparing(false);
     }
@@ -185,19 +188,13 @@ export const VersionComparisonModal = ({
     [zoom]
   );
 
-  // Render left page
+  // Trigger initial render when PDFs are loaded
   useEffect(() => {
-    if (leftPdfRef.current && leftCanvasRef.current) {
-      renderPage(leftPdfRef.current, leftCanvasRef.current, leftPage, leftRenderTaskRef);
+    if (pdfsLoaded && leftPdfRef.current && leftCanvasRef.current && rightPdfRef.current && rightCanvasRef.current) {
+      renderPage(leftPdfRef.current, leftCanvasRef.current, 1, leftRenderTaskRef);
+      renderPage(rightPdfRef.current, rightCanvasRef.current, 1, rightRenderTaskRef);
     }
-  }, [leftPage, renderPage]);
-
-  // Render right page
-  useEffect(() => {
-    if (rightPdfRef.current && rightCanvasRef.current) {
-      renderPage(rightPdfRef.current, rightCanvasRef.current, rightPage, rightRenderTaskRef);
-    }
-  }, [rightPage, renderPage]);
+  }, [pdfsLoaded, renderPage]);
 
   // Sync page navigation
   const handlePageChange = (side: "left" | "right", newPage: number) => {
