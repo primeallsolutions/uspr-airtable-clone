@@ -174,7 +174,11 @@ export const DocumentVersionHistory = ({
   }
 
   if (versions.length === 0) {
-    return null; // Don't show if no versions exist
+    return (
+      <div className="bg-white rounded-xl border border-gray-200 p-4">
+        <p className="text-sm text-gray-500">No version history available for this document.</p>
+      </div>
+    );
   }
 
   return (

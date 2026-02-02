@@ -1017,6 +1017,7 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
               <>
                 <DocumentsList
                   documents={visibleDocs}
+                  allDocs={allDocs}
                   selectedDocPath={selectedDocPath}
                   loading={loading && isInitialLoad}
                   error={error}

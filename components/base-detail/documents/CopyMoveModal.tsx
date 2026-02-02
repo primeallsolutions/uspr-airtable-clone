@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { X, Copy, Move, Loader2 } from "lucide-react";
 import { DocumentsService } from "@/lib/services/documents-service";
 import { toast } from "sonner";
@@ -8,7 +8,8 @@ type CopyMoveModalProps = {
   isOpen: boolean;
   onClose: () => void;
   document: (StoredDocument & { relative: string }) | null;
-  folders: Array<{ name: string; path: string }>;
+  documents: StoredDocument[];
+  folders: Array<{ name: string; path: string, parent_path: string | null }>;
   baseId: string;
   tableId?: string | null;
   recordId?: string | null;
@@ -20,6 +21,7 @@ export const CopyMoveModal = ({
   isOpen,
   onClose,
   document,
+  documents,
   folders,
   baseId,
   tableId,
@@ -30,7 +32,13 @@ export const CopyMoveModal = ({
   const [operation, setOperation] = useState<"copy" | "move">("copy");
   const [selectedFolder, setSelectedFolder] = useState<string>("");
   const [newFileName, setNewFileName] = useState<string>("");
+  const [isValid, setIsValid] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    console.log({selectedFolder, newFileName, documents});
+    setIsValid(!documents.map(doc => doc.path).includes(`${selectedFolder}${newFileName || document?.relative.split("/").pop()}`));
+  }, [selectedFolder, newFileName]);
 
   const handleReset = useCallback(() => {
     setOperation("copy");
@@ -174,7 +182,7 @@ export const CopyMoveModal = ({
               ) : (
                 availableFolders.map((folder) => (
                   <option key={folder.path} value={folder.path}>
-                    {folder.name}
+                    {folder.parent_path || ""}{folder.name}
                   </option>
                 ))
               )}
@@ -195,6 +203,7 @@ export const CopyMoveModal = ({
               disabled={isLoading}
             />
             <p className="text-xs text-gray-500 mt-1">Leave empty to keep original name</p>
+            {!isValid && (<p className="flex-1 text-sm text-red-600">A document with this name already exists.</p>)}
           </div>
         </div>
 
@@ -209,7 +218,7 @@ export const CopyMoveModal = ({
           </button>
           <button
             onClick={handleExecute}
-            disabled={isLoading || !selectedFolder}
+            disabled={isLoading || !selectedFolder || !isValid}
             className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
               operation === "copy"
                 ? "bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400"

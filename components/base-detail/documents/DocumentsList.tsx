@@ -9,6 +9,7 @@ import { CopyMoveModal } from "./CopyMoveModal";
 
 type DocumentsListProps = {
   documents: Array<StoredDocument & { relative: string }>;
+  allDocs: StoredDocument[];
   selectedDocPath: string | null;
   loading: boolean;
   error: string | null;
@@ -29,6 +30,7 @@ const renderDocIcon = (mimeType: string) => {
 
 export const DocumentsList = ({
   documents,
+  allDocs,
   selectedDocPath,
   loading,
   error,
@@ -45,7 +47,7 @@ export const DocumentsList = ({
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
   const [copyMoveModalOpen, setCopyMoveModalOpen] = useState(false);
   const [selectedDocForCopyMove, setSelectedDocForCopyMove] = useState<(StoredDocument & { relative: string }) | null>(null);
-  const [folders, setFolders] = useState<Array<{ name: string; path: string }>>([]);
+  const [folders, setFolders] = useState<Array<{ name: string; path: string, parent_path: string | null }>>([]);
 
   const filteredDocuments = useMemo(() => {
     if (!searchQuery.trim()) return documents;
@@ -214,7 +216,7 @@ export const DocumentsList = ({
                   </div>
                   <div className="flex-shrink-0 flex items-center gap-1">
                     {onDocumentEdit && isPdf(doc.mimeType) && (
-                      <button
+                      <span
                         onClick={(e) => {
                           e.stopPropagation();
                           onDocumentEdit(doc);
@@ -223,9 +225,9 @@ export const DocumentsList = ({
                         title="Edit document"
                       >
                         <FilePen className="w-4 h-4" />
-                      </button>
+                      </span>
                     )}
-                    <button
+                    <span
                       onClick={(e) => {
                         e.stopPropagation();
                         openCopyMoveModal(doc);
@@ -234,7 +236,7 @@ export const DocumentsList = ({
                       title="Copy or move document"
                     >
                       <FolderOutput className="w-4 h-4" />
-                    </button>
+                    </span>
                   </div>
                 </button>
               );
@@ -319,6 +321,7 @@ export const DocumentsList = ({
         isOpen={copyMoveModalOpen}
         onClose={closeCopyMoveModal}
         document={selectedDocForCopyMove}
+        documents={allDocs}
         folders={folders}
         baseId={baseId}
         tableId={tableId}
