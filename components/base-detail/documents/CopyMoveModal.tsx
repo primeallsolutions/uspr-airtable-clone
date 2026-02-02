@@ -36,9 +36,10 @@ export const CopyMoveModal = ({
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    console.log({selectedFolder, newFileName, documents});
-    setIsValid(!documents.map(doc => doc.path).includes(`${selectedFolder}${newFileName || document?.relative.split("/").pop()}`));
-  }, [selectedFolder, newFileName]);
+    const fileName = newFileName || document?.relative.split("/").pop() || "";
+    const targetPath = `${selectedFolder}${fileName}`;
+    setIsValid(!documents.map(doc => doc.path).includes(targetPath));
+  }, [selectedFolder, newFileName, document?.relative, documents]);
 
   const handleReset = useCallback(() => {
     setOperation("copy");

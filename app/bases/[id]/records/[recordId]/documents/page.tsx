@@ -100,6 +100,7 @@ export default function RecordDocumentsPage() {
     };
 
     loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- record and selectedTitleFieldId are checked for initial state only
   }, [baseId, recordId, tableId]);
 
   // Get record name based on selected field (defaults to 1st column)
