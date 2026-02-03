@@ -59,6 +59,7 @@ type Annotation = {
   height: number;
   content?: string;
   originalText?: string;
+  originalIndex?: number;  // Index in textItems array for unique matching
   color?: string;
   imageData?: string;
   fontSize?: number;
@@ -118,6 +119,9 @@ export const PdfEditor = ({
     originalY: number;
     offsetX: number;
     offsetY: number;
+    originalTextX?: number;  // Original text item position from textItems (before any moves)
+    originalTextY?: number;
+    originalTextIndex?: number;  // Index in textItems array for unique matching
   } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [panStart, setPanStart] = useState<{ x: number; y: number } | null>(null);
@@ -569,10 +573,17 @@ export const PdfEditor = ({
       const pageTextItems = textItems.get(pageNum) || [];
       pageTextItems.forEach((item, idx) => {
         // Check if this text has a textEdit annotation (may have been moved)
+        // Use originalIndex for unique matching to handle duplicate text strings
         const editAnnotation = annotations.find(
           a => a.type === "textEdit" && 
                a.pageIndex === pageNum - 1 && 
-               a.originalText === item.str
+               a.originalIndex === idx  // Match by index for uniqueness
+        ) || annotations.find(
+          // Fallback to originalText match for backwards compatibility
+          a => a.type === "textEdit" && 
+               a.pageIndex === pageNum - 1 && 
+               a.originalText === item.str &&
+               a.originalIndex === undefined
         );
         
         // Use annotation position if text was moved, otherwise use original
@@ -677,7 +688,27 @@ export const PdfEditor = ({
     const blockIndex = currentPageBlocks.findIndex(block => block.id === draggedBlock.id);
     if (blockIndex !== -1) {
       // Get the current annotation position for the dragged block
-      const currentAnnotation = annotations.find(a => a.id === draggedBlock.id);
+      // For text items, look for both drag_ prefix annotation and permanent textEdit annotations
+      let currentAnnotation: Annotation | undefined;
+      
+      if (draggedBlock.type === 'text') {
+        // First check for the temporary drag annotation
+        const dragAnnotationId = `drag_${draggedBlock.id}`;
+        currentAnnotation = annotations.find(a => a.id === dragAnnotationId);
+        
+        // If not found, look for a permanent textEdit annotation with matching originalIndex
+        if (!currentAnnotation && draggedBlock.originalTextIndex !== undefined) {
+          currentAnnotation = annotations.find(
+            a => a.type === 'textEdit' && 
+                 a.pageIndex === currentPage - 1 && 
+                 a.originalIndex === draggedBlock.originalTextIndex
+          );
+        }
+      } else {
+        // For non-text items (annotations), look for direct ID match
+        currentAnnotation = annotations.find(a => a.id === draggedBlock.id);
+      }
+      
       if (currentAnnotation) {
         // Update the content block with current annotation position
         const updatedBlock = {
@@ -791,13 +822,38 @@ export const PdfEditor = ({
           const offsetX = x - block.x;
           const offsetY = y - block.y;
           
+          // For text blocks, store original text item position for accurate offset calculation
+          let originalTextX: number | undefined;
+          let originalTextY: number | undefined;
+          let originalTextIndex: number | undefined;
+          
+          if (block.type === 'text') {
+            const textItemMatch = block.id.match(/text-(\d+)-(\d+)/);
+            if (textItemMatch) {
+              const pageNum = parseInt(textItemMatch[1], 10);
+              const itemIdx = parseInt(textItemMatch[2], 10);
+              const textItemsOnPage = textItems.get(pageNum) || [];
+              const textItem = textItemsOnPage[itemIdx];
+              
+              if (textItem) {
+                // Store the ORIGINAL text item position from textItems (never changes)
+                originalTextX = textItem.x;
+                originalTextY = textItem.y;
+                originalTextIndex = itemIdx;
+              }
+            }
+          }
+          
           setDraggedBlock({
             id: block.id,
             type: block.type,
             originalX: block.x,
             originalY: block.y,
             offsetX,
-            offsetY
+            offsetY,
+            originalTextX,
+            originalTextY,
+            originalTextIndex,
           });
           setIsDragging(true);
           e.preventDefault();
@@ -874,10 +930,18 @@ export const PdfEditor = ({
             const dragAnnotationId = `drag_${draggedBlock.id}`;
             
             // Check if there's already an existing textEdit annotation for this text
+            // Use originalIndex for unique matching
             const existingAnnotation = annotations.find(
               a => a.type === "textEdit" && 
                    a.pageIndex === currentPage - 1 && 
+                   a.originalIndex === itemIdx &&
+                   !a.id.startsWith('drag_')
+            ) || annotations.find(
+              // Fallback to originalText match for backwards compatibility
+              a => a.type === "textEdit" && 
+                   a.pageIndex === currentPage - 1 && 
                    a.originalText === textItem.str &&
+                   a.originalIndex === undefined &&
                    !a.id.startsWith('drag_')
             );
             
@@ -894,6 +958,7 @@ export const PdfEditor = ({
               height: textItem.height,
               content: content,
               originalText: textItem.str,
+              originalIndex: itemIdx,  // Store index for unique matching
               fontSize: textItem.fontSize,
               color: '#000000'
             };
@@ -952,12 +1017,19 @@ export const PdfEditor = ({
       const tempAnnotation = annotations.find(a => a.id === dragAnnotationId);
       
       if (tempAnnotation) {
-        // Check if there's already an existing textEdit annotation for this originalText
-        // (could be from a previous edit or drag)
+        // Check if there's already an existing textEdit annotation for this text
+        // Use originalIndex for unique matching
         const existingAnnotation = annotations.find(
           a => a.type === "textEdit" && 
                a.pageIndex === tempAnnotation.pageIndex && 
+               a.originalIndex === tempAnnotation.originalIndex &&
+               a.id !== dragAnnotationId
+        ) || annotations.find(
+          // Fallback to originalText match for backwards compatibility
+          a => a.type === "textEdit" && 
+               a.pageIndex === tempAnnotation.pageIndex && 
                a.originalText === tempAnnotation.originalText &&
+               a.originalIndex === undefined &&
                a.id !== dragAnnotationId
         );
         
@@ -966,14 +1038,14 @@ export const PdfEditor = ({
           let filtered = prev.filter(a => a.id !== dragAnnotationId);
           
           if (existingAnnotation) {
-            // Update existing annotation with new position
+            // Update existing annotation with new position (preserve originalIndex)
             filtered = filtered.map(a => 
               a.id === existingAnnotation.id 
-                ? { ...a, x: tempAnnotation.x, y: tempAnnotation.y }
+                ? { ...a, x: tempAnnotation.x, y: tempAnnotation.y, originalIndex: tempAnnotation.originalIndex }
                 : a
             );
           } else {
-            // Create a new permanent annotation
+            // Create a new permanent annotation with originalIndex
             const permanentAnnotation: Annotation = {
               ...tempAnnotation,
               id: `edit-${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -1041,29 +1113,37 @@ export const PdfEditor = ({
       
       for (let i = 0; i < currentPageTextItems.length; i++) {
         const item = currentPageTextItems[i];
-        // Check if click is within the bounds of the text item
+        
+        // Check if this text has already been edited/moved
+        // Use originalIndex for unique matching
+        const existingTextEdit = annotations.find(
+          a => a.type === "textEdit" && 
+               a.pageIndex === currentPage - 1 && 
+               a.originalIndex === i
+        ) || annotations.find(
+          // Fallback to originalText match for backwards compatibility
+          a => a.type === "textEdit" && 
+               a.pageIndex === currentPage - 1 && 
+               a.originalText === item.str &&
+               a.originalIndex === undefined
+        );
+        
+        // Use annotation position if it exists (supports moved text)
+        const checkX = existingTextEdit?.x ?? item.x;
+        const checkY = existingTextEdit?.y ?? item.y;
+        
+        // Check if click is within the bounds of the text item (at current position)
         // Use a slightly larger hit area for better UX
         const hitMargin = 5; // pixels
-        if (x >= item.x - hitMargin && x <= item.x + item.width + hitMargin && 
-            y >= item.y - hitMargin && y <= item.y + item.height + hitMargin) {
-          
-          // Check if this text has already been edited (match by originalText, not position)
-          const existingTextEdit = annotations.find(
-            a => a.type === "textEdit" && 
-                 a.pageIndex === currentPage - 1 && 
-                 a.originalText === item.str
-          );
-          
-          // Use annotation position if it exists (supports moved text)
-          const editX = existingTextEdit?.x ?? item.x;
-          const editY = existingTextEdit?.y ?? item.y;
+        if (x >= checkX - hitMargin && x <= checkX + item.width + hitMargin && 
+            y >= checkY - hitMargin && y <= checkY + item.height + hitMargin) {
           
           setEditingText({
             pageIndex: currentPage - 1,
             itemIndex: i,
             text: existingTextEdit?.content || item.str,
-            x: editX,
-            y: editY,
+            x: checkX,
+            y: checkY,
             width: item.width,
             height: item.height,
             fontSize: item.fontSize,
@@ -1520,11 +1600,17 @@ export const PdfEditor = ({
                   <div className="absolute top-0 left-0 w-full h-full pointer-events-none" style={{ zIndex: 5 }}>
                     {textItems.get(currentPage)!.map((item, idx) => {
                       // Check if this text has been edited or moved
-                      // Match by originalText and original position (stored in annotation)
+                      // Use originalIndex for unique matching
                       const editedAnnotation = annotations.find(
                         a => a.type === "textEdit" && 
                         a.pageIndex === currentPage - 1 && 
-                        a.originalText === item.str
+                        a.originalIndex === idx
+                      ) || annotations.find(
+                        // Fallback to originalText match for backwards compatibility
+                        a => a.type === "textEdit" && 
+                        a.pageIndex === currentPage - 1 && 
+                        a.originalText === item.str &&
+                        a.originalIndex === undefined
                       );
                       
                       const isCurrentlyEditing = editingText && 
@@ -1680,6 +1766,7 @@ export const PdfEditor = ({
                               height: editingText.height,
                               content: newText,
                               originalText: editingText.originalText,
+                              originalIndex: editingText.itemIndex,  // Store index for unique matching
                               fontSize: editingText.fontSize,
                             }];
                           }

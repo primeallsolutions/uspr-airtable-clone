@@ -119,6 +119,10 @@ async function getSupabaseClient(request: NextRequest) {
   return supabaseAdmin;
 }
 
+// #region agent log
+const DEBUG_ENDPOINT = 'http://127.0.0.1:7242/ingest/618db0db-dc88-4b24-9388-3127a0884ae1';
+// #endregion
+
 /**
  * POST /api/esignature/requests/[id]/send
  * Send signature request to all signers
@@ -131,6 +135,10 @@ export async function POST(
     const supabase = await getSupabaseClient(request);
     const { id } = await params;
 
+    // #region agent log
+    fetch(DEBUG_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'send/route.ts:POST:entry',message:'API endpoint called',data:{requestId:id},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'D'})}).catch(()=>{});
+    // #endregion
+
     const signatureRequest = await ESignatureService.getSignatureRequest(id, supabase);
     if (!signatureRequest) {
       return NextResponse.json({ error: "Signature request not found" }, { status: 404 });
@@ -142,6 +150,10 @@ export async function POST(
         { status: 400 }
       );
     }
+
+    // #region agent log
+    fetch(DEBUG_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'send/route.ts:POST:beforeSend',message:'About to send emails to signers',data:{requestId:id,signerCount:signatureRequest.signers.length,signerEmails:signatureRequest.signers.map(s=>s.email)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'D'})}).catch(()=>{});
+    // #endregion
 
     // Send emails to all signers (handle errors individually so some can succeed even if others fail)
     const emailResults = await Promise.allSettled(

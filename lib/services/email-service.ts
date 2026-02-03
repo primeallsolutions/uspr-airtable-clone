@@ -3,6 +3,10 @@ const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL || "noreply@example.com";
 const EMAIL_FROM_NAME = process.env.EMAIL_FROM_NAME || "US Prime Realty";
 
+// #region agent log
+const DEBUG_ENDPOINT = 'http://127.0.0.1:7242/ingest/618db0db-dc88-4b24-9388-3127a0884ae1';
+// #endregion
+
 export type EmailOptions = {
   to: string | string[];
   subject: string;
@@ -16,8 +20,15 @@ export const EmailService = {
    * Send an email using Resend API
    */
   async sendEmail(options: EmailOptions): Promise<void> {
+    // #region agent log
+    fetch(DEBUG_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'email-service.ts:sendEmail:entry',message:'sendEmail called',data:{to:options.to,subject:options.subject,hasApiKey:!!RESEND_API_KEY,apiKeyPrefix:RESEND_API_KEY?.substring(0,8),fromEmail:RESEND_FROM_EMAIL,fromName:EMAIL_FROM_NAME},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A,E'})}).catch(()=>{});
+    // #endregion
+    
     if (!RESEND_API_KEY) {
       const errorMsg = "RESEND_API_KEY is not configured. Email functionality will be disabled.";
+      // #region agent log
+      fetch(DEBUG_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'email-service.ts:sendEmail:noApiKey',message:'RESEND_API_KEY not found',data:{error:errorMsg},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
+      // #endregion
       console.warn(errorMsg);
       throw new Error(errorMsg);
     }
@@ -26,6 +37,10 @@ export const EmailService = {
     const toEmails = Array.isArray(options.to) ? options.to : [options.to];
 
     try {
+      // #region agent log
+      fetch(DEBUG_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'email-service.ts:sendEmail:beforeFetch',message:'About to call Resend API',data:{fromEmail,toEmails,subject:options.subject},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'B'})}).catch(()=>{});
+      // #endregion
+      
       const response = await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: {
@@ -41,8 +56,15 @@ export const EmailService = {
         }),
       });
 
+      // #region agent log
+      fetch(DEBUG_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'email-service.ts:sendEmail:afterFetch',message:'Resend API response received',data:{status:response.status,ok:response.ok},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'B'})}).catch(()=>{});
+      // #endregion
+
       if (!response.ok) {
         const errorBody = await response.text();
+        // #region agent log
+        fetch(DEBUG_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'email-service.ts:sendEmail:apiError',message:'Resend API returned error',data:{status:response.status,errorBody},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'B'})}).catch(()=>{});
+        // #endregion
         console.error("Failed to send email via Resend:", errorBody);
         
         // Parse error response for better error messages
@@ -55,8 +77,14 @@ export const EmailService = {
       }
 
       const result = await response.json();
+      // #region agent log
+      fetch(DEBUG_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'email-service.ts:sendEmail:success',message:'Email sent successfully via Resend',data:{to:options.to,id:result.id},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'B'})}).catch(()=>{});
+      // #endregion
       console.log(`Email sent successfully to: ${options.to}`, { id: result.id });
     } catch (error) {
+      // #region agent log
+      fetch(DEBUG_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'email-service.ts:sendEmail:caught',message:'Error caught in sendEmail',data:{error:error instanceof Error ? error.message : String(error)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'C'})}).catch(()=>{});
+      // #endregion
       console.error("Failed to send email:", error);
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
       throw new Error(`Failed to send email: ${errorMessage}`);
