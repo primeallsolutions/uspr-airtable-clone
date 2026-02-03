@@ -50,7 +50,9 @@ export function PageCanvas({
     canvasRef
   );
   
-  const { getAnnotationsForPage, addHighlight, moveAnnotation } = useAnnotationStore();
+  // Subscribe to annotations directly for reactivity
+  const annotations = useAnnotationStore((state) => state.annotations);
+  const { getAnnotationsForPage, addHighlight, moveAnnotation, addTextEdit, findTextEdit } = useAnnotationStore();
   
   // Drawing state for highlight tool
   const [isDrawing, setIsDrawing] = useState(false);
@@ -68,6 +70,9 @@ export function PageCanvas({
   // Get page height for coordinate conversion
   const pageHeight = viewport ? viewport.height / zoom : 0;
 
+  // Get annotations for current page (reactive)
+  const pageAnnotations = annotations.filter(a => a.pageIndex === pageNumber - 1);
+
   // Render annotations on overlay canvas
   const renderAnnotations = useCallback(() => {
     const canvas = overlayCanvasRef.current;
@@ -82,11 +87,9 @@ export function PageCanvas({
 
     // Clear previous
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // Draw annotations for this page
-    const annotations = getAnnotationsForPage(pageNumber - 1);
     
-    for (const ann of annotations) {
+    // Draw annotations for this page
+    for (const ann of pageAnnotations) {
       const screenPos = pdfToScreen(ann.x, ann.y + ann.height, pageHeight, zoom);
       const screenWidth = ann.width * zoom;
       const screenHeight = ann.height * zoom;
@@ -141,7 +144,7 @@ export function PageCanvas({
         currentRect.height * zoom
       );
     }
-  }, [viewport, pageNumber, zoom, pageHeight, getAnnotationsForPage, currentRect, activeTool]);
+  }, [viewport, zoom, pageHeight, currentRect, activeTool, pageAnnotations]);
 
   // Re-render annotations when they change
   useEffect(() => {
@@ -151,18 +154,34 @@ export function PageCanvas({
   // Find annotation at a screen position
   const findAnnotationAtPosition = useCallback(
     (screenX: number, screenY: number): Annotation | null => {
-      const annotations = getAnnotationsForPage(pageNumber - 1);
+      const pageAnnotations = getAnnotationsForPage(pageNumber - 1);
       
-      for (const ann of annotations) {
-        const screenPos = pdfToScreen(ann.x, ann.y + ann.height, pageHeight, zoom);
-        const screenWidth = ann.width * zoom;
-        const screenHeight = ann.height * zoom;
+      for (const ann of pageAnnotations) {
+        let screenPosX: number;
+        let screenPosY: number;
+        let screenWidth: number;
+        let screenHeight: number;
+        
+        if (ann.type === "textEdit") {
+          // TextEdit uses screen coordinates directly
+          screenPosX = ann.x * zoom;
+          screenPosY = ann.y * zoom;
+          screenWidth = ann.width * zoom;
+          screenHeight = ann.height * zoom;
+        } else {
+          // Other annotations use PDF coordinates
+          const screenPos = pdfToScreen(ann.x, ann.y + ann.height, pageHeight, zoom);
+          screenPosX = screenPos.x;
+          screenPosY = screenPos.y;
+          screenWidth = ann.width * zoom;
+          screenHeight = ann.height * zoom;
+        }
         
         if (
-          screenX >= screenPos.x &&
-          screenX <= screenPos.x + screenWidth &&
-          screenY >= screenPos.y &&
-          screenY <= screenPos.y + screenHeight
+          screenX >= screenPosX &&
+          screenX <= screenPosX + screenWidth &&
+          screenY >= screenPosY &&
+          screenY <= screenPosY + screenHeight
         ) {
           return ann;
         }
@@ -187,19 +206,89 @@ export function PageCanvas({
         setDrawStart({ x: screenX / zoom, y: screenY / zoom });
         setCurrentRect({ x: screenX / zoom, y: screenY / zoom, width: 0, height: 0 });
       } else if (activeTool === "select") {
-        // Check if clicking on an annotation to drag it
+        // First check if clicking on an existing annotation to drag it
         const annotation = findAnnotationAtPosition(screenX, screenY);
         if (annotation) {
-          const screenPos = pdfToScreen(annotation.x, annotation.y + annotation.height, pageHeight, zoom);
-          setIsDragging(true);
-          setDraggedAnnotation({
-            id: annotation.id,
-            startX: annotation.x,
-            startY: annotation.y,
-            offsetX: screenX - screenPos.x,
-            offsetY: screenY - screenPos.y,
-          });
+          // For textEdit annotations, use screen coordinates directly
+          if (annotation.type === "textEdit") {
+            setIsDragging(true);
+            setDraggedAnnotation({
+              id: annotation.id,
+              startX: annotation.x,
+              startY: annotation.y,
+              offsetX: screenX - annotation.x * zoom,
+              offsetY: screenY - annotation.y * zoom,
+            });
+          } else {
+            const screenPos = pdfToScreen(annotation.x, annotation.y + annotation.height, pageHeight, zoom);
+            setIsDragging(true);
+            setDraggedAnnotation({
+              id: annotation.id,
+              startX: annotation.x,
+              startY: annotation.y,
+              offsetX: screenX - screenPos.x,
+              offsetY: screenY - screenPos.y,
+            });
+          }
           e.preventDefault();
+          return;
+        }
+        
+        // If no annotation found, check if clicking on original PDF text
+        // Convert it to a moveable textEdit annotation
+        for (let i = 0; i < textItems.length; i++) {
+          const item = textItems[i];
+          const margin = 2;
+          if (
+            screenX / zoom >= item.x - margin &&
+            screenX / zoom <= item.x + item.width + margin &&
+            screenY / zoom >= item.y - margin &&
+            screenY / zoom <= item.y + item.height + margin
+          ) {
+            // Check if there's already a textEdit for this item
+            const existingEdit = findTextEdit(
+              pageNumber - 1,
+              item.str,
+              item.x,
+              item.y
+            );
+            
+            if (existingEdit) {
+              // Use the existing edit
+              setIsDragging(true);
+              setDraggedAnnotation({
+                id: existingEdit.id,
+                startX: existingEdit.x,
+                startY: existingEdit.y,
+                offsetX: screenX - existingEdit.x * zoom,
+                offsetY: screenY - existingEdit.y * zoom,
+              });
+            } else {
+              // Create a new textEdit annotation for this text (same content, now moveable)
+              const newId = addTextEdit(
+                pageNumber - 1,
+                item.x,
+                item.y,
+                item.width,
+                item.height,
+                item.str,
+                item.str, // Same content - just making it moveable
+                item.fontSize
+              );
+              
+              // Start dragging the newly created annotation
+              setIsDragging(true);
+              setDraggedAnnotation({
+                id: newId,
+                startX: item.x,
+                startY: item.y,
+                offsetX: screenX - item.x * zoom,
+                offsetY: screenY - item.y * zoom,
+              });
+            }
+            e.preventDefault();
+            return;
+          }
         }
       } else if (activeTool === "pan") {
         setIsPanning(true);
@@ -223,7 +312,7 @@ export function PageCanvas({
         }
       }
     },
-    [activeTool, viewport, pageHeight, zoom, textItems, onTextClick, findAnnotationAtPosition, onPanStart]
+    [activeTool, viewport, pageHeight, zoom, textItems, onTextClick, findAnnotationAtPosition, onPanStart, pageNumber, findTextEdit, addTextEdit]
   );
 
   const handleMouseMove = useCallback(
@@ -246,13 +335,21 @@ export function PageCanvas({
         const newScreenX = screenX - draggedAnnotation.offsetX;
         const newScreenY = screenY - draggedAnnotation.offsetY;
         
-        // Convert back to PDF coordinates
-        const annotations = getAnnotationsForPage(pageNumber - 1);
-        const ann = annotations.find(a => a.id === draggedAnnotation.id);
+        // Find the annotation to check its type
+        const pageAnnotations = getAnnotationsForPage(pageNumber - 1);
+        const ann = pageAnnotations.find(a => a.id === draggedAnnotation.id);
         if (ann) {
-          const newPdfX = newScreenX / zoom;
-          const newPdfY = pageHeight - newScreenY / zoom - ann.height;
-          moveAnnotation(draggedAnnotation.id, newPdfX, newPdfY);
+          if (ann.type === "textEdit") {
+            // TextEdit uses screen coordinates directly
+            const newX = newScreenX / zoom;
+            const newY = newScreenY / zoom;
+            moveAnnotation(draggedAnnotation.id, newX, newY);
+          } else {
+            // Other annotations use PDF coordinates (bottom-left origin)
+            const newPdfX = newScreenX / zoom;
+            const newPdfY = pageHeight - newScreenY / zoom - ann.height;
+            moveAnnotation(draggedAnnotation.id, newPdfX, newPdfY);
+          }
         }
       } else if (isPanning && panStart) {
         const deltaX = e.clientX - panStart.x;
@@ -397,6 +494,63 @@ export function PageCanvas({
                 onTextClick?.(item, idx);
               }}
               title="Click to edit"
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Text Layer for Select/Move Mode - shows moveable text elements */}
+      {activeTool === "select" && textItems.length > 0 && (
+        <div
+          className="absolute top-0 left-0 w-full h-full pointer-events-none"
+          style={{ zIndex: 5 }}
+        >
+          {textItems.map((item, idx) => (
+            <div
+              key={idx}
+              className="absolute pointer-events-auto cursor-move hover:bg-yellow-100/30 hover:outline hover:outline-1 hover:outline-yellow-500 hover:outline-dashed transition-all"
+              style={{
+                left: item.x * zoom,
+                top: item.y * zoom,
+                width: item.width * zoom,
+                height: item.height * zoom,
+              }}
+              onMouseDown={(e) => {
+                e.stopPropagation();
+                // Trigger the same logic as canvas mousedown for select tool
+                const existingEdit = findTextEdit(pageNumber - 1, item.str, item.x, item.y);
+                
+                if (existingEdit) {
+                  setIsDragging(true);
+                  setDraggedAnnotation({
+                    id: existingEdit.id,
+                    startX: existingEdit.x,
+                    startY: existingEdit.y,
+                    offsetX: e.nativeEvent.offsetX,
+                    offsetY: e.nativeEvent.offsetY,
+                  });
+                } else {
+                  const newId = addTextEdit(
+                    pageNumber - 1,
+                    item.x,
+                    item.y,
+                    item.width,
+                    item.height,
+                    item.str,
+                    item.str,
+                    item.fontSize
+                  );
+                  setIsDragging(true);
+                  setDraggedAnnotation({
+                    id: newId,
+                    startX: item.x,
+                    startY: item.y,
+                    offsetX: e.nativeEvent.offsetX,
+                    offsetY: e.nativeEvent.offsetY,
+                  });
+                }
+              }}
+              title="Drag to move"
             />
           ))}
         </div>
