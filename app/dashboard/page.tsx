@@ -134,6 +134,9 @@ function DashboardContent() {
   const [isCreateTemplateModalOpen, setIsCreateTemplateModalOpen] = useState(false);
   const [templateBaseId, setTemplateBaseId] = useState<string>('');
   const [isTransitioning, setIsTransitioning] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+
+  const [searchQuery, setSearchQuery] = useState<string>('');
 
   // Initialize data on component mount
   const initializeDashboard = useCallback(async (preferredWorkspaceId?: string | null) => {
@@ -423,7 +426,7 @@ function DashboardContent() {
           <div className="w-8 h-8 border-4 border-white-600 border-t-transparent rounded-full animate-spin"></div>
         </div>
       )}
-      <div className="flex min-h-screen">
+      <div className="flex min-h-screen flex-col md:flex-row">
         {/* Sidebar */}
         <Sidebar
           activeView={activeView}
@@ -433,6 +436,8 @@ function DashboardContent() {
           workspacesCollapsed={workspacesCollapsed}
           editingWorkspaceId={editingWorkspaceId}
           editingWorkspaceName={editingWorkspaceName}
+          isMobileOpen={isMobileSidebarOpen}
+          onMobileClose={() => setIsMobileSidebarOpen(false)}
           onViewChange={(view) => {
             if (view === 'home') switchToHomeView();
             else if (view === 'starred') handleStarredViewSelect();
@@ -452,15 +457,22 @@ function DashboardContent() {
         />
 
         {/* Main Content */}
-        <section className="flex min-w-0 flex-1 flex-col md:ml-64"> {/* offset left-margin by 64 to account for fixed sidebar */}
+        <section className="flex min-w-0 flex-1 flex-col md:ml-64">
           {/* Top Bar */}
-          <TopBar user={user} onSignOut={signOut} onOpenAccount={switchToAccountView} />
+          <TopBar 
+            user={user} 
+            onSignOut={signOut} 
+            onOpenAccount={switchToAccountView}
+            onMenuToggle={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
+            isMobileMenuOpen={isMobileSidebarOpen}
+            setSearchQuery={setSearchQuery}
+          />
 
           {/* Banner */}
           {showBanner && <Banner onClose={() => setShowBanner(false)} />}
 
           {/* Content */}
-          <main className="px-6 py-6">
+          <main className="px-3 md:px-6 py-4 md:py-6 flex-1 overflow-y-auto">
             {activeView === 'home' && (
               <HomeView
                 recentBases={recentBases}
@@ -475,6 +487,7 @@ function DashboardContent() {
                 onCreateBase={openCreateModal}
                 onBaseStarToggle={toggleStar}
                 onBaseContextMenu={handleBaseContextMenu}
+                searchQuery={searchQuery}
               />
             )}
             
@@ -498,6 +511,7 @@ function DashboardContent() {
                 canManageMembers={canManageMembers}
                 onLeaveWorkspace={handleLeaveWorkspace}
                 canLeaveWorkspace={role === 'member' || role === 'admin'}
+                searchQuery={searchQuery}
               />
             )}
             
@@ -514,6 +528,7 @@ function DashboardContent() {
                 onSortToggle={setIsSortOpen}
                 onBaseStarToggle={toggleStar}
                 onBaseContextMenu={handleBaseContextMenu}
+                searchQuery={searchQuery}
               />
             )}
             
@@ -530,6 +545,7 @@ function DashboardContent() {
                 onSortToggle={setIsSortOpen}
                 onBaseStarToggle={toggleStar}
                 onBaseContextMenu={handleBaseContextMenu}
+                searchQuery={searchQuery}
               />
             )}
 

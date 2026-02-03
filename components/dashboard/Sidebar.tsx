@@ -25,6 +25,8 @@ interface SidebarProps {
   onCancelEditingWorkspace: () => void;
   onDeleteWorkspace: (workspace: {id: string, name: string}) => void;
   setEditingWorkspaceName: (name: string) => void;
+  isMobileOpen?: boolean;
+  onMobileClose?: () => void;
 }
 
 export const Sidebar = ({
@@ -44,7 +46,9 @@ export const Sidebar = ({
   onStartEditingWorkspace,
   onCancelEditingWorkspace,
   onDeleteWorkspace,
-  setEditingWorkspaceName
+  setEditingWorkspaceName,
+  isMobileOpen = false,
+  onMobileClose
 }: SidebarProps) => {
   const workspaceList = (() => {
     const map = new Map<string, SidebarWorkspace>();
@@ -57,16 +61,34 @@ export const Sidebar = ({
   })();
   const dotColors = ["bg-blue-600", "bg-gray-400", "bg-purple-600", "bg-green-600", "bg-amber-500"];
 
+  // Close sidebar when navigation happens on mobile
+  const handleNavigate = (callback: () => void) => {
+    callback();
+    if (onMobileClose) onMobileClose();
+  };
+
   return (
-    <aside className="hidden fixed top-0 left-0 w-64 h-screen flex-col border-r bg-white md:flex">
-      <div className="flex items-center gap-2 px-4 py-4">
+    <>
+      {/* Mobile overlay */}
+      {isMobileOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 md:hidden"
+          onClick={onMobileClose}
+        />
+      )}
+      
+      {/* Sidebar */}
+      <aside className={`w-64 h-screen flex flex-col border-r bg-white fixed top-0 left-0 z-50 transition-transform duration-300 overflow-hidden ${
+        isMobileOpen ? '!translate-x-0' : '!-translate-x-full md:!translate-x-0'
+      }`}>
+      <div className="flex items-center gap-2 px-4 py-4 flex-shrink-0">
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-xs font-bold text-white">US</div>
         <div className="text-base font-semibold text-gray-900">Prime Database</div>
       </div>
       
-      <nav className="px-2 py-2">
+      <nav className="px-2 py-2 flex-shrink-0">
         <button 
-          onClick={() => onViewChange('home')} 
+          onClick={() => handleNavigate(() => onViewChange('home'))} 
           className={`flex w-full items-center gap-2 rounded-md px-2 py-2 cursor-pointer ${
             activeView === 'home' 
               ? 'bg-blue-100 text-blue-700 font-medium' 
@@ -78,7 +100,7 @@ export const Sidebar = ({
         </button>
         
         <button 
-          onClick={() => onViewChange('starred')}
+          onClick={() => handleNavigate(() => onViewChange('starred'))}
           className={`flex w-full items-center gap-2 rounded-md px-2 py-2 cursor-pointer ${
             activeView === 'starred'
               ? 'bg-blue-100 text-blue-700 font-medium'
@@ -90,7 +112,7 @@ export const Sidebar = ({
         </button>
         
         <button
-          onClick={() => onViewChange('shared')}
+          onClick={() => handleNavigate(() => onViewChange('shared'))}
           className={`flex w-full items-center gap-2 rounded-md px-2 py-2 cursor-pointer ${
             activeView === 'shared'
               ? 'bg-blue-100 text-blue-700 font-medium'
@@ -102,7 +124,7 @@ export const Sidebar = ({
         </button>
         
         <button
-          onClick={() => onViewChange('marketing')}
+          onClick={() => handleNavigate(() => onViewChange('marketing'))}
           className={`flex w-full items-center gap-2 rounded-md px-2 py-2 cursor-pointer ${
             activeView === 'marketing'
               ? 'bg-blue-100 text-blue-700 font-medium'
@@ -114,7 +136,7 @@ export const Sidebar = ({
         </button>
         
         <button
-          onClick={() => onViewChange('templates')}
+          onClick={() => handleNavigate(() => onViewChange('templates'))}
           className={`flex w-full items-center gap-2 rounded-md px-2 py-2 cursor-pointer ${
             activeView === 'templates'
               ? 'bg-blue-100 text-blue-700 font-medium'
@@ -186,7 +208,7 @@ export const Sidebar = ({
                           ? 'bg-blue-100 text-blue-700 font-medium'
                           : 'text-gray-900 hover:bg-gray-100'
                       }`}
-                      onClick={() => onWorkspaceSelect(workspace.id)}
+                      onClick={() => handleNavigate(() => onWorkspaceSelect(workspace.id))}
                     >
                       <span className={`inline-block h-3.5 w-3.5 rounded-full ${color}`}></span>
                       <span className="truncate">{workspace.name}</span>
@@ -233,7 +255,7 @@ export const Sidebar = ({
 
       {/* Only show the Create button on the following views: */}
       {(activeView === 'home' || activeView === 'workspace') && (
-        <div className="mt-auto px-4 pb-4">
+        <div className="mt-auto px-4 pb-4 flex-shrink-0">
           <button
             onClick={onCreateBase}
             className="flex w-full items-center justify-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 cursor-pointer"
@@ -243,5 +265,6 @@ export const Sidebar = ({
         </div>
       )}
     </aside>
+    </>
   );
 };

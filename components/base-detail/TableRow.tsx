@@ -104,7 +104,7 @@ export const TableRow = ({
       {/* Record creation time */}
       { showCreatedAt && (
         <div
-          className="border-r border-gray-200 bg-gray-50 flex items-center justify-center group relative transition-all sticky z-20 bg-white shadow-[4px_0_6px_-4px_rgba(0,0,0,0.1)]"
+          className="border-r border-gray-200 bg-gray-50 flex items-center justify-center group relative transition-all md:sticky z-20 bg-white shadow-[4px_0_6px_-4px_rgba(0,0,0,0.1)]"
           style={{ left: `calc(${selectWidth} + ${actionsWidth} + ${rowNumberWidth})`, width: createdAtWidth }}
         >
           <span className="text-sm font-medium text-gray-900 truncate text-center flex-1">
@@ -175,8 +175,7 @@ export const TableRow = ({
         return (
           <div
             key={field.id}
-            className={`flex-1 min-w-[150px] max-w-[300px] border-r border-gray-200 relative p-2 ${hasMultiLineContent ? 'items-start' : 'flex items-center'} ${isSticky ? 'sticky z-20 bg-white shadow-[4px_0_6px_-4px_rgba(0,0,0,0.08)]' : ''}`}
-            style={isSticky ? { left: leftOffset } : undefined}
+            className={`flex-1 min-w-[150px] max-w-[300px] border-r border-gray-200 relative p-2 ${hasMultiLineContent ? 'items-start' : 'flex items-center'} ${isSticky ? `md:sticky md:left-${leftOffset}px md:z-20 md:bg-white md:shadow-[4px_0_6px_-4px_rgba(0,0,0,0.08)]` : ''}`}
           >
             {renderCellContent()}
           </div>

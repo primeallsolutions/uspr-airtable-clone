@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { MoreVertical, Zap, Crown, Edit, Trash2, ArrowLeft } from "lucide-react";
+import { MoreVertical, Zap, Crown, Edit, Trash2, ArrowLeft, Menu, X } from "lucide-react";
 import type { BaseRow, TableRow, TopTab } from "@/lib/types/base-detail";
 import { IntegrationsButton } from "./IntegrationsButton";
 
@@ -26,6 +26,8 @@ interface TopNavigationProps {
   onOpenIntegrationsCatalog?: () => void;
   GHLCheckStatus?: boolean;
   setGHLCheckStatus?: (status: boolean) => void;
+  onMenuToggle?: () => void;
+  isMobileMenuOpen?: boolean;
 }
 
 export const TopNavigation = ({
@@ -49,7 +51,9 @@ export const TopNavigation = ({
   onManageWebhooks,
   onOpenIntegrationsCatalog,
   GHLCheckStatus,
-  setGHLCheckStatus
+  setGHLCheckStatus,
+  onMenuToggle = () => {},
+  isMobileMenuOpen = false
 }: TopNavigationProps) => {
   const router = useRouter();
   const [isTableDropdownOpen, setIsTableDropdownOpen] = useState(false);
@@ -91,6 +95,20 @@ export const TopNavigation = ({
       {/* Top bar */}
       <div className="flex items-center justify-between px-6 py-4">
         <div className="flex items-center gap-4">
+          {/* Mobile menu button */}
+          <button
+            type="button"
+            onClick={onMenuToggle}
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors md:hidden"
+            title="Toggle sidebar"
+          >
+            {isMobileMenuOpen ? (
+              <X size={20} className="text-gray-600" />
+            ) : (
+              <Menu size={20} className="text-gray-600" />
+            )}
+          </button>
+
           {/* Back button */}
           <button
             type="button"
@@ -215,7 +233,7 @@ export const TopNavigation = ({
             <button
               type="button"
               onClick={onExportBase}
-              className="px-3 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 flex items-center gap-2"
+              className="hidden md:flex px-3 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 flex items-center gap-2"
               title="Export base"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

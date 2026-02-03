@@ -28,6 +28,7 @@ interface WorkspaceViewProps {
   canManageMembers?: boolean;
   onLeaveWorkspace?: () => void;
   canLeaveWorkspace?: boolean;
+  searchQuery?: string;
 }
 
 export const WorkspaceView = ({
@@ -49,6 +50,7 @@ export const WorkspaceView = ({
   canManageMembers,
   onLeaveWorkspace,
   canLeaveWorkspace = false,
+  searchQuery
 }: WorkspaceViewProps) => {
   const currentWorkspace = workspaces.find(w => w.id === selectedWorkspaceId);
   const [activeTab, setActiveTab] = useState<'bases' | 'analytics' | 'settings'>(
@@ -93,15 +95,15 @@ export const WorkspaceView = ({
 
   return (
     <>
-      <h1 className="mb-4 text-2xl font-bold text-gray-900">{currentWorkspace?.name || 'Workspace'}</h1>
+      <h1 className="mb-4 text-xl md:text-2xl font-bold text-gray-900">{currentWorkspace?.name || 'Workspace'}</h1>
       {/* Tab Navigation */}
-      <div className="mb-6 border-b border-gray-200">
-        <div className="flex gap-8">
+      <div className="mb-6 border-b border-gray-200 overflow-x-auto">
+        <div className="flex gap-4 md:gap-8">
           {(canManageMembers ? ['analytics', 'bases', 'settings'] as const : ['bases', 'settings'] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`py-3 px-1 text-sm font-medium border-b-2 transition-colors ${
+              className={`py-3 px-1 text-xs md:text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                 activeTab === tab
                   ? 'border-blue-600 text-blue-600'
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -116,21 +118,22 @@ export const WorkspaceView = ({
       {/* Tab Content */}
       {!isTransitioning && activeTab === 'bases' && (
         <>
-          <div className="mb-6 flex items-center justify-between">
+          <div className="mb-6 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
             <SortDropdown
               sortOption={sortOption}
               setSortOption={onSortOptionChange}
               isOpen={isSortOpen}
               setIsOpen={onSortToggle}
             />
-            <div className="flex items-center gap-3">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
               {workspaceBases.length > 0 && (
                 <button
                   onClick={onCreateBase}
-                  className="flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 cursor-pointer"
+                  className="flex items-center justify-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 cursor-pointer min-h-10 order-2 sm:order-none"
                 >
                   <Plus size={16} />
-                  Create base
+                  <span className="hidden sm:inline">Create base</span>
+                  <span className="sm:hidden">Create</span>
                 </button>
               )}
               <ViewToggle
@@ -139,12 +142,12 @@ export const WorkspaceView = ({
               />
             </div>
           </div>
-          <div className="space-y-8">
+          <div className="space-y-6 md:space-y-8">
             <div className={collectionView === 'grid'
-              ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4'
-              : 'space-y-3'
+              ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4'
+              : 'space-y-2 md:space-y-3'
             }>
-              {workspaceBases.length > 0 ? sortBases(workspaceBases, sortOption).map(
+              {workspaceBases.filter(base => !searchQuery || base.name.toLowerCase().includes(searchQuery.toLowerCase())).length > 0 ? sortBases(workspaceBases.filter(base => !searchQuery || base.name.toLowerCase().includes(searchQuery.toLowerCase())), sortOption).map(
                 (base) => (
                   <BaseCard
                     key={base.id}

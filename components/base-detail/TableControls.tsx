@@ -374,14 +374,14 @@ export const TableControls = ({
       )}
 
       {/* View Controls */}
-      <div className="flex items-center justify-between px-6 py-3">
-        <div className="flex items-center gap-4">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-0 px-3 md:px-6 py-3 overflow-x-auto md:overflow-x-visible">
+        <div className="flex items-center gap-2 md:gap-4 flex-nowrap overflow-x-auto md:overflow-x-visible pb-2 md:pb-0">
           {/* Hide Fields - Grid only */}
           {viewMode === 'grid' && (
             <button
               type="button"
               onClick={(e) => onHideFields(e.currentTarget as HTMLElement)}
-              className={`flex items-center gap-2 px-3 py-2 text-sm rounded-lg transition-colors ${
+              className={`flex items-center gap-2 px-3 py-2 text-sm rounded-lg transition-colors whitespace-nowrap ${
                 activePanel === 'hideFields'
                   ? 'bg-blue-50 text-blue-700'
                   : 'text-gray-600 hover:bg-gray-100'
@@ -389,7 +389,8 @@ export const TableControls = ({
             >
               <Eye size={16} />
               <div className="flex items-center gap-2">
-                <span>Hide fields</span>
+                <span className="hidden md:inline">Hide fields</span>
+                <span className="inline md:hidden">Fields</span>
                 {viewState?.hiddenFieldsCount ? (
                   <span className="text-xs font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
                     {viewState.hiddenFieldsCount}
@@ -447,7 +448,7 @@ export const TableControls = ({
           <button
             type="button"
             onClick={(e) => onSort(e.currentTarget as HTMLElement)}
-            className={`flex items-center gap-2 px-3 py-2 text-sm rounded-lg transition-colors ${
+            className={`flex items-center gap-2 px-3 py-2 text-sm rounded-lg transition-colors whitespace-nowrap ${
               activePanel === 'sort'
                 ? 'bg-blue-50 text-blue-700'
                 : 'text-gray-600 hover:bg-gray-100'
@@ -455,9 +456,10 @@ export const TableControls = ({
           >
             <ArrowUpDown size={16} />
             <div className="flex flex-col leading-tight text-left">
-              <span>{sortLabel ? 'Sorted' : 'Sorted by 1 field'}</span>
+              <span className="hidden md:inline">{sortLabel ? 'Sorted' : 'Sorted by 1 field'}</span>
+              <span className="inline md:hidden">Sort</span>
               {sortLabel && (
-                <span className="text-xs text-blue-600">
+                <span className="text-xs text-blue-600 hidden md:inline">
                   {sortLabel}
                 </span>
               )}
@@ -491,19 +493,20 @@ export const TableControls = ({
           <button
             type="button"
             onClick={(e) => onShare(e.currentTarget as HTMLElement)}
-            className={`flex items-center gap-2 px-3 py-2 text-sm rounded-lg transition-colors ${
+            className={`flex items-center gap-2 px-3 py-2 text-sm rounded-lg transition-colors whitespace-nowrap ${
               activePanel === 'share'
                 ? 'bg-blue-50 text-blue-700'
                 : 'text-gray-600 hover:bg-gray-100'
             }`}
           >
             <Share2 size={16} />
-            <span>Share and sync</span>
+            <span className="hidden md:inline">Share and sync</span>
+            <span className="inline md:hidden">Share</span>
           </button>
         </div>
 
         {/* Navigation + Search */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-shrink-0 md:flex-shrink">
           <div className="flex items-center">
             <button
               type="button"
@@ -532,7 +535,7 @@ export const TableControls = ({
           </div>
 
           {/* Search */}
-          <div className="relative">
+          <div className="relative hidden md:block">
             <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
             <input
               type="text"

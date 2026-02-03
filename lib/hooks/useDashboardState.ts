@@ -7,7 +7,7 @@ export const useDashboardState = () => {
   const [sortOption, setSortOption] = useState<SortOption>('lastOpened');
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null);
   const [selectedBase, setSelectedBase] = useState<BaseRecord | null>(null);
-  const [showBanner, setShowBanner] = useState(true);
+  const [showBanner, setShowBanner] = useState(false);
   
   // Modal states
   const [isCreateOpen, setIsCreateOpen] = useState(false);

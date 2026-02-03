@@ -176,6 +176,7 @@ export default function BaseDetailPage() {
   // Add state for GHL integration modal
   const [isGHLModalOpen, setIsGHLModalOpen] = useState(false);
   const [GHLCheckStatus, setGHLCheckStatus] = useState(true); // assume connected, will force reload GHLSyncStatus if set to false
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const openGHLModal = () => setIsGHLModalOpen(true);
   const closeGHLModal = () => {
     setIsGHLModalOpen(false);
@@ -935,10 +936,12 @@ export default function BaseDetailPage() {
         viewMode={viewMode}
         onViewModeChange={setViewMode}
         onCreateNew={openCreateTableModal}
+        isMobileOpen={isMobileSidebarOpen}
+        onMobileClose={() => setIsMobileSidebarOpen(false)}
       />
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden md:ml-64">
         {/* Top Navigation */}
           <TopNavigation
           base={base}
@@ -962,6 +965,8 @@ export default function BaseDetailPage() {
           onOpenIntegrationsCatalog={openIntegrationsModal}
           GHLCheckStatus={GHLCheckStatus}
           setGHLCheckStatus={setGHLCheckStatus}
+          onMenuToggle={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
+          isMobileMenuOpen={isMobileSidebarOpen}
         />
 
         {/* Table Controls */}

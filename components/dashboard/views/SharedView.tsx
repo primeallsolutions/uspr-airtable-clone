@@ -16,6 +16,7 @@ interface SharedViewProps {
   onSortToggle: (open: boolean) => void;
   onBaseStarToggle?: (base: BaseRecord) => void;
   onBaseContextMenu: (e: React.MouseEvent, base: BaseRecord) => void;
+  searchQuery?: string;
 }
 
 export const SharedView = ({
@@ -29,7 +30,8 @@ export const SharedView = ({
   onSortOptionChange,
   onSortToggle,
   onBaseStarToggle,
-  onBaseContextMenu
+  onBaseContextMenu,
+  searchQuery
 }: SharedViewProps) => {
   if (loading && !initialLoad) {
     return (
@@ -41,8 +43,8 @@ export const SharedView = ({
 
   return (
     <>
-      <h1 className="mb-4 text-2xl font-bold text-gray-900">Shared</h1>
-      <div className="mb-6 flex items-center justify-between">
+      <h1 className="mb-4 text-xl md:text-2xl font-bold text-gray-900">Shared</h1>
+      <div className="mb-6 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
         <SortDropdown
           sortOption={sortOption}
           setSortOption={onSortOptionChange}
@@ -55,14 +57,15 @@ export const SharedView = ({
         />
       </div>
       
-      <div className="space-y-8">
+      <div className="space-y-6 md:space-y-8">
         <div>
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Shared Bases</h2>
+          <h2 className="text-base md:text-lg font-semibold text-gray-900 mb-3 md:mb-4">Shared Bases</h2>
           <div className={collectionView === 'grid'
-            ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4'
-            : 'space-y-3'
+            ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4'
+            : 'space-y-2 md:space-y-3'
           }>
-            {sharedBases.length ? sortBases(sharedBases, sortOption).map(
+            {sharedBases.filter(base => !searchQuery || base.name.toLowerCase().includes(searchQuery.toLowerCase())).length
+            ? sortBases(sharedBases.filter(base => !searchQuery || base.name.toLowerCase().includes(searchQuery.toLowerCase())), sortOption).map(
               (base) => (
                 <BaseCard
                   key={base.id}

@@ -149,11 +149,10 @@ export const TableHeader = ({
             onDrop={(e) => handleDrop(e, idx)}
             onDragEnd={handleDragEnd}
             className={`flex-1 min-w-[150px] max-w-[300px] border-r border-gray-200 bg-gray-50 group relative transition-all ${
-              isSticky ? 'sticky z-20 bg-white shadow-[4px_0_6px_-4px_rgba(0,0,0,0.1)]' : ''
+              isSticky ? `md:sticky md:left-${leftOffset}px md:z-20 md:bg-white md:shadow-[4px_0_6px_-4px_rgba(0,0,0,0.1)]` : ''
             } ${isDragging ? 'opacity-50' : ''} ${
               isDragOver ? 'border-l-4 border-l-blue-500' : ''
             }`}
-            style={isSticky ? { left: leftOffset } : undefined}
           >
             <div className="flex items-center justify-between p-3 min-w-0">
               {onReorderFields && (
