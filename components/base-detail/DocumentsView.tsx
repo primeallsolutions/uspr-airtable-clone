@@ -10,7 +10,7 @@ import { DocumentsSidebar, type DocumentView } from "./documents/DocumentsSideba
 import { DocumentsList } from "./documents/DocumentsList";
 import { DocumentPreview } from "./documents/DocumentPreview";
 import { ActivityFeed } from "./documents/ActivityFeed";
-import { PdfEditor } from "./documents/PdfEditor";
+import { PdfEditor } from "./documents/pdf-editor";
 import { TemplateManagementModal } from "./documents/TemplateManagementModal";
 import { SignatureRequestModal } from "./documents/SignatureRequestModal";
 import { SignatureRequestStatus } from "./documents/SignatureRequestStatus";
