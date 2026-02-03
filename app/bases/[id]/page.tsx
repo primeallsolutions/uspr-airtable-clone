@@ -44,7 +44,7 @@ import {
   type FilterState,
   type SortRule
 } from "@/components/base-detail/ViewControlModals";
-// DocumentsView removed - documents now accessed per-record in RecordDetailsModal
+import { TemplatesView } from "@/components/base-detail/TemplatesView";
 
 const generateClientId = () =>
   typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
@@ -1173,7 +1173,15 @@ export default function BaseDetailPage() {
             </div>
           )}
 
-          {/* Documents tab removed - now accessed per-record in RecordDetailsModal */}
+          {topTab === 'templates' && (
+            <TemplatesView
+              baseId={baseId || ''}
+              baseName={base?.name}
+              tables={tables}
+              records={records}
+              fields={fields}
+            />
+          )}
         </div>
       </div>
 

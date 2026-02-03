@@ -110,16 +110,6 @@ export const DocumentPreview = ({
                 <Scissors className="w-4 h-4 text-blue-600" />
               </button>
             )}
-            {isPdf(selectedDoc.mimeType) && onRequestSignature && (
-              <button
-                onClick={() => onRequestSignature(selectedDoc)}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition-colors"
-                title="Send for E-Signature"
-              >
-                <PenTool className="w-3.5 h-3.5" />
-                <span>Send for Signature</span>
-              </button>
-            )}
             <button
               onClick={onRename}
               className="p-1.5 hover:bg-gray-200 rounded-lg transition-colors"

@@ -5,6 +5,7 @@ import { X, Plus, Trash2, Mail, User, FileText, Loader2, Save, Send, ChevronDown
 import { supabase } from "@/lib/supabaseClient";
 import { StoredDocument } from "@/lib/services/documents-service";
 import { ESignatureService, SignatureRequestSigner, SignatureField } from "@/lib/services/esign-service";
+import type { RecordRow } from "@/lib/types/base-detail";
 import { toast } from "sonner";
 
 type SignatureRequestModalProps = {
@@ -14,12 +15,16 @@ type SignatureRequestModalProps = {
   tableId?: string | null;
   selectedDocument?: StoredDocument | null;
   onRequestCreated?: () => void;
-  // Optional: Pre-selected record for status update
+  // Pre-selected record for status update
   recordId?: string | null;
-  // Optional: Fields available for status column selection
+  // Pre-selected template ID
+  selectedTemplateId?: string;
+  // Fields available for status column selection
   availableFields?: Array<{ id: string; name: string; type: string; options?: Record<string, { name?: string; label?: string }> }>;
-  // Optional: Record values for auto-populating signer info
+  // Record values for auto-populating signer info
   recordValues?: Record<string, any>;
+  // Available records for selection (for base-level templates)
+  records?: RecordRow[];
 };
 
 export const SignatureRequestModal = ({
@@ -30,8 +35,10 @@ export const SignatureRequestModal = ({
   selectedDocument,
   onRequestCreated,
   recordId,
+  selectedTemplateId: preSelectedTemplateId,
   availableFields = [],
   recordValues,
+  records = [],
 }: SignatureRequestModalProps) => {
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
@@ -46,6 +53,9 @@ export const SignatureRequestModal = ({
   const [sending, setSending] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
   
+  // Record selection for base-level templates
+  const [selectedRecordId, setSelectedRecordId] = useState<string | null>(recordId || null);
+
   // Document mode vs Template mode
   const [mode, setMode] = useState<'template' | 'document'>('template');
   // Signature fields placed on document (for document mode)
@@ -84,6 +94,66 @@ export const SignatureRequestModal = ({
   const isRenderingRef = useRef(false);
 
   // Load available templates with valid signature fields
+  // Get primary field value for a record
+  const getPrimaryValue = (record: RecordRow): string => {
+    if (!record.values) return "No value";
+    // Get first field value (assuming first field is primary)
+    const firstFieldId = availableFields[0]?.id;
+    if (firstFieldId && record.values[firstFieldId]) {
+      return `${record.values[firstFieldId]} (${record.id?.slice(0, 8)})`;
+    }
+    return `Record ${record.id?.slice(0, 8)}`;
+  };
+
+  // Get email from selected record
+  const getRecordEmail = (): string | null => {
+    if (!selectedRecordId) return null;
+    
+    const selectedRecord = records.find(r => r.id === selectedRecordId);
+    if (!selectedRecord || !selectedRecord.values) return null;
+    
+    // Find email field
+    const emailField = availableFields.find(f => f.type === 'email');
+    
+    if (!emailField) return null;
+    
+    const emailValue = selectedRecord.values[emailField.id];
+    return emailValue ? String(emailValue) : null;
+  };
+
+  // Get name from selected record
+  const getRecordName = (): string | null => {
+    if (!selectedRecordId) return null;
+    
+    const selectedRecord = records.find(r => r.id === selectedRecordId);
+    if (!selectedRecord || !selectedRecord.values) return null;
+    
+    // First, try to find a field with "name" in its name
+    const nameField = availableFields.find(f => 
+      f.name.toLowerCase().includes('name')
+    );
+    
+    if (nameField && selectedRecord.values[nameField.id]) {
+      return String(selectedRecord.values[nameField.id]);
+    }
+    
+    // If not found, use the primary field (first field)
+    const primaryFieldId = availableFields[0]?.id;
+    if (primaryFieldId && selectedRecord.values[primaryFieldId]) {
+      return String(selectedRecord.values[primaryFieldId]);
+    }
+    
+    return null;
+  };
+
+  // Check if email is already in use by another signer
+  const isEmailAlreadyUsed = (email: string | null, excludeIndex?: number): boolean => {
+    if (!email) return false;
+    return signers.some((signer, index) => 
+      signer.email === email && (excludeIndex === undefined || index !== excludeIndex)
+    );
+  };
+
   const loadTemplates = useCallback(async () => {
     try {
       setLoading(true);
@@ -93,8 +163,8 @@ export const SignatureRequestModal = ({
         headers.Authorization = `Bearer ${session.access_token}`;
       }
 
-      // Fetch all templates for this base/table
-      const response = await fetch(`/api/templates?baseId=${baseId}${tableId ? `&tableId=${tableId}` : ""}`, { headers });
+      // Fetch all templates for this base (not filtered by table - get base-level templates)
+      const response = await fetch(`/api/templates?baseId=${baseId}`, { headers });
       
       if (!response.ok) {
         throw new Error("Failed to load templates");
@@ -118,13 +188,24 @@ export const SignatureRequestModal = ({
 
       console.log(`Found ${templatesWithSignatures.length} templates with signature fields out of ${templates.length} total templates`);
       setAvailableTemplates(templatesWithSignatures);
+      
+      // Auto-select template if one was pre-selected and available
+      if (preSelectedTemplateId) {
+        const preSelectedTemplate = templatesWithSignatures.find(
+          (t: { id: string; name: string; description?: string }) => t.id === preSelectedTemplateId
+        );
+        if (preSelectedTemplate) {
+          setSelectedTemplateId(preSelectedTemplateId);
+          setTitle(preSelectedTemplate.name || "Signature Request");
+        }
+      }
     } catch (error) {
       console.error("Failed to load templates:", error);
       toast.error("Failed to load templates with signature fields");
     } finally {
       setLoading(false);
     }
-  }, [baseId, tableId]);
+  }, [baseId, preSelectedTemplateId]);
 
   // Track if templates have been loaded to prevent duplicate loads
   const templatesLoadedRef = useRef(false);
@@ -306,7 +387,7 @@ export const SignatureRequestModal = ({
       
       // Get signed URL
       const urlResponse = await fetch(
-        `/api/templates/${templateId}/signed-url?baseId=${baseId}${tableId ? `&tableId=${tableId}` : ""}`,
+        `/api/templates/${templateId}/signed-url?baseId=${baseId}`,
         { headers }
       );
       if (!urlResponse.ok) {
@@ -315,14 +396,14 @@ export const SignatureRequestModal = ({
       const urlData = await urlResponse.json();
       setPdfUrl(urlData.url);
 
-      // Load signature fields
-      const signatureFields = (template.fields || []).filter((f: any) => f.field_type === "signature");
-      setTemplateFields(signatureFields);
+      // Load all fillable fields from the template (signature, text, date, initials, etc.)
+      const allFields = (template.fields || []).filter((f: any) => f.field_type);
+      setTemplateFields(allFields);
       
       // Initialize field-signer assignments (default to empty - user will assign)
       const assignments: Record<string, string> = {};
-      signatureFields.forEach((field: any) => {
-        assignments[field.id || field.field_key] = ""; // Don't use signers here
+      allFields.forEach((field: any) => {
+        assignments[field.id || field.field_key] = "";
       });
       setFieldSignerAssignments(assignments);
 
@@ -501,15 +582,17 @@ export const SignatureRequestModal = ({
     setSigners(signers.filter((_, i) => i !== index));
   };
 
-  const handleSignerChange = (index: number, field: string, value: string) => {
+  const handleSignerChange = (changes: Array<{index: number, field: string, value: string}>) => {
     const updated = [...signers];
-    if (field === "email" || field === "name") {
-      updated[index] = { ...updated[index], [field]: value };
-    } else if (field === "role") {
-      updated[index] = { ...updated[index], role: value as "signer" | "viewer" | "approver" };
-    } else if (field === "sign_order") {
-      updated[index] = { ...updated[index], sign_order: parseInt(value) || 0 };
-    }
+    changes.forEach(({ index, field, value }) => {
+      if (field === "email" || field === "name") {
+        updated[index] = { ...updated[index], [field]: value };
+      } else if (field === "role") {
+        updated[index] = { ...updated[index], role: value as "signer" | "viewer" | "approver" };
+      } else if (field === "sign_order") {
+        updated[index] = { ...updated[index], sign_order: parseInt(value) || 0 };
+      }
+    });
     setSigners(updated);
   };
 
@@ -593,7 +676,6 @@ export const SignatureRequestModal = ({
           body: JSON.stringify({
             templateId: selectedTemplateId,
             baseId,
-            tableId: tableId || null,
             fieldValues: {}, // Empty field values - template will be used as-is
           }),
         });
@@ -610,17 +692,17 @@ export const SignatureRequestModal = ({
           throw new Error("Failed to get generated document path");
         }
 
-        // Get all signature fields from the template
+        // Get all fillable fields from the template (including non-signature fields)
         const templateResponse = await fetch(`/api/templates/${selectedTemplateId}`, { headers });
         if (!templateResponse.ok) {
           throw new Error("Failed to load template fields");
         }
         const templateData = await templateResponse.json();
         const templateFieldsData = (templateData.template?.fields || []).filter(
-          (f: any) => f.field_type === "signature"
+          (f: any) => f.field_type
         );
 
-        // Map template fields to signature request fields
+        // Map all template fields to signature request fields
         signatureFields = templateFieldsData.map((field: any) => ({
           signer_email: fieldSignerAssignments[field.id || field.field_key] || validSigners[0]?.email || "",
           page_number: field.page_number,
@@ -628,14 +710,14 @@ export const SignatureRequestModal = ({
           y_position: Number(field.y_position),
           width: field.width ? Number(field.width) : 150,
           height: field.height ? Number(field.height) : 50,
-          field_type: "signature" as const,
+          field_type: field.field_type as any,
           label: field.field_name,
           is_required: field.is_required !== false,
         }));
       }
 
       // Get full document path
-      const prefix = tableId ? `bases/${baseId}/tables/${tableId}/` : `bases/${baseId}/`;
+      const prefix = `bases/${baseId}/`;
       const fullDocumentPath = documentPath.startsWith(prefix) ? documentPath : `${prefix}${documentPath}`;
 
       const response = await fetch("/api/esignature/requests", {
@@ -644,7 +726,7 @@ export const SignatureRequestModal = ({
         body: JSON.stringify({
           baseId,
           tableId: tableId || null,
-          record_id: recordId || null,
+          record_id: selectedRecordId || recordId || null,
           title,
           message: message || null,
           document_path: fullDocumentPath,
@@ -761,8 +843,6 @@ export const SignatureRequestModal = ({
           body: JSON.stringify({
             templateId: selectedTemplateId,
             baseId,
-            tableId: tableId || null,
-            recordId: recordId || null,
             fieldValues: {}, // Empty field values - template will be used as-is
             skipSignatureRequest: true, // We'll create signature request manually with our signers
           }),
@@ -780,17 +860,17 @@ export const SignatureRequestModal = ({
           throw new Error("Failed to get generated document path");
         }
 
-        // Get all signature fields from the template
+        // Get all fillable fields from the template (including non-signature fields)
         const templateResponse = await fetch(`/api/templates/${selectedTemplateId}`, { headers });
         if (!templateResponse.ok) {
           throw new Error("Failed to load template fields");
         }
         const templateData = await templateResponse.json();
         const templateFieldsData = (templateData.template?.fields || []).filter(
-          (f: any) => f.field_type === "signature"
+          (f: any) => f.field_type
         );
 
-        // Map template fields to signature request fields
+        // Map all template fields to signature request fields
         signatureFields = templateFieldsData.map((field: any) => ({
           signer_email: fieldSignerAssignments[field.id || field.field_key] || validSigners[0]?.email || "",
           page_number: field.page_number,
@@ -798,14 +878,14 @@ export const SignatureRequestModal = ({
           y_position: Number(field.y_position),
           width: field.width ? Number(field.width) : 150,
           height: field.height ? Number(field.height) : 50,
-          field_type: "signature" as const,
+          field_type: field.field_type as any,
           label: field.field_name,
           is_required: field.is_required !== false,
         }));
       }
 
       // Get full document path
-      const prefix = tableId ? `bases/${baseId}/tables/${tableId}/` : `bases/${baseId}/`;
+      const prefix = `bases/${baseId}/`;
       const fullDocumentPath = documentPath.startsWith(prefix) ? documentPath : `${prefix}${documentPath}`;
 
       // First, create the request
@@ -815,7 +895,7 @@ export const SignatureRequestModal = ({
         body: JSON.stringify({
           baseId,
           tableId: tableId || null,
-          record_id: recordId || null,
+          record_id: selectedRecordId || recordId || null,
           title,
           message: message || null,
           document_path: fullDocumentPath,
@@ -971,6 +1051,29 @@ export const SignatureRequestModal = ({
             )}
           </div>
 
+          {/* Record Selection (for base-level templates) */}
+          {records.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Select Record
+              </label>
+              <select
+                value={selectedRecordId || ""}
+                onChange={(e) => setSelectedRecordId(e.target.value || null)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                {records.map((record) => (
+                  <option key={record.id} value={record.id}>
+                    {getPrimaryValue(record)}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-500 mt-1">
+                Selecting a record will automatically attach the signed document to that record when the signature is complete.
+              </p>
+            </div>
+          )}
+
           {/* Title */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -1025,7 +1128,7 @@ export const SignatureRequestModal = ({
                         <input
                           type="email"
                           value={signer.email}
-                          onChange={(e) => handleSignerChange(index, "email", e.target.value)}
+                          onChange={(e) => handleSignerChange([{index, field: "email", value: e.target.value}])}
                           placeholder="signer@example.com"
                           className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
@@ -1034,13 +1137,30 @@ export const SignatureRequestModal = ({
                         <label className="block text-xs font-medium text-gray-600 mb-1">
                           Name (Optional)
                         </label>
-                        <input
-                          type="text"
-                          value={signer.name}
-                          onChange={(e) => handleSignerChange(index, "name", e.target.value)}
-                          placeholder="Full Name"
-                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={signer.name}
+                            onChange={(e) => handleSignerChange([{index, field: "name", value: e.target.value}])}
+                            placeholder="Full Name"
+                            className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          />
+                          {selectedRecordId && (getRecordName() || getRecordEmail()) && !isEmailAlreadyUsed(getRecordEmail(), index) && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                handleSignerChange([
+                                  {index, field: "email", value: getRecordEmail() || ""},
+                                  {index, field: "name", value: getRecordName() || ""},
+                                ]);
+                              }}
+                              className="px-3 py-2 text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors border border-blue-200 whitespace-nowrap"
+                              title="Fill email and name from selected record"
+                            >
+                              Autofill
+                            </button>
+                          )}
+                        </div>
                       </div>
                       <div>
                         <label className="block text-xs font-medium text-gray-600 mb-1">
@@ -1048,7 +1168,7 @@ export const SignatureRequestModal = ({
                         </label>
                         <select
                           value={signer.role}
-                          onChange={(e) => handleSignerChange(index, "role", e.target.value)}
+                          onChange={(e) => handleSignerChange([{index, field: "role", value: e.target.value}])}
                           className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         >
                           <option value="signer">Signer</option>
@@ -1063,7 +1183,7 @@ export const SignatureRequestModal = ({
                         <input
                           type="number"
                           value={signer.sign_order}
-                          onChange={(e) => handleSignerChange(index, "sign_order", e.target.value)}
+                          onChange={(e) => handleSignerChange([{index, field: "sign_order", value: e.target.value}])}
                           min="0"
                           className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
@@ -1084,47 +1204,108 @@ export const SignatureRequestModal = ({
                     <div className="mt-3 pt-3 border-t border-gray-300">
                       <div className="flex items-center justify-between mb-2">
                         <label className="text-xs font-medium text-gray-700">
-                          Assigned Signature Fields
+                          Assign Fields to Signer
+                          {signer.email ? ` (${signer.email})` : " (Please enter signer's email to assign fields)"}
                         </label>
                         <span className="text-xs text-gray-500">
                           {Object.entries(fieldSignerAssignments).filter(([_, email]) => email === signer.email).length} / {templateFields.length} assigned
                         </span>
                       </div>
                       
-                      {/* Field Checkboxes */}
+                      {/* Field Checkboxes - Separated by Type */}
                       <div className="space-y-1.5 max-h-40 overflow-y-auto">
-                        {templateFields.map((field: any) => {
-                          const fieldKey = field.id || field.field_key;
-                          const isAssigned = fieldSignerAssignments[fieldKey] === signer.email;
-                          
-                          return (
-                            <label
-                              key={fieldKey}
-                              className="flex items-center gap-2 p-2 hover:bg-gray-100 rounded cursor-pointer transition-colors"
-                            >
-                              <input
-                                type="checkbox"
-                                checked={isAssigned}
-                                onChange={(e) => {
-                                  setFieldSignerAssignments({
-                                    ...fieldSignerAssignments,
-                                    [fieldKey]: e.target.checked ? signer.email : "",
-                                  });
-                                }}
-                                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                              />
-                              <div className="flex-1 flex items-center justify-between">
-                                <span className="text-xs text-gray-700">
-                                  {field.field_name || "Signature Field"}
-                                  {field.is_required && <span className="text-red-500 ml-1">*</span>}
-                                </span>
-                                <span className="text-xs text-gray-500">
-                                  Page {field.page_number}
-                                </span>
-                              </div>
-                            </label>
-                          );
-                        })}
+                        {/* Signature Fields */}
+                        {templateFields.filter((f: any) => f.field_type === "signature").length > 0 && (
+                          <div>
+                            <div className="text-xs font-semibold text-gray-600 bg-gray-100 px-2 py-1 rounded mb-1">
+                              Signature Fields
+                            </div>
+                            {templateFields
+                              .filter((f: any) => f.field_type === "signature")
+                              .map((field: any) => {
+                                const fieldKey = field.id || field.field_key;
+                                const isAssigned = signer.email && fieldSignerAssignments[fieldKey] === signer.email;
+                                
+                                return (
+                                  <label
+                                    key={fieldKey}
+                                    className="flex items-center gap-2 p-2 hover:bg-gray-100 rounded cursor-pointer transition-colors"
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={!!isAssigned}
+                                      disabled={!signer.email}
+                                      onChange={(e) => {
+                                        setFieldSignerAssignments({
+                                          ...fieldSignerAssignments,
+                                          [fieldKey]: e.target.checked ? signer.email : "",
+                                        });
+                                      }}
+                                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                    />
+                                    <div className="flex-1 flex items-center justify-between">
+                                      <span className="text-xs text-gray-700">
+                                        {field.field_name || "Signature Field"}
+                                        {field.is_required && <span className="text-red-500 ml-1">*</span>}
+                                      </span>
+                                      <span className="text-xs text-gray-500">
+                                        Page {field.page_number}
+                                      </span>
+                                    </div>
+                                  </label>
+                                );
+                              })}
+                          </div>
+                        )}
+                        
+                        {/* Other Fillable Fields */}
+                        {templateFields.filter((f: any) => f.field_type !== "signature").length > 0 && (
+                          <div>
+                            <div className="text-xs font-semibold text-gray-600 bg-gray-100 px-2 py-1 rounded mb-1 mt-2">
+                              Other Fields
+                            </div>
+                            {templateFields
+                              .filter((f: any) => f.field_type !== "signature")
+                              .map((field: any) => {
+                                const fieldKey = field.id || field.field_key;
+                                const isAssigned = signer.email && fieldSignerAssignments[fieldKey] === signer.email;
+                                
+                                return (
+                                  <label
+                                    key={fieldKey}
+                                    className="flex items-center gap-2 p-2 hover:bg-gray-100 rounded cursor-pointer transition-colors"
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={!!isAssigned}
+                                      disabled={!signer.email}
+                                      onChange={(e) => {
+                                        setFieldSignerAssignments({
+                                          ...fieldSignerAssignments,
+                                          [fieldKey]: e.target.checked ? signer.email : "",
+                                        });
+                                      }}
+                                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                    />
+                                    <div className="flex-1 flex items-center justify-between">
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-xs text-gray-700">
+                                          {field.field_name || field.field_type}
+                                          {field.is_required && <span className="text-red-500 ml-1">*</span>}
+                                        </span>
+                                        <span className="text-xs text-gray-500 bg-gray-200 px-1.5 py-0.5 rounded">
+                                          {field.field_type}
+                                        </span>
+                                      </div>
+                                      <span className="text-xs text-gray-500">
+                                        Page {field.page_number}
+                                      </span>
+                                    </div>
+                                  </label>
+                                );
+                              })}
+                          </div>
+                        )}
                       </div>
                       
                       {/* Quick Actions */}

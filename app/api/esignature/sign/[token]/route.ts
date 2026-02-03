@@ -251,9 +251,7 @@ export async function POST(
 
     // Always create a new signed document instead of replacing the original
     // This prevents accidentally modifying templates or original documents
-    const basePrefix = signatureRequest.table_id
-      ? `bases/${signatureRequest.base_id}/tables/${signatureRequest.table_id}/`
-      : `bases/${signatureRequest.base_id}/`;
+    const basePrefix = `bases/${signatureRequest.base_id}/`;
     
     // Extract original filename and create signed version name
     const originalPath = signatureRequest.document_path;
@@ -389,6 +387,74 @@ export async function POST(
         completed_at: new Date().toISOString(),
         completion_certificate_path: certificatePath,
       }, supabaseAdmin);
+
+      // Copy signed PDF to record's documents folder if record is associated
+      if (signatureRequest.record_id) {
+        try {
+          // Build path - base-level records don't use table_id
+          const recordDocsPath = `bases/${signatureRequest.base_id}/records/${signatureRequest.record_id}/`;
+          
+          // Get signed URL for the final signed document
+          const { data: signedUrlData, error: signedUrlError } = await supabaseAdmin.storage
+            .from(BUCKET)
+            .createSignedUrl(signatureRequest.document_path, 600);
+          
+          if (signedUrlError || !signedUrlData) {
+            console.error("Failed to get signed URL for copying to record:", signedUrlError);
+          } else {
+            // Download signed PDF
+            const response = await fetch(signedUrlData.signedUrl);
+            if (!response.ok) {
+              throw new Error("Failed to download signed PDF");
+            }
+            
+            // Extract filename from path
+            const fileName = signatureRequest.document_path.split("/").pop() || "signed-document.pdf";
+            
+            // Upload to record's documents folder
+            const uploadPath = recordDocsPath + Date.now() + "_" + fileName;
+            console.log("Uploading signed document to:", uploadPath);
+            
+            const { error: uploadError } = await supabaseAdmin.storage
+              .from(BUCKET)
+              .upload(uploadPath, signedPdfBytes, {
+                contentType: "application/pdf",
+                upsert: false,
+              });
+            
+            if (uploadError) {
+              console.error("Failed to copy signed document to record:", uploadError);
+            } else {
+              console.log(`Successfully copied signed document to record ${signatureRequest.record_id} at path: ${uploadPath}`);
+              
+              // Add document record to documents table
+              try {
+                const { error: docError } = await supabaseAdmin
+                  .from("record_documents")
+                  .insert({
+                    record_id: signatureRequest.record_id,
+                    base_id: signatureRequest.base_id,
+                    document_path: uploadPath,
+                    document_name: fileName,
+                    mime_type: "application/pdf",
+                    size_bytes: pdfBytes.byteLength,
+                  });
+                
+                if (docError) {
+                  console.error("Failed to add document to documents table:", docError);
+                } else {
+                  console.log(`Successfully added document record for ${fileName}`);
+                }
+              } catch (dbError) {
+                console.error("Error inserting document record:", dbError);
+              }
+            }
+          }
+        } catch (copyError) {
+          console.error("Error copying signed document to record:", copyError);
+          // Don't fail the entire operation if copy fails
+        }
+      }
     }
 
     return NextResponse.json({ success: true, signedDocumentPath: signedPath });

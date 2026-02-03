@@ -96,7 +96,7 @@ export type Automation = {
 };
 
 export type ViewMode = 'grid' | 'kanban';
-export type TopTab = 'data' | 'automations' | 'interfaces' | 'forms' | 'documents';
+export type TopTab = 'data' | 'automations' | 'interfaces' | 'forms' | 'templates';
 export type SortDirection = 'asc' | 'desc';
 
 export type Condition = {

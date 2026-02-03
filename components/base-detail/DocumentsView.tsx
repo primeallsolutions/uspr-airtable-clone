@@ -1,7 +1,7 @@
 import { useMemo, useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabaseClient";
-import type { TableRow } from "@/lib/types/base-detail";
+import type { FieldRow, RecordRow, TableRow } from "@/lib/types/base-detail";
 import { DocumentsService, type StoredDocument } from "@/lib/services/documents-service";
 import { DocumentActivityService } from "@/lib/services/document-activity-service";
 import { DocumentVersionService } from "@/lib/services/document-version-service";
@@ -27,6 +27,7 @@ import { AuditLogViewer } from "./documents/AuditLogViewer";
 import { TransactionFolderSetupModal } from "./documents/TransactionFolderSetupModal";
 import { PhotoGallery } from "./documents/PhotoGallery";
 import { isFolder, isPdf } from "./documents/utils";
+import { BaseDetailService } from "@/lib/services/base-detail-service";
 import type { DocumentTemplate } from "@/lib/services/template-service";
 
 // Type for folder tree nodes
@@ -73,7 +74,6 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
   const [isInitialLoad, setIsInitialLoad] = useState<boolean>(true);
   const [editorDoc, setEditorDoc] = useState<StoredDocument | null>(null);
   const [editorSignedUrl, setEditorSignedUrl] = useState<string | null>(null);
-  const [showTemplateManagement, setShowTemplateManagement] = useState<boolean>(false);
   const [showTemplateFieldEditor, setShowTemplateFieldEditor] = useState<boolean>(false);
   const [showDocumentGenerator, setShowDocumentGenerator] = useState<boolean>(false);
   const [selectedTemplate, setSelectedTemplate] = useState<DocumentTemplate | null>(null);
@@ -101,6 +101,20 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
     () => (folderPath && !folderPath.endsWith("/") ? `${folderPath}/` : folderPath),
     [folderPath]
   );
+
+  const [recordsData, setRecordsData] = useState<RecordRow[]>([]);
+  const [tableFields, setTableFields] = useState<FieldRow[]>([]);
+  useEffect(() => {
+    const fetchFields = async () => {
+      const [recordsData, fieldsData] = await Promise.all([
+        BaseDetailService.getRecords(selectedTable?.id || ""),
+        BaseDetailService.getFields(selectedTable?.id || "")
+      ]);
+      setRecordsData(recordsData);
+      setTableFields(fieldsData);
+    };
+    fetchFields();
+  }, [selectedTable?.id]);
 
   const refresh = useCallback(async () => {
     try {
@@ -1001,7 +1015,6 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
         uploadProgress={uploadProgress}
         onAddFolder={handleAddFolder}
         onUpload={handleUpload}
-        onManageTemplates={() => setShowTemplateManagement(true)}
         onRequestSignature={() => setShowSignatureRequestModal(true)}
         onViewSignatures={() => setShowSignatureStatus(true)}
         onMergeDocuments={() => setShowMergeWithReorderModal(true)}
@@ -1151,24 +1164,6 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
         />
       )}
 
-      {/* Template Management Modal */}
-      <TemplateManagementModal
-        isOpen={showTemplateManagement}
-        onClose={() => setShowTemplateManagement(false)}
-        baseId={baseId}
-        tableId={selectedTable?.id ?? null}
-        onTemplateSelect={(template) => {
-          setSelectedTemplate(template);
-          setShowTemplateManagement(false);
-          setShowDocumentGenerator(true);
-        }}
-        onEditFields={(template) => {
-          setSelectedTemplate(template);
-          setShowTemplateManagement(false);
-          setShowTemplateFieldEditor(true);
-        }}
-      />
-
       {/* Template Field Editor */}
       {selectedTemplate && (
         <TemplateFieldEditor
@@ -1265,6 +1260,13 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
           setShowSignatureStatus(true);
         }}
         recordId={recordId}
+        recordValues={recordsData.find(r => r.id === recordId)?.values || undefined}
+        availableFields={tableFields.map(f => ({
+          id: f.id,
+          name: f.name,
+          type: f.type,
+          options: f.options as Record<string, { name?: string; label?: string }> | undefined
+        }))}
       />
 
       {/* Signature Request Status */}
