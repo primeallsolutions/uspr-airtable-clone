@@ -20,7 +20,10 @@ interface PageCanvasProps {
   rotation: number;
   activeTool: Tool;
   onTextClick?: (textItem: TextItem, index: number) => void;
-  onCanvasClick?: (pdfPoint: Point) => void;
+  onCanvasClick?: (pdfPoint: Point, screenPoint: Point) => void;
+  onPanStart?: () => void;
+  onPanMove?: (deltaX: number, deltaY: number) => void;
+  onPanEnd?: () => void;
 }
 
 export function PageCanvas({
@@ -31,6 +34,9 @@ export function PageCanvas({
   activeTool,
   onTextClick,
   onCanvasClick,
+  onPanStart,
+  onPanMove,
+  onPanEnd,
 }: PageCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -44,12 +50,20 @@ export function PageCanvas({
     canvasRef
   );
   
-  const { getAnnotationsForPage, addHighlight } = useAnnotationStore();
+  const { getAnnotationsForPage, addHighlight, moveAnnotation } = useAnnotationStore();
   
   // Drawing state for highlight tool
   const [isDrawing, setIsDrawing] = useState(false);
   const [drawStart, setDrawStart] = useState<Point | null>(null);
   const [currentRect, setCurrentRect] = useState<Rect | null>(null);
+  
+  // Drag state for moving annotations
+  const [isDragging, setIsDragging] = useState(false);
+  const [draggedAnnotation, setDraggedAnnotation] = useState<{ id: string; startX: number; startY: number; offsetX: number; offsetY: number } | null>(null);
+  
+  // Pan state
+  const [isPanning, setIsPanning] = useState(false);
+  const [panStart, setPanStart] = useState<Point | null>(null);
 
   // Get page height for coordinate conversion
   const pageHeight = viewport ? viewport.height / zoom : 0;
@@ -90,13 +104,20 @@ export function PageCanvas({
           break;
 
         case "textEdit":
+          // TextEdit uses screen-like coordinates directly (from textItem extraction)
+          // Don't use pdfToScreen conversion for these
+          const textEditX = ann.x * zoom;
+          const textEditY = ann.y * zoom;
+          const textEditWidth = ann.width * zoom;
+          const textEditHeight = ann.height * zoom;
+          
           // Draw white background to cover original text
           ctx.fillStyle = "white";
-          ctx.fillRect(screenPos.x - 2, screenPos.y - 2, screenWidth + 4, screenHeight + 4);
+          ctx.fillRect(textEditX - 2, textEditY - 2, textEditWidth + 4, textEditHeight + 4);
           // Draw new text
           ctx.font = `${ann.fontSize * zoom}px Arial`;
           ctx.fillStyle = ann.color;
-          ctx.fillText(ann.content, screenPos.x, screenPos.y + ann.fontSize * zoom);
+          ctx.fillText(ann.content, textEditX, textEditY + ann.fontSize * zoom);
           break;
 
         case "signature":
@@ -127,6 +148,30 @@ export function PageCanvas({
     renderAnnotations();
   }, [renderAnnotations]);
 
+  // Find annotation at a screen position
+  const findAnnotationAtPosition = useCallback(
+    (screenX: number, screenY: number): Annotation | null => {
+      const annotations = getAnnotationsForPage(pageNumber - 1);
+      
+      for (const ann of annotations) {
+        const screenPos = pdfToScreen(ann.x, ann.y + ann.height, pageHeight, zoom);
+        const screenWidth = ann.width * zoom;
+        const screenHeight = ann.height * zoom;
+        
+        if (
+          screenX >= screenPos.x &&
+          screenX <= screenPos.x + screenWidth &&
+          screenY >= screenPos.y &&
+          screenY <= screenPos.y + screenHeight
+        ) {
+          return ann;
+        }
+      }
+      return null;
+    },
+    [getAnnotationsForPage, pageNumber, pageHeight, zoom]
+  );
+
   // Mouse handlers for the overlay canvas
   const handleMouseDown = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -141,15 +186,34 @@ export function PageCanvas({
         setIsDrawing(true);
         setDrawStart({ x: screenX / zoom, y: screenY / zoom });
         setCurrentRect({ x: screenX / zoom, y: screenY / zoom, width: 0, height: 0 });
+      } else if (activeTool === "select") {
+        // Check if clicking on an annotation to drag it
+        const annotation = findAnnotationAtPosition(screenX, screenY);
+        if (annotation) {
+          const screenPos = pdfToScreen(annotation.x, annotation.y + annotation.height, pageHeight, zoom);
+          setIsDragging(true);
+          setDraggedAnnotation({
+            id: annotation.id,
+            startX: annotation.x,
+            startY: annotation.y,
+            offsetX: screenX - screenPos.x,
+            offsetY: screenY - screenPos.y,
+          });
+          e.preventDefault();
+        }
+      } else if (activeTool === "pan") {
+        setIsPanning(true);
+        setPanStart({ x: e.clientX, y: e.clientY });
+        onPanStart?.();
+        e.preventDefault();
       } else if (activeTool === "edit") {
         // Find clicked text item
         for (let i = 0; i < textItems.length; i++) {
           const item = textItems[i];
           const margin = 5;
           if (
-            pdfPoint.x >= item.x - margin &&
-            pdfPoint.x <= item.x + item.width + margin &&
-            // Note: textItems y is already in screen-like coordinates (top-down)
+            screenX / zoom >= item.x - margin &&
+            screenX / zoom <= item.x + item.width + margin &&
             screenY / zoom >= item.y - margin &&
             screenY / zoom <= item.y + item.height + margin
           ) {
@@ -159,25 +223,45 @@ export function PageCanvas({
         }
       }
     },
-    [activeTool, viewport, pageHeight, zoom, textItems, onTextClick]
+    [activeTool, viewport, pageHeight, zoom, textItems, onTextClick, findAnnotationAtPosition, onPanStart]
   );
 
   const handleMouseMove = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
-      if (!isDrawing || !drawStart || !overlayCanvasRef.current) return;
+      if (!overlayCanvasRef.current) return;
 
       const rect = overlayCanvasRef.current.getBoundingClientRect();
-      const screenX = (e.clientX - rect.left) / zoom;
-      const screenY = (e.clientY - rect.top) / zoom;
+      const screenX = e.clientX - rect.left;
+      const screenY = e.clientY - rect.top;
 
-      setCurrentRect({
-        x: Math.min(drawStart.x, screenX),
-        y: Math.min(drawStart.y, screenY),
-        width: Math.abs(screenX - drawStart.x),
-        height: Math.abs(screenY - drawStart.y),
-      });
+      if (isDrawing && drawStart) {
+        setCurrentRect({
+          x: Math.min(drawStart.x, screenX / zoom),
+          y: Math.min(drawStart.y, screenY / zoom),
+          width: Math.abs(screenX / zoom - drawStart.x),
+          height: Math.abs(screenY / zoom - drawStart.y),
+        });
+      } else if (isDragging && draggedAnnotation) {
+        // Move the annotation
+        const newScreenX = screenX - draggedAnnotation.offsetX;
+        const newScreenY = screenY - draggedAnnotation.offsetY;
+        
+        // Convert back to PDF coordinates
+        const annotations = getAnnotationsForPage(pageNumber - 1);
+        const ann = annotations.find(a => a.id === draggedAnnotation.id);
+        if (ann) {
+          const newPdfX = newScreenX / zoom;
+          const newPdfY = pageHeight - newScreenY / zoom - ann.height;
+          moveAnnotation(draggedAnnotation.id, newPdfX, newPdfY);
+        }
+      } else if (isPanning && panStart) {
+        const deltaX = e.clientX - panStart.x;
+        const deltaY = e.clientY - panStart.y;
+        onPanMove?.(deltaX, deltaY);
+        setPanStart({ x: e.clientX, y: e.clientY });
+      }
     },
-    [isDrawing, drawStart, zoom]
+    [isDrawing, drawStart, zoom, isDragging, draggedAnnotation, isPanning, panStart, getAnnotationsForPage, pageNumber, pageHeight, moveAnnotation, onPanMove]
   );
 
   const handleMouseUp = useCallback(() => {
@@ -195,13 +279,24 @@ export function PageCanvas({
       }
     }
 
+    if (isPanning) {
+      onPanEnd?.();
+    }
+
     setIsDrawing(false);
     setDrawStart(null);
     setCurrentRect(null);
-  }, [isDrawing, currentRect, activeTool, pageNumber, pageHeight, addHighlight]);
+    setIsDragging(false);
+    setDraggedAnnotation(null);
+    setIsPanning(false);
+    setPanStart(null);
+  }, [isDrawing, currentRect, activeTool, pageNumber, pageHeight, addHighlight, isPanning, onPanEnd]);
 
   const handleClick = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
+      // Don't trigger click if we were dragging or panning
+      if (isDragging || isPanning) return;
+      
       if (!overlayCanvasRef.current || !viewport) return;
 
       const rect = overlayCanvasRef.current.getBoundingClientRect();
@@ -210,15 +305,20 @@ export function PageCanvas({
       const pdfPoint = screenToPdf(screenX, screenY, pageHeight, zoom);
 
       if (activeTool === "text" || activeTool === "signature") {
-        onCanvasClick?.(pdfPoint);
+        onCanvasClick?.(pdfPoint, { x: screenX, y: screenY });
       }
     },
-    [viewport, pageHeight, zoom, activeTool, onCanvasClick]
+    [viewport, pageHeight, zoom, activeTool, onCanvasClick, isDragging, isPanning]
   );
 
-  // Get cursor style based on active tool
+  // Get cursor style based on active tool and state
   const getCursor = () => {
+    if (isDragging) return "grabbing";
+    if (isPanning) return "grabbing";
+    
     switch (activeTool) {
+      case "select":
+        return "default";
       case "highlight":
         return "crosshair";
       case "text":
@@ -258,6 +358,13 @@ export function PageCanvas({
           setIsDrawing(false);
           setDrawStart(null);
           setCurrentRect(null);
+          setIsDragging(false);
+          setDraggedAnnotation(null);
+          if (isPanning) {
+            onPanEnd?.();
+          }
+          setIsPanning(false);
+          setPanStart(null);
         }}
         onClick={handleClick}
       />

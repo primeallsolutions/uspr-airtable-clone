@@ -11,7 +11,7 @@
 
 "use client";
 
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import { Loader2 } from "lucide-react";
 
 import type { PdfEditorProps, Tool, TextItem, Point } from "./types";
@@ -26,6 +26,74 @@ import { PageCanvas } from "./components/PageCanvas";
 import { TextEditOverlay } from "./components/TextEditOverlay";
 import { StatusBar } from "./components/StatusBar";
 import { SignatureCapture } from "../SignatureCapture";
+
+// Text box editor for adding new text annotations
+function TextBoxEditor({
+  position,
+  zoom,
+  onSave,
+  onCancel,
+}: {
+  position: Point;
+  zoom: number;
+  onSave: (text: string) => void;
+  onCancel: () => void;
+}) {
+  const [text, setText] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      if (text.trim()) {
+        onSave(text.trim());
+      } else {
+        onCancel();
+      }
+    } else if (e.key === "Escape") {
+      onCancel();
+    }
+  };
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        left: position.x,
+        top: position.y,
+        zIndex: 1000,
+      }}
+    >
+      <input
+        ref={inputRef}
+        type="text"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={handleKeyDown}
+        onBlur={() => {
+          if (text.trim()) {
+            onSave(text.trim());
+          } else {
+            onCancel();
+          }
+        }}
+        placeholder="Type text and press Enter"
+        className="bg-white text-black outline-none border-2 border-green-500 rounded-sm shadow-lg"
+        style={{
+          fontSize: 14 * zoom,
+          lineHeight: 1.2,
+          padding: "4px 8px",
+          minWidth: 200,
+          fontFamily: "Helvetica, Arial, sans-serif",
+        }}
+      />
+    </div>
+  );
+}
 
 export function PdfEditor({
   document: docInfo,
@@ -56,6 +124,12 @@ export function PdfEditor({
     index: number;
   } | null>(null);
 
+  // Text box creation state
+  const [textBoxPosition, setTextBoxPosition] = useState<{ pdf: Point; screen: Point } | null>(null);
+
+  // Container ref for pan scrolling
+  const viewerContainerRef = useRef<HTMLDivElement>(null);
+
   // Annotation store
   const {
     annotations,
@@ -75,6 +149,7 @@ export function PdfEditor({
       setRotation(0);
       setActiveTool("select");
       setEditingText(null);
+      setTextBoxPosition(null);
       clearAnnotations();
       reset();
     }
@@ -99,6 +174,7 @@ export function PdfEditor({
       if (page >= 1 && page <= numPages) {
         setCurrentPage(page);
         setEditingText(null);
+        setTextBoxPosition(null);
       }
     },
     [numPages]
@@ -123,6 +199,7 @@ export function PdfEditor({
   const handleToolChange = useCallback((tool: Tool) => {
     setActiveTool(tool);
     setEditingText(null);
+    setTextBoxPosition(null);
 
     if (tool === "signature") {
       setShowSignatureCapture(true);
@@ -134,16 +211,36 @@ export function PdfEditor({
   }, []);
 
   const handleCanvasClick = useCallback(
-    (pdfPoint: Point) => {
+    (pdfPoint: Point, screenPoint: Point) => {
       if (activeTool === "text") {
-        const text = window.prompt("Enter text annotation:");
-        if (text) {
-          addTextBox(currentPage - 1, pdfPoint, text);
-        }
+        // Show inline text editor instead of prompt
+        setTextBoxPosition({ pdf: pdfPoint, screen: screenPoint });
       }
     },
-    [activeTool, currentPage, addTextBox]
+    [activeTool]
   );
+
+  const handleTextBoxSave = useCallback(
+    (text: string) => {
+      if (textBoxPosition) {
+        addTextBox(currentPage - 1, textBoxPosition.pdf, text);
+        setTextBoxPosition(null);
+      }
+    },
+    [textBoxPosition, currentPage, addTextBox]
+  );
+
+  const handleTextBoxCancel = useCallback(() => {
+    setTextBoxPosition(null);
+  }, []);
+
+  // Pan handlers
+  const handlePanMove = useCallback((deltaX: number, deltaY: number) => {
+    if (viewerContainerRef.current) {
+      viewerContainerRef.current.scrollLeft -= deltaX;
+      viewerContainerRef.current.scrollTop -= deltaY;
+    }
+  }, []);
 
   const handleSignatureSave = useCallback(
     (imageData: string) => {
@@ -259,7 +356,11 @@ export function PdfEditor({
           )}
 
           {/* PDF Viewer */}
-          <div className="flex-1 overflow-auto bg-gray-600 flex items-start justify-center p-8">
+          <div 
+            ref={viewerContainerRef}
+            className="flex-1 overflow-auto bg-gray-600 flex items-start justify-center p-8"
+            style={{ cursor: activeTool === "pan" ? "grab" : undefined }}
+          >
             {status === "loading" && (
               <div className="flex items-center justify-center h-full">
                 <Loader2 className="w-8 h-8 text-white animate-spin" />
@@ -282,9 +383,10 @@ export function PdfEditor({
                   activeTool={activeTool}
                   onTextClick={handleTextClick}
                   onCanvasClick={handleCanvasClick}
+                  onPanMove={handlePanMove}
                 />
 
-                {/* Text Edit Overlay */}
+                {/* Text Edit Overlay for editing existing text */}
                 {editingText && (
                   <TextEditOverlay
                     textItem={editingText.item}
@@ -293,6 +395,16 @@ export function PdfEditor({
                     pageHeight={pageHeight}
                     zoom={zoom}
                     onClose={() => setEditingText(null)}
+                  />
+                )}
+
+                {/* Text Box Editor for adding new text */}
+                {textBoxPosition && (
+                  <TextBoxEditor
+                    position={textBoxPosition.screen}
+                    zoom={zoom}
+                    onSave={handleTextBoxSave}
+                    onCancel={handleTextBoxCancel}
                   />
                 )}
               </div>
