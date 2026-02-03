@@ -24,12 +24,8 @@ import {
   type RecordDocument,
 } from "@/lib/services/record-documents-service";
 
-import { DocumentGeneratorForm } from "./DocumentGeneratorForm";
-import { TemplateManagementModal } from "./TemplateManagementModal";
-import { TemplateFieldEditor } from "./TemplateFieldEditor";
 import { SignatureRequestModal } from "./SignatureRequestModal";
 import { SignatureRequestStatus } from "./SignatureRequestStatus";
-import type { DocumentTemplate } from "@/lib/services/template-service";
 import type { FieldRow } from "@/lib/types/base-detail";
 
 type RecordDocumentsProps = {
@@ -88,10 +84,8 @@ export const RecordDocuments = ({
   const [isDragging, setIsDragging] = useState(false);
   
   // Modal stack management - only one modal visible at a time
-  type ModalType = 'none' | 'template-management' | 'document-generator' | 'field-editor' | 'signature-request' | 'signature-status';
+  type ModalType = 'none' | 'signature-request' | 'signature-status';
   const [activeModal, setActiveModal] = useState<ModalType>('none');
-  const [selectedTemplate, setSelectedTemplate] = useState<DocumentTemplate | null>(null);
-  const [templateToEdit, setTemplateToEdit] = useState<DocumentTemplate | null>(null);
 
   // Navigate to advanced documents page
   const handleAdvancedDocuments = () => {
@@ -238,14 +232,6 @@ export const RecordDocuments = ({
           >
             <CheckSquare className="w-4 h-4" />
             View Requests
-          </button>
-          <button
-            onClick={() => setActiveModal('template-management')}
-            className="px-3 py-1.5 text-sm font-medium text-white bg-green-600 border border-green-700 rounded-lg hover:bg-green-700 transition-colors flex items-center gap-1.5"
-            title="Generate document from template with auto-filled record data"
-          >
-            <FileText className="w-4 h-4" />
-            Templates
           </button>
           <button
             onClick={handleAdvancedDocuments}
@@ -424,60 +410,6 @@ export const RecordDocuments = ({
             </div>
           </div>
         </div>
-      )}
-
-      {/* Template Selection Modal */}
-      <TemplateManagementModal
-        isOpen={activeModal === 'template-management'}
-        onClose={() => {
-          setActiveModal('none');
-          setSelectedTemplate(null);
-          setTemplateToEdit(null);
-        }}
-        baseId={baseId}
-        tableId={tableId}
-        onTemplateSelect={(template) => {
-          setSelectedTemplate(template);
-          setActiveModal('document-generator');
-        }}
-        onEditFields={(template) => {
-          setTemplateToEdit(template);
-          setActiveModal('field-editor');
-        }}
-      />
-
-      {/* Document Generator Form with Record Auto-Fill */}
-      {selectedTemplate && (
-        <DocumentGeneratorForm
-          isOpen={activeModal === 'document-generator'}
-          onClose={() => {
-            setActiveModal('template-management');
-          }}
-          template={selectedTemplate}
-          baseId={baseId}
-          tableId={tableId}
-          recordId={recordId}
-          recordValues={recordValues}
-          recordFields={fields}
-          onDocumentGenerated={() => {
-            loadDocuments();
-            setActiveModal('none');
-            setSelectedTemplate(null);
-          }}
-        />
-      )}
-
-      {/* Template Field Editor Modal */}
-      {templateToEdit && (
-        <TemplateFieldEditor
-          isOpen={activeModal === 'field-editor'}
-          onClose={() => {
-            setActiveModal('template-management');
-          }}
-          template={templateToEdit}
-          baseId={baseId}
-          tableId={tableId}
-        />
       )}
 
       {/* Signature Request Modal */}
