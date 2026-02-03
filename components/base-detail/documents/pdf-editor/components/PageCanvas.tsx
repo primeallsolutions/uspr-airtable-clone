@@ -62,6 +62,7 @@ export function PageCanvas({
   // Drag state for moving annotations
   const [isDragging, setIsDragging] = useState(false);
   const [draggedAnnotation, setDraggedAnnotation] = useState<{ id: string; startX: number; startY: number; offsetX: number; offsetY: number } | null>(null);
+  const wasDraggingRef = useRef(false); // Track if we just finished dragging to prevent click
   
   // Pan state
   const [isPanning, setIsPanning] = useState(false);
@@ -72,6 +73,21 @@ export function PageCanvas({
 
   // Get annotations for current page (reactive)
   const pageAnnotations = annotations.filter(a => a.pageIndex === pageNumber - 1);
+
+  // Cache for preloaded signature images to avoid async loading issues
+  const signatureImagesRef = useRef<Map<string, HTMLImageElement>>(new Map());
+
+  // Preload signature images when annotations change
+  useEffect(() => {
+    const signatureAnnotations = pageAnnotations.filter(a => a.type === "signature");
+    for (const ann of signatureAnnotations) {
+      if (ann.type === "signature" && !signatureImagesRef.current.has(ann.id)) {
+        const img = new Image();
+        img.src = ann.imageData;
+        signatureImagesRef.current.set(ann.id, img);
+      }
+    }
+  }, [pageAnnotations]);
 
   // Render annotations on overlay canvas
   const renderAnnotations = useCallback(() => {
@@ -108,28 +124,44 @@ export function PageCanvas({
 
         case "textEdit":
           // TextEdit uses screen-like coordinates directly (from textItem extraction)
-          // Don't use pdfToScreen conversion for these
           const textEditX = ann.x * zoom;
           const textEditY = ann.y * zoom;
           const textEditWidth = ann.width * zoom;
           const textEditHeight = ann.height * zoom;
           
-          // Draw white background to cover original text
+          // IMPORTANT: First cover the ORIGINAL position (where the text was in the PDF)
+          // This prevents the "copy" effect when moving text
+          const originalX = ann.originalX * zoom;
+          const originalY = ann.originalY * zoom;
           ctx.fillStyle = "white";
-          ctx.fillRect(textEditX - 2, textEditY - 2, textEditWidth + 4, textEditHeight + 4);
-          // Draw new text
+          ctx.fillRect(originalX - 2, originalY - 2, textEditWidth + 4, textEditHeight + 4);
+          
+          // If the text has been moved, draw at the new position
+          // Draw white background at new position too (in case it overlaps other text)
+          if (textEditX !== originalX || textEditY !== originalY) {
+            ctx.fillRect(textEditX - 2, textEditY - 2, textEditWidth + 4, textEditHeight + 4);
+          }
+          
+          // Draw the text at the current position
           ctx.font = `${ann.fontSize * zoom}px Arial`;
           ctx.fillStyle = ann.color;
           ctx.fillText(ann.content, textEditX, textEditY + ann.fontSize * zoom);
           break;
 
         case "signature":
-          // Draw signature image
-          const img = new Image();
-          img.onload = () => {
-            ctx.drawImage(img, screenPos.x, screenPos.y, screenWidth, screenHeight);
-          };
-          img.src = ann.imageData;
+          // Use cached image for immediate drawing (no async delay)
+          const cachedImg = signatureImagesRef.current.get(ann.id);
+          if (cachedImg && cachedImg.complete) {
+            ctx.drawImage(cachedImg, screenPos.x, screenPos.y, screenWidth, screenHeight);
+          } else {
+            // Fallback: load and draw (first render)
+            const img = new Image();
+            img.onload = () => {
+              signatureImagesRef.current.set(ann.id, img);
+              ctx.drawImage(img, screenPos.x, screenPos.y, screenWidth, screenHeight);
+            };
+            img.src = ann.imageData;
+          }
           break;
       }
     }
@@ -380,6 +412,15 @@ export function PageCanvas({
       onPanEnd?.();
     }
 
+    // Track if we were dragging to prevent click event from firing
+    if (isDragging) {
+      wasDraggingRef.current = true;
+      // Reset the flag after a short delay (allows click event to check it)
+      setTimeout(() => {
+        wasDraggingRef.current = false;
+      }, 100);
+    }
+
     setIsDrawing(false);
     setDrawStart(null);
     setCurrentRect(null);
@@ -387,12 +428,12 @@ export function PageCanvas({
     setDraggedAnnotation(null);
     setIsPanning(false);
     setPanStart(null);
-  }, [isDrawing, currentRect, activeTool, pageNumber, pageHeight, addHighlight, isPanning, onPanEnd]);
+  }, [isDrawing, currentRect, activeTool, pageNumber, pageHeight, addHighlight, isPanning, onPanEnd, isDragging]);
 
   const handleClick = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
-      // Don't trigger click if we were dragging or panning
-      if (isDragging || isPanning) return;
+      // Don't trigger click if we were dragging or panning (or just finished)
+      if (isDragging || isPanning || wasDraggingRef.current) return;
       
       if (!overlayCanvasRef.current || !viewport) return;
 
@@ -473,63 +514,62 @@ export function PageCanvas({
         </div>
       )}
 
-      {/* Text Layer for Edit Mode */}
+      {/* Text Layer for Edit Mode - only show text items that haven't been converted to annotations */}
       {activeTool === "edit" && textItems.length > 0 && (
         <div
           className="absolute top-0 left-0 w-full h-full pointer-events-none"
           style={{ zIndex: 5 }}
         >
-          {textItems.map((item, idx) => (
-            <div
-              key={idx}
-              className="absolute pointer-events-auto cursor-text hover:bg-blue-100/50 hover:outline hover:outline-1 hover:outline-blue-400 transition-all"
-              style={{
-                left: item.x * zoom,
-                top: item.y * zoom,
-                width: item.width * zoom,
-                height: item.height * zoom,
-              }}
-              onClick={(e) => {
-                e.stopPropagation();
-                onTextClick?.(item, idx);
-              }}
-              title="Click to edit"
-            />
-          ))}
+          {textItems.map((item, idx) => {
+            // Skip text items that already have a textEdit annotation
+            const hasEdit = findTextEdit(pageNumber - 1, item.str, item.x, item.y);
+            if (hasEdit) return null;
+            
+            return (
+              <div
+                key={idx}
+                className="absolute pointer-events-auto cursor-text hover:bg-blue-100/50 hover:outline hover:outline-1 hover:outline-blue-400 transition-all"
+                style={{
+                  left: item.x * zoom,
+                  top: item.y * zoom,
+                  width: item.width * zoom,
+                  height: item.height * zoom,
+                }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onTextClick?.(item, idx);
+                }}
+                title="Click to edit"
+              />
+            );
+          })}
         </div>
       )}
 
-      {/* Text Layer for Select/Move Mode - shows moveable text elements */}
+      {/* Text Layer for Select/Move Mode - only show text items that haven't been moved */}
       {activeTool === "select" && textItems.length > 0 && (
         <div
           className="absolute top-0 left-0 w-full h-full pointer-events-none"
           style={{ zIndex: 5 }}
         >
-          {textItems.map((item, idx) => (
-            <div
-              key={idx}
-              className="absolute pointer-events-auto cursor-move hover:bg-yellow-100/30 hover:outline hover:outline-1 hover:outline-yellow-500 hover:outline-dashed transition-all"
-              style={{
-                left: item.x * zoom,
-                top: item.y * zoom,
-                width: item.width * zoom,
-                height: item.height * zoom,
-              }}
-              onMouseDown={(e) => {
-                e.stopPropagation();
-                // Trigger the same logic as canvas mousedown for select tool
-                const existingEdit = findTextEdit(pageNumber - 1, item.str, item.x, item.y);
-                
-                if (existingEdit) {
-                  setIsDragging(true);
-                  setDraggedAnnotation({
-                    id: existingEdit.id,
-                    startX: existingEdit.x,
-                    startY: existingEdit.y,
-                    offsetX: e.nativeEvent.offsetX,
-                    offsetY: e.nativeEvent.offsetY,
-                  });
-                } else {
+          {textItems.map((item, idx) => {
+            // Skip text items that already have a textEdit annotation (they're now annotations)
+            const existingEdit = findTextEdit(pageNumber - 1, item.str, item.x, item.y);
+            if (existingEdit) return null;
+            
+            return (
+              <div
+                key={idx}
+                className="absolute pointer-events-auto cursor-move hover:bg-yellow-100/30 hover:outline hover:outline-1 hover:outline-yellow-500 hover:outline-dashed transition-all"
+                style={{
+                  left: item.x * zoom,
+                  top: item.y * zoom,
+                  width: item.width * zoom,
+                  height: item.height * zoom,
+                }}
+                onMouseDown={(e) => {
+                  e.stopPropagation();
+                  // Create a new textEdit annotation for this text
                   const newId = addTextEdit(
                     pageNumber - 1,
                     item.x,
@@ -548,11 +588,11 @@ export function PageCanvas({
                     offsetX: e.nativeEvent.offsetX,
                     offsetY: e.nativeEvent.offsetY,
                   });
-                }
-              }}
-              title="Drag to move"
-            />
-          ))}
+                }}
+                title="Drag to move"
+              />
+            );
+          })}
         </div>
       )}
     </div>
