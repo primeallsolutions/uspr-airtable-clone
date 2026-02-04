@@ -30,6 +30,9 @@ interface GridViewProps {
   colorAssignments?: Record<string, string>;
   showCreatedAt?: boolean;
   scrollContainerRef?: React.Ref<HTMLDivElement>;
+  // For opening a specific record's detail modal (e.g., when returning from documents page)
+  initialOpenRecordId?: string | null;
+  onInitialRecordOpened?: () => void;
 }
 
 export const GridView = ({
@@ -55,7 +58,9 @@ export const GridView = ({
   colorFieldId,
   colorAssignments = {},
   showCreatedAt = false,
-  scrollContainerRef
+  scrollContainerRef,
+  initialOpenRecordId,
+  onInitialRecordOpened
 }: GridViewProps) => {
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
   const initialOrderRef = useRef<string[] | null>(null);
@@ -81,6 +86,19 @@ export const GridView = ({
   }, [records.length]);
   const [detailRecordId, setDetailRecordId] = useState<string | null>(null);
   const { selectWidth, actionsWidth, rowNumberWidth, addFieldWidth } = tableLayout;
+
+  // Handle initial record opening (e.g., when returning from documents page)
+  useEffect(() => {
+    if (initialOpenRecordId && records.length > 0) {
+      // Check if the record exists in the current records
+      const recordExists = records.some(r => r.id === initialOpenRecordId);
+      if (recordExists) {
+        setDetailRecordId(initialOpenRecordId);
+        // Notify parent that the initial record has been opened
+        onInitialRecordOpened?.();
+      }
+    }
+  }, [initialOpenRecordId, records, onInitialRecordOpened]);
 
   // Preserve stable row ordering based on initial load to prevent reordering on updates
   const displayRecords = useMemo(() => {

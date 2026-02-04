@@ -17,6 +17,7 @@ import {
   FileEdit,
   PenTool,
   CheckSquare,
+  Edit3,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -26,6 +27,8 @@ import {
 
 import { SignatureRequestModal } from "./SignatureRequestModal";
 import { SignatureRequestStatus } from "./SignatureRequestStatus";
+import { PdfEditor } from "./pdf-editor";
+import type { SignatureRequestData } from "./pdf-editor/types";
 import type { FieldRow } from "@/lib/types/base-detail";
 
 type RecordDocumentsProps = {
@@ -82,6 +85,14 @@ export const RecordDocuments = ({
   const [previewDoc, setPreviewDoc] = useState<RecordDocument | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
+  
+  // PDF Editor state
+  const [editorDoc, setEditorDoc] = useState<RecordDocument | null>(null);
+  const [editorSignedUrl, setEditorSignedUrl] = useState<string | null>(null);
+  
+  // Signature request state - document to use when opening signature modal from editor
+  const [signatureRequestDoc, setSignatureRequestDoc] = useState<RecordDocument | null>(null);
+  const [signatureRequestData, setSignatureRequestData] = useState<SignatureRequestData | null>(null);
   
   // Modal stack management - only one modal visible at a time
   type ModalType = 'none' | 'signature-request' | 'signature-status';
@@ -162,31 +173,163 @@ export const RecordDocuments = ({
     }
   };
 
-  // Handle preview
+  // Handle preview - opens PdfEditor for PDFs, simple preview for other files
   const handlePreview = async (doc: RecordDocument) => {
     try {
-      const url = await RecordDocumentsService.getSignedUrl(doc.document_path);
-      setPreviewUrl(url);
-      setPreviewDoc(doc);
-    } catch (err) {
-      console.error("Failed to get preview URL:", err);
-      toast.error("Failed to load preview");
+      console.log("[RecordDocuments] Previewing document:", doc.document_name, "Path:", doc.document_path);
+      // Pass baseId, recordId, and tableId to help construct full path for relative paths
+      const url = await RecordDocumentsService.getSignedUrl(
+        doc.document_path, 
+        3600, 
+        { 
+          baseId: doc.base_id || baseId, 
+          recordId: doc.record_id || recordId,
+          tableId: doc.table_id || tableId 
+        }
+      );
+      
+      if (doc.mime_type === "application/pdf") {
+        // Open in PdfEditor for full editing capabilities
+        setEditorDoc(doc);
+        setEditorSignedUrl(url);
+      } else {
+        // Keep existing simple preview for images/other files
+        setPreviewUrl(url);
+        setPreviewDoc(doc);
+      }
+    } catch (err: unknown) {
+      console.error("[RecordDocuments] Failed to get preview URL for:", doc.document_path, "Error:", err);
+      
+      // Check if file was not found in storage
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      const isNotFound = errorMessage.toLowerCase().includes("not found") || 
+                         errorMessage.includes("Object not found") ||
+                         errorMessage === "";  // Empty error often means file not found
+      
+      if (isNotFound) {
+        // Offer to clean up the orphaned record
+        const shouldCleanup = window.confirm(
+          `The file "${doc.document_name}" was not found in storage. It may have been deleted.\n\n` +
+          `Path: ${doc.document_path}\n\n` +
+          `Would you like to remove this entry from your documents list?`
+        );
+        
+        if (shouldCleanup) {
+          try {
+            await RecordDocumentsService.removeOrphanedRecord(doc.id);
+            toast.success("Removed missing document from list");
+            await loadDocuments();
+          } catch (cleanupErr) {
+            console.error("Failed to clean up orphaned record:", cleanupErr);
+            toast.error("Failed to remove document entry");
+          }
+        }
+      } else {
+        toast.error(`Failed to load preview: ${errorMessage || "Unknown error"}`);
+      }
     }
+  };
+
+  // Handle PDF Editor close
+  const handleEditorClose = () => {
+    setEditorDoc(null);
+    setEditorSignedUrl(null);
+  };
+
+  // Handle saving edited PDF
+  const handleEditorSave = async (file: File) => {
+    if (!editorDoc) return;
+    
+    const toastId = toast.loading("Saving document...");
+    
+    try {
+      // Upload edited file as a new version (preserves original)
+      await RecordDocumentsService.uploadAndAttach({
+        recordId,
+        baseId,
+        tableId,
+        file,
+      });
+      
+      // Refresh document list
+      await loadDocuments();
+      
+      // Close editor
+      setEditorDoc(null);
+      setEditorSignedUrl(null);
+      
+      toast.success("Document saved successfully", { id: toastId });
+    } catch (err) {
+      console.error("Failed to save document:", err);
+      toast.error("Failed to save document", { id: toastId });
+    }
+  };
+
+  // Handle request signature from PDF Editor
+  // Note: signatureFields param is available but we use the SignatureRequestModal's
+  // built-in field placement instead for better UX
+  const handleRequestSignatureFromEditor = (data?: SignatureRequestData) => {
+    if (!editorDoc) return;
+    
+    // Save reference to current doc for signature request
+    setSignatureRequestDoc(editorDoc);
+    
+    // Save signature request data from PDF Editor (signers, fields, assignments)
+    if (data) {
+      setSignatureRequestData(data);
+    }
+    
+    // Close editor
+    setEditorDoc(null);
+    setEditorSignedUrl(null);
+    
+    // Open signature modal with this document pre-selected
+    setActiveModal('signature-request');
   };
 
   // Handle download
   const handleDownload = async (doc: RecordDocument) => {
     try {
-      const url = await RecordDocumentsService.getSignedUrl(doc.document_path);
+      // Pass baseId, recordId, and tableId to help construct full path for relative paths
+      const url = await RecordDocumentsService.getSignedUrl(
+        doc.document_path,
+        3600,
+        { 
+          baseId: doc.base_id || baseId, 
+          recordId: doc.record_id || recordId,
+          tableId: doc.table_id || tableId 
+        }
+      );
       const link = document.createElement("a");
       link.href = url;
       link.download = doc.document_name;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-    } catch (err) {
+    } catch (err: unknown) {
       console.error("Failed to download:", err);
-      toast.error("Failed to download document");
+      
+      // Check if file was not found in storage
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      if (errorMessage.includes("not found") || errorMessage.includes("Object not found")) {
+        const shouldCleanup = window.confirm(
+          `The file "${doc.document_name}" was not found in storage. It may have been deleted.\n\n` +
+          `Would you like to remove this entry from your documents list?`
+        );
+        
+        if (shouldCleanup) {
+          try {
+            await RecordDocumentsService.removeOrphanedRecord(doc.id);
+            toast.success("Removed missing document from list");
+            await loadDocuments();
+          } catch (cleanupErr) {
+            console.error("Failed to clean up orphaned record:", cleanupErr);
+            toast.error("Failed to remove document entry");
+          }
+        }
+      } else {
+        toast.error("Failed to download document");
+      }
     }
   };
 
@@ -309,10 +452,20 @@ export const RecordDocuments = ({
 
                 {/* Actions */}
                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  {/* Edit button for PDFs - opens full editor */}
+                  {doc.mime_type === "application/pdf" && (
+                    <button
+                      onClick={() => handlePreview(doc)}
+                      className="p-1.5 text-gray-500 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+                      title="Edit document"
+                    >
+                      <Edit3 className="w-4 h-4" />
+                    </button>
+                  )}
                   <button
                     onClick={() => handlePreview(doc)}
                     className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                    title="Preview"
+                    title={doc.mime_type === "application/pdf" ? "View/Edit" : "Preview"}
                   >
                     <ExternalLink className="w-4 h-4" />
                   </button>
@@ -412,13 +565,45 @@ export const RecordDocuments = ({
         </div>
       )}
 
+      {/* PDF Editor Modal */}
+      <PdfEditor
+        document={editorDoc ? {
+          path: editorDoc.document_path,
+          mimeType: editorDoc.mime_type || undefined,
+        } : null}
+        signedUrl={editorSignedUrl}
+        isOpen={Boolean(editorDoc)}
+        onClose={handleEditorClose}
+        onSave={handleEditorSave}
+        onRequestSignature={handleRequestSignatureFromEditor}
+        // Record context for enhanced signature request features
+        recordId={recordId}
+        availableFields={fields?.map(f => ({
+          id: f.id,
+          name: f.name,
+          type: f.type,
+          options: f.options as Record<string, { name?: string; label?: string }> | undefined
+        }))}
+        recordValues={recordValues}
+      />
+
       {/* Signature Request Modal */}
       <SignatureRequestModal
         isOpen={activeModal === 'signature-request'}
-        onClose={() => setActiveModal('none')}
+        onClose={() => {
+          setActiveModal('none');
+          setSignatureRequestDoc(null);
+          setSignatureRequestData(null);
+        }}
         baseId={baseId}
         tableId={tableId}
         recordId={recordId}
+        selectedDocument={signatureRequestDoc ? {
+          path: signatureRequestDoc.document_path,
+          size: signatureRequestDoc.size_bytes || 0,
+          mimeType: signatureRequestDoc.mime_type || "application/pdf",
+          createdAt: signatureRequestDoc.created_at,
+        } : undefined}
         availableFields={fields?.map(f => ({
           id: f.id,
           name: f.name,
@@ -429,7 +614,29 @@ export const RecordDocuments = ({
         onRequestCreated={() => {
           toast.success("Signature request created successfully");
           setActiveModal('none');
+          setSignatureRequestDoc(null);
+          setSignatureRequestData(null);
         }}
+        // Pre-populated data from PDF Editor SignerPanel
+        initialSigners={signatureRequestData?.signers.map(s => ({
+          id: s.id,
+          email: s.email,
+          name: s.name,
+          role: s.role,
+          signOrder: s.signOrder,
+        }))}
+        initialSignatureFields={signatureRequestData?.signatureFields.map(f => ({
+          id: f.id,
+          pageIndex: f.pageIndex,
+          x: f.x,
+          y: f.y,
+          width: f.width,
+          height: f.height,
+          label: f.label,
+          fieldType: f.fieldType,
+          assignedTo: f.assignedTo,
+        }))}
+        initialFieldAssignments={signatureRequestData?.fieldAssignments}
       />
 
       {/* Signature Request Status Modal */}

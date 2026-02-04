@@ -6,11 +6,12 @@ import { DocumentsService, type StoredDocument } from "@/lib/services/documents-
 import { DocumentActivityService } from "@/lib/services/document-activity-service";
 import { DocumentVersionService } from "@/lib/services/document-version-service";
 import { DocumentsHeader } from "./documents/DocumentsHeader";
-import { DocumentsSidebar, type DocumentView } from "./documents/DocumentsSidebar";
+import { DocumentsSidebar, type DocumentView, type DocumentDragData } from "./documents/DocumentsSidebar";
 import { DocumentsList } from "./documents/DocumentsList";
 import { DocumentPreview } from "./documents/DocumentPreview";
 import { ActivityFeed } from "./documents/ActivityFeed";
 import { PdfEditor } from "./documents/pdf-editor";
+import type { SignatureRequestData } from "./documents/pdf-editor/types";
 import { TemplateManagementModal } from "./documents/TemplateManagementModal";
 import { SignatureRequestModal } from "./documents/SignatureRequestModal";
 import { SignatureRequestStatus } from "./documents/SignatureRequestStatus";
@@ -29,6 +30,8 @@ import { PhotoGallery } from "./documents/PhotoGallery";
 import { isFolder, isPdf } from "./documents/utils";
 import { BaseDetailService } from "@/lib/services/base-detail-service";
 import type { DocumentTemplate } from "@/lib/services/template-service";
+import { PostActionPrompt, createUploadSuggestions } from "./documents/PostActionPrompt";
+import { KeyboardShortcutsPanel, useKeyboardShortcutsPanel } from "./documents/KeyboardShortcutsPanel";
 
 // Type for folder tree nodes
 type FolderNode = {
@@ -85,6 +88,7 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
   const [showSignatureRequestModal, setShowSignatureRequestModal] = useState<boolean>(false);
   const [showSignatureStatus, setShowSignatureStatus] = useState<boolean>(false);
   const [signatureRequestDoc, setSignatureRequestDoc] = useState<StoredDocument | null>(null);
+  const [signatureRequestData, setSignatureRequestData] = useState<SignatureRequestData | null>(null);
   const [showMergePackModal, setShowMergePackModal] = useState<boolean>(false);
   const [showMergeWithReorderModal, setShowMergeWithReorderModal] = useState<boolean>(false);
   const [showActivityFeed, setShowActivityFeed] = useState<boolean>(true);
@@ -96,6 +100,16 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
   const [showFolderSetup, setShowFolderSetup] = useState<boolean>(false);
   const [checkedDocuments, setCheckedDocuments] = useState<string[]>([]);
   const [currentView, setCurrentView] = useState<DocumentView>('folder');
+  
+  // Post-upload prompt state
+  const [showUploadPrompt, setShowUploadPrompt] = useState(false);
+  const [lastUploadedDoc, setLastUploadedDoc] = useState<StoredDocument | null>(null);
+  
+  // Drag and drop state for documents
+  const [draggingDocument, setDraggingDocument] = useState<DocumentDragData | null>(null);
+
+  // Keyboard shortcuts panel
+  const keyboardShortcuts = useKeyboardShortcutsPanel();
 
   const currentPrefix = useMemo(
     () => (folderPath && !folderPath.endsWith("/") ? `${folderPath}/` : folderPath),
@@ -311,6 +325,17 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
         toast.success(`Successfully uploaded ${results.success} file${results.success > 1 ? "s" : ""}`, {
           id: toastId,
         });
+        
+        // Show post-upload prompt for single PDF uploads
+        if (results.success === 1 && validFiles[0].type === "application/pdf") {
+          const uploadedFileName = validFiles[0].name;
+          // Find the uploaded document in the refreshed list
+          const uploadedDoc = allDocs.find(d => d.path.endsWith(uploadedFileName));
+          if (uploadedDoc) {
+            setLastUploadedDoc(uploadedDoc);
+            setShowUploadPrompt(true);
+          }
+        }
       } else {
         const errorMessages = results.errors.slice(0, 3).map(e => `${e.file}: ${e.error}`).join("; ");
         toast.warning(`Uploaded ${results.success} file${results.success > 1 ? "s" : ""}, ${results.failed} failed`, {
@@ -350,6 +375,23 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
   };
 
   const visibleDocs = useMemo(() => {
+    // For "today" view - show documents uploaded today
+    if (currentView === 'today') {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      return allDocs
+        .filter((doc) => {
+          if (isFolder(doc)) return false;
+          const docDate = new Date(doc.createdAt);
+          docDate.setHours(0, 0, 0, 0);
+          return docDate.getTime() === today.getTime();
+        })
+        .map((doc) => {
+          // Show full path as relative name for context
+          return { ...doc, relative: doc.path };
+        });
+    }
+
     // For "recent" view - show documents from last 7 days
     if (currentView === 'recent') {
       const sevenDaysAgo = new Date();
@@ -421,6 +463,18 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
   // Total document count (all files)
   const totalDocCount = useMemo(() => {
     return allDocs.filter((doc) => !isFolder(doc)).length;
+  }, [allDocs]);
+
+  // Count documents uploaded today
+  const todayCount = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return allDocs.filter((doc) => {
+      if (isFolder(doc)) return false;
+      const docDate = new Date(doc.createdAt);
+      docDate.setHours(0, 0, 0, 0);
+      return docDate.getTime() === today.getTime();
+    }).length;
   }, [allDocs]);
 
   // Build folder tree structure
@@ -836,6 +890,115 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
     }
   };
 
+  const handleFolderMove = async (sourcePath: string, targetParentPath: string) => {
+    const folderName = sourcePath.split("/").filter(Boolean).pop() || "folder";
+    const targetDescription = targetParentPath 
+      ? `into "${targetParentPath.split("/").filter(Boolean).pop()}"` 
+      : "to root level";
+    
+    const toastId = toast.loading(`Moving folder "${folderName}" ${targetDescription}...`);
+    
+    try {
+      const newPath = await DocumentsService.moveFolder({
+        baseId,
+        tableId: selectedTable?.id ?? null,
+        recordId,
+        sourceFolderPath: sourcePath,
+        targetParentPath,
+      });
+      
+      // Update folder path if we were viewing the moved folder
+      if (folderPath === sourcePath || folderPath.startsWith(sourcePath)) {
+        const relativePath = folderPath.slice(sourcePath.length);
+        setFolderPath(newPath + relativePath);
+      }
+      
+      // Log activity
+      await DocumentActivityService.logActivity({
+        baseId,
+        tableId: selectedTable?.id,
+        recordId,
+        action: 'folder_rename', // Reusing folder_rename action type for moves
+        folderPath: newPath,
+        documentName: folderName,
+        metadata: { movedFrom: sourcePath, movedTo: newPath },
+      });
+      
+      await refresh();
+      toast.success("Folder moved", {
+        id: toastId,
+        description: `"${folderName}" has been moved ${targetDescription}.`,
+      });
+    } catch (err) {
+      console.error("Failed to move folder", err);
+      const errorMessage = err instanceof Error ? err.message : "Unable to move folder";
+      toast.error("Failed to move folder", {
+        id: toastId,
+        description: errorMessage,
+      });
+      throw err;
+    }
+  };
+
+  const handleDocumentMove = async (documentPath: string, targetFolderPath: string) => {
+    const docName = documentPath.split("/").pop() || "document";
+    const targetDescription = targetFolderPath 
+      ? `to "${targetFolderPath.split("/").filter(Boolean).pop()}"` 
+      : "to Uncategorized";
+    
+    const toastId = toast.loading(`Moving "${docName}" ${targetDescription}...`);
+    
+    try {
+      await DocumentsService.moveDocument({
+        baseId,
+        tableId: selectedTable?.id ?? null,
+        recordId,
+        sourceRelativePath: documentPath,
+        targetFolderPath,
+      });
+      
+      // Clear selection if we moved the selected document
+      if (selectedDocPath === documentPath) {
+        setSelectedDocPath(null);
+        setSignedUrl(null);
+      }
+      
+      // Log activity
+      await DocumentActivityService.logActivity({
+        baseId,
+        tableId: selectedTable?.id,
+        recordId,
+        action: 'rename', // Reusing rename action type for moves
+        documentPath: targetFolderPath + docName,
+        documentName: docName,
+        metadata: { movedFrom: documentPath, movedTo: targetFolderPath },
+      });
+      
+      await refresh();
+      toast.success("Document moved", {
+        id: toastId,
+        description: `"${docName}" has been moved ${targetDescription}.`,
+      });
+    } catch (err) {
+      console.error("Failed to move document", err);
+      const errorMessage = err instanceof Error ? err.message : "Unable to move document";
+      toast.error("Failed to move document", {
+        id: toastId,
+        description: errorMessage,
+      });
+      throw err;
+    }
+  };
+  
+  // Document drag handlers
+  const handleDocumentDragStart = (dragData: DocumentDragData) => {
+    setDraggingDocument(dragData);
+  };
+  
+  const handleDocumentDragEnd = () => {
+    setDraggingDocument(null);
+  };
+
   const handleDocumentEdit = async (doc: StoredDocument & { relative: string }) => {
     // Only allow editing PDFs
     if (!isPdf(doc.mimeType)) {
@@ -1027,10 +1190,13 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
           onFolderSelect={handleFolderSelect}
           onFolderRename={handleFolderRename}
           onFolderDelete={handleFolderDelete}
+          onFolderMove={handleFolderMove}
+          onDocumentMove={handleDocumentMove}
           loading={loading && isInitialLoad}
           uncategorizedCount={uncategorizedCount}
           recentCount={recentCount}
           totalDocCount={totalDocCount}
+          todayCount={todayCount}
           currentView={currentView}
           onViewChange={handleViewChange}
         />
@@ -1100,6 +1266,8 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
                   checkedDocuments={checkedDocuments}
                   onDocumentSelect={setSelectedDocPath}
                   onDocumentEdit={handleDocumentEdit}
+                  onDocumentDragStart={handleDocumentDragStart}
+                  onDocumentDragEnd={handleDocumentDragEnd}
                   baseId={baseId}
                   tableId={selectedTable?.id}
                   recordId={recordId}
@@ -1118,6 +1286,19 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
                   onSplit={selectedDoc && isPdf(selectedDoc.mimeType) ? () => handleDocumentSplit(selectedDoc) : undefined}
                   loading={loading && isInitialLoad && !selectedDoc}
                   onRequestSignature={handleRequestSignatureForDocument}
+                  onEdit={selectedDoc && isPdf(selectedDoc.mimeType) 
+                    ? (doc) => handleDocumentEdit({ ...doc, relative: doc.path }) 
+                    : undefined
+                  }
+                  onDownload={selectedDoc && signedUrl ? (doc) => {
+                    // Create a download link
+                    const link = document.createElement('a');
+                    link.href = signedUrl;
+                    link.download = doc.path.split('/').pop() || 'document';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                  } : undefined}
                 />
               
                 {/* Activity Feed Sidebar */}
@@ -1161,6 +1342,24 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
           isOpen={Boolean(editorDoc)}
           onClose={handleEditorClose}
           onSave={handleEditorSave}
+          onRequestSignature={(data) => {
+            // Close the editor and open signature request modal with pre-populated data
+            const docToSign = editorDoc;
+            handleEditorClose();
+            // Set the document and signature request data for the modal
+            setSignatureRequestDoc(docToSign);
+            setSignatureRequestData(data);
+            setShowSignatureRequestModal(true);
+          }}
+          // Record context for enhanced signature request features
+          recordId={recordId}
+          availableFields={tableFields.map(f => ({
+            id: f.id,
+            name: f.name,
+            type: f.type,
+            options: f.options as Record<string, { name?: string; label?: string }> | undefined
+          }))}
+          recordValues={recordsData.find(r => r.id === recordId)?.values}
         />
       )}
 
@@ -1245,6 +1444,7 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
         onClose={() => {
           setShowSignatureRequestModal(false);
           setSignatureRequestDoc(null);
+          setSignatureRequestData(null);
         }}
         baseId={baseId}
         tableId={selectedTable?.id ?? null}
@@ -1257,6 +1457,7 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
         onRequestCreated={() => {
           setShowSignatureRequestModal(false);
           setSignatureRequestDoc(null);
+          setSignatureRequestData(null);
           setShowSignatureStatus(true);
         }}
         recordId={recordId}
@@ -1267,6 +1468,25 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
           type: f.type,
           options: f.options as Record<string, { name?: string; label?: string }> | undefined
         }))}
+        // Pre-populated data from PDF Editor SignerPanel
+        initialSigners={signatureRequestData?.signers.map(s => ({
+          email: s.email,
+          name: s.name,
+          role: s.role,
+          signOrder: s.signOrder,
+        }))}
+        initialSignatureFields={signatureRequestData?.signatureFields.map(f => ({
+          id: f.id,
+          pageIndex: f.pageIndex,
+          x: f.x,
+          y: f.y,
+          width: f.width,
+          height: f.height,
+          label: f.label,
+          fieldType: f.fieldType,
+          assignedTo: f.assignedTo,
+        }))}
+        initialFieldAssignments={signatureRequestData?.fieldAssignments}
       />
 
       {/* Signature Request Status */}
@@ -1347,6 +1567,46 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
         onComplete={() => {
           refresh();
         }}
+      />
+
+      {/* Post-Upload Prompt */}
+      <PostActionPrompt
+        type="document-uploaded"
+        documentName={lastUploadedDoc?.path.split("/").pop()}
+        isOpen={showUploadPrompt}
+        onClose={() => {
+          setShowUploadPrompt(false);
+          setLastUploadedDoc(null);
+        }}
+        suggestions={createUploadSuggestions({
+          onEditDocument: lastUploadedDoc ? () => {
+            setShowUploadPrompt(false);
+            handleDocumentEdit({ ...lastUploadedDoc, relative: lastUploadedDoc.path });
+          } : undefined,
+          onRequestSignature: lastUploadedDoc ? () => {
+            setShowUploadPrompt(false);
+            setSignatureRequestDoc(lastUploadedDoc);
+            setShowSignatureRequestModal(true);
+          } : undefined,
+          onOrganize: () => {
+            setShowUploadPrompt(false);
+            // Focus on the folder selector - user can then move the document
+            if (lastUploadedDoc) {
+              setSelectedDocPath(lastUploadedDoc.path);
+            }
+          },
+          onUploadMore: () => {
+            setShowUploadPrompt(false);
+            setLastUploadedDoc(null);
+            // Trigger file input click - would need a ref, so just close for now
+          },
+        })}
+      />
+
+      {/* Keyboard Shortcuts Panel */}
+      <KeyboardShortcutsPanel
+        isOpen={keyboardShortcuts.isOpen}
+        onClose={keyboardShortcuts.close}
       />
     </div>
   );
