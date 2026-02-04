@@ -56,8 +56,11 @@ async function getSupabaseClient(): Promise<SupabaseClient> {
 
     // Verify authentication - throw error if no user
     const { data: { user }, error: userError } = await supabase.auth.getUser();
-    if (userError || !user) {
-      throw new Error("Unauthorized: Failed to parse cookies for Supabase auth");
+    if (userError) {
+      throw new Error(`Unauthorized: Supabase auth error: ${userError.message}`);
+    }
+    if (!user) {
+      throw new Error("Unauthorized: no authenticated user");
     }
 
     return supabase;
