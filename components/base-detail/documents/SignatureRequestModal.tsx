@@ -26,7 +26,7 @@ type SignatureRequestModalProps = {
   // Available records for selection (for base-level templates)
   records?: RecordRow[];
   // Pre-populated signers from PDF Editor SignerPanel
-  initialSigners?: Array<{ email: string; name: string; role: "signer" | "viewer" | "approver" }>;
+  initialSigners?: Array<{ email: string; name: string; role: "signer" | "viewer" | "approver"; signOrder?: number }>;
   // Pre-populated signature fields from PDF Editor
   initialSignatureFields?: Array<{
     id: string;
@@ -373,7 +373,7 @@ export const SignatureRequestModal = ({
           email: s.email,
           name: s.name,
           role: s.role,
-          sign_order: index,
+          sign_order: s.signOrder ?? index,
         })));
         return;
       }

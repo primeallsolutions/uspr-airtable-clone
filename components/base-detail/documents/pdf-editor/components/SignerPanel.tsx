@@ -2,11 +2,18 @@
  * Signer Panel
  * Integrated panel for managing signers and sending signature requests
  * directly from the PDF Editor
+ * 
+ * Features:
+ * - Request metadata (title, message, expiry)
+ * - Signer management with roles and sign order
+ * - Field assignment with select all/deselect all
+ * - Inline field label editing
+ * - Status column configuration for auto-updates
  */
 
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Users,
   Plus,
@@ -15,12 +22,22 @@ import {
   Loader2,
   ChevronRight,
   ChevronDown,
+  ChevronUp,
   Mail,
   User,
   CheckCircle2,
   Clock,
   XCircle,
   AlertCircle,
+  FileText,
+  MessageSquare,
+  Calendar,
+  Database,
+  Edit2,
+  Check,
+  X,
+  ListOrdered,
+  UserCheck,
 } from "lucide-react";
 import type { SignatureFieldAnnotation } from "../types";
 
@@ -29,7 +46,20 @@ export interface Signer {
   email: string;
   name: string;
   role: "signer" | "viewer" | "approver";
+  signOrder: number;
   status?: "pending" | "sent" | "signed" | "declined";
+}
+
+export interface RequestMetadata {
+  title: string;
+  message: string;
+  expiresAt: string;
+}
+
+export interface StatusConfig {
+  fieldId: string;
+  valueOnComplete: string;
+  valueOnDecline: string;
 }
 
 interface SignerPanelProps {
@@ -44,6 +74,23 @@ interface SignerPanelProps {
   isSending?: boolean;
   requestStatus?: "draft" | "sent" | "completed" | "declined" | null;
   documentName?: string;
+  // New props for enhanced functionality
+  onFieldLabelChange?: (fieldId: string, newLabel: string) => void;
+  // Request metadata
+  requestMetadata?: RequestMetadata;
+  onRequestMetadataChange?: (metadata: RequestMetadata) => void;
+  // Status column config
+  recordId?: string | null;
+  availableFields?: Array<{ 
+    id: string; 
+    name: string; 
+    type: string;
+    options?: Record<string, { name?: string; label?: string }>;
+  }>;
+  statusConfig?: StatusConfig;
+  onStatusConfigChange?: (config: StatusConfig | null) => void;
+  // Autofill support
+  recordValues?: Record<string, unknown>;
 }
 
 export function SignerPanel({
@@ -58,8 +105,51 @@ export function SignerPanel({
   isSending = false,
   requestStatus,
   documentName,
+  onFieldLabelChange,
+  requestMetadata,
+  onRequestMetadataChange,
+  recordId,
+  availableFields = [],
+  statusConfig,
+  onStatusConfigChange,
+  recordValues,
 }: SignerPanelProps) {
-  const [expandedSigners, setExpandedSigners] = useState<Set<string>>(new Set());
+  // All signers start expanded
+  const [expandedSigners, setExpandedSigners] = useState<Set<string>>(() => 
+    new Set(signers.map(s => s.id))
+  );
+  
+  // Editing state for field labels
+  const [editingFieldId, setEditingFieldId] = useState<string | null>(null);
+  const [editingFieldLabel, setEditingFieldLabel] = useState("");
+  
+  // Status config expanded state
+  const [showStatusConfig, setShowStatusConfig] = useState(false);
+  
+  // Request settings expanded state
+  const [showRequestSettings, setShowRequestSettings] = useState(true);
+
+  // Auto-expand new signers when they are added
+  useEffect(() => {
+    const newSignerIds = signers.map(s => s.id);
+    setExpandedSigners(prev => {
+      const next = new Set(prev);
+      newSignerIds.forEach(id => next.add(id));
+      return next;
+    });
+  }, [signers]);
+
+  // Initialize request metadata with document name if not set
+  useEffect(() => {
+    if (documentName && onRequestMetadataChange && (!requestMetadata || !requestMetadata.title)) {
+      const docNameWithoutExt = documentName.replace(/\.[^/.]+$/, "");
+      onRequestMetadataChange({
+        title: `Signature Request - ${docNameWithoutExt}`,
+        message: "",
+        expiresAt: "",
+      });
+    }
+  }, [documentName, requestMetadata, onRequestMetadataChange]);
 
   const addSigner = () => {
     const newSigner: Signer = {
@@ -67,10 +157,10 @@ export function SignerPanel({
       email: "",
       name: "",
       role: "signer",
+      signOrder: signers.length, // Sequential by default
       status: "pending",
     };
     onSignersChange([...signers, newSigner]);
-    setExpandedSigners((prev) => new Set([...prev, newSigner.id]));
   };
 
   const removeSigner = (id: string) => {
@@ -117,6 +207,70 @@ export function SignerPanel({
 
   const canSend = validSigners.length > 0 && signatureFields.length > 0;
 
+  // Select all fields for a signer
+  const selectAllFieldsForSigner = (signerId: string) => {
+    signatureFields.forEach((field) => {
+      onFieldAssignmentChange(field.id, signerId);
+    });
+  };
+
+  // Deselect all fields for a signer
+  const deselectAllFieldsForSigner = (signerId: string) => {
+    signatureFields.forEach((field) => {
+      if (fieldAssignments[field.id] === signerId) {
+        onFieldAssignmentChange(field.id, "");
+      }
+    });
+  };
+
+  // Start editing field label
+  const startEditingField = (fieldId: string, currentLabel: string) => {
+    setEditingFieldId(fieldId);
+    setEditingFieldLabel(currentLabel);
+  };
+
+  // Save field label edit
+  const saveFieldLabel = () => {
+    if (editingFieldId && onFieldLabelChange && editingFieldLabel.trim()) {
+      onFieldLabelChange(editingFieldId, editingFieldLabel.trim());
+    }
+    setEditingFieldId(null);
+    setEditingFieldLabel("");
+  };
+
+  // Cancel field label edit
+  const cancelFieldLabelEdit = () => {
+    setEditingFieldId(null);
+    setEditingFieldLabel("");
+  };
+
+  // Autofill signer from record values
+  const autofillSigner = (signerId: string) => {
+    if (!recordValues || !availableFields) return;
+    
+    // Find email field
+    const emailField = availableFields.find(f => 
+      f.type === "email" || 
+      f.name.toLowerCase().includes("email")
+    );
+    
+    // Find name field
+    const nameField = availableFields.find(f => 
+      f.name.toLowerCase().includes("name")
+    );
+    
+    const email = emailField && recordValues[emailField.id] 
+      ? String(recordValues[emailField.id]) 
+      : "";
+    const name = nameField && recordValues[nameField.id] 
+      ? String(recordValues[nameField.id]) 
+      : "";
+    
+    if (email || name) {
+      updateSigner(signerId, { email, name });
+    }
+  };
+
   const getStatusIcon = (status?: string) => {
     switch (status) {
       case "signed":
@@ -143,6 +297,17 @@ export function SignerPanel({
     }
   };
 
+  // Get status field options
+  const statusFieldOptions = useMemo(() => {
+    if (!statusConfig?.fieldId) return [];
+    const field = availableFields.find(f => f.id === statusConfig.fieldId);
+    if (!field?.options) return [];
+    return Object.entries(field.options).map(([key, val]) => ({
+      value: key,
+      label: val.label || val.name || key,
+    }));
+  }, [statusConfig?.fieldId, availableFields]);
+
   if (!isOpen) {
     return (
       <button
@@ -161,12 +326,12 @@ export function SignerPanel({
   }
 
   return (
-    <div className="w-80 bg-gray-800 border-l border-gray-700 flex flex-col">
+    <div className="w-96 bg-gray-800 border-l border-gray-700 flex flex-col">
       {/* Header */}
       <div className="px-4 py-3 border-b border-gray-700 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Users className="w-5 h-5 text-purple-400" />
-          <span className="text-white font-medium">Signers & Fields</span>
+          <span className="text-white font-medium">Signature Request</span>
         </div>
         <button
           onClick={onToggle}
@@ -195,18 +360,98 @@ export function SignerPanel({
                 {requestStatus === "completed" ? "All Signed" : requestStatus}
               </span>
             </div>
-            {documentName && (
-              <p className="text-xs text-gray-400 mt-1 truncate">
-                {documentName}
-              </p>
+          </div>
+        )}
+
+        {/* Request Settings Section */}
+        {onRequestMetadataChange && (
+          <div className="bg-gray-700/50 rounded-lg overflow-hidden">
+            <button
+              onClick={() => setShowRequestSettings(!showRequestSettings)}
+              className="w-full px-3 py-2 flex items-center justify-between hover:bg-gray-700/70"
+            >
+              <div className="flex items-center gap-2">
+                <FileText className="w-4 h-4 text-purple-400" />
+                <span className="text-xs font-medium text-gray-300 uppercase">
+                  Request Settings
+                </span>
+              </div>
+              {showRequestSettings ? (
+                <ChevronUp className="w-4 h-4 text-gray-500" />
+              ) : (
+                <ChevronDown className="w-4 h-4 text-gray-500" />
+              )}
+            </button>
+            
+            {showRequestSettings && (
+              <div className="px-3 pb-3 space-y-3">
+                {/* Request Title */}
+                <div>
+                  <label className="flex items-center gap-1 text-xs text-gray-400 mb-1">
+                    <FileText className="w-3 h-3" />
+                    Title
+                  </label>
+                  <input
+                    type="text"
+                    value={requestMetadata?.title || ""}
+                    onChange={(e) =>
+                      onRequestMetadataChange({
+                        ...(requestMetadata || { title: "", message: "", expiresAt: "" }),
+                        title: e.target.value,
+                      })
+                    }
+                    placeholder="Signature Request Title"
+                    className="w-full px-2 py-1.5 text-sm bg-gray-600 border border-gray-500 rounded text-white placeholder-gray-400 focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+
+                {/* Message to Signers */}
+                <div>
+                  <label className="flex items-center gap-1 text-xs text-gray-400 mb-1">
+                    <MessageSquare className="w-3 h-3" />
+                    Message (Optional)
+                  </label>
+                  <textarea
+                    value={requestMetadata?.message || ""}
+                    onChange={(e) =>
+                      onRequestMetadataChange({
+                        ...(requestMetadata || { title: "", message: "", expiresAt: "" }),
+                        message: e.target.value,
+                      })
+                    }
+                    placeholder="Add a message for signers..."
+                    rows={2}
+                    className="w-full px-2 py-1.5 text-sm bg-gray-600 border border-gray-500 rounded text-white placeholder-gray-400 focus:outline-none focus:border-purple-500 resize-none"
+                  />
+                </div>
+
+                {/* Expiration Date */}
+                <div>
+                  <label className="flex items-center gap-1 text-xs text-gray-400 mb-1">
+                    <Calendar className="w-3 h-3" />
+                    Expires (Optional)
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={requestMetadata?.expiresAt || ""}
+                    onChange={(e) =>
+                      onRequestMetadataChange({
+                        ...(requestMetadata || { title: "", message: "", expiresAt: "" }),
+                        expiresAt: e.target.value,
+                      })
+                    }
+                    className="w-full px-2 py-1.5 text-sm bg-gray-600 border border-gray-500 rounded text-white placeholder-gray-400 focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+              </div>
             )}
           </div>
         )}
 
-        {/* Fields Summary */}
+        {/* Signature Fields Section */}
         <div className="bg-gray-700/50 rounded-lg p-3">
           <h3 className="text-xs font-medium text-gray-400 uppercase mb-2">
-            Signature Fields
+            Signature Fields ({signatureFields.length})
           </h3>
           {signatureFields.length === 0 ? (
             <p className="text-sm text-gray-500">
@@ -222,10 +467,57 @@ export function SignerPanel({
                     field.fieldType
                   )}`}
                 >
-                  <span className="font-medium truncate">{field.label}</span>
-                  <span className="text-[10px] uppercase opacity-75">
-                    Page {field.pageIndex + 1}
-                  </span>
+                  {editingFieldId === field.id ? (
+                    <div className="flex items-center gap-1 flex-1">
+                      <input
+                        type="text"
+                        value={editingFieldLabel}
+                        onChange={(e) => setEditingFieldLabel(e.target.value)}
+                        className="flex-1 px-1 py-0.5 text-xs bg-white border border-gray-300 rounded text-gray-800 focus:outline-none focus:border-purple-500"
+                        autoFocus
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") saveFieldLabel();
+                          if (e.key === "Escape") cancelFieldLabelEdit();
+                        }}
+                      />
+                      <button
+                        onClick={saveFieldLabel}
+                        className="p-0.5 text-green-600 hover:bg-green-100 rounded"
+                      >
+                        <Check className="w-3 h-3" />
+                      </button>
+                      <button
+                        onClick={cancelFieldLabelEdit}
+                        className="p-0.5 text-red-600 hover:bg-red-100 rounded"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <span 
+                        className="font-medium truncate flex-1 cursor-pointer hover:underline"
+                        onClick={() => onFieldLabelChange && startEditingField(field.id, field.label)}
+                        title={onFieldLabelChange ? "Click to edit" : field.label}
+                      >
+                        {field.label}
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        {onFieldLabelChange && (
+                          <button
+                            onClick={() => startEditingField(field.id, field.label)}
+                            className="p-0.5 opacity-50 hover:opacity-100"
+                            title="Edit label"
+                          >
+                            <Edit2 className="w-3 h-3" />
+                          </button>
+                        )}
+                        <span className="text-[10px] uppercase opacity-75">
+                          Page {field.pageIndex + 1}
+                        </span>
+                      </div>
+                    </>
+                  )}
                 </div>
               ))}
             </div>
@@ -242,14 +534,14 @@ export function SignerPanel({
         <div>
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-xs font-medium text-gray-400 uppercase">
-              Signers
+              Signers ({signers.length})
             </h3>
             <button
               onClick={addSigner}
               className="text-xs text-purple-400 hover:text-purple-300 flex items-center gap-1"
             >
               <Plus className="w-3 h-3" />
-              Add
+              Add Signer
             </button>
           </div>
 
@@ -259,9 +551,10 @@ export function SignerPanel({
             </p>
           ) : (
             <div className="space-y-2">
-              {signers.map((signer) => {
+              {signers.map((signer, index) => {
                 const isExpanded = expandedSigners.has(signer.id);
                 const assignedFields = getFieldsAssignedToSigner(signer.id);
+                const canAutofill = recordValues && availableFields.length > 0;
 
                 return (
                   <div
@@ -282,8 +575,13 @@ export function SignerPanel({
                         <div className="flex items-center gap-2">
                           {getStatusIcon(signer.status)}
                           <span className="text-sm text-white truncate">
-                            {signer.name || signer.email || "New Signer"}
+                            {signer.name || signer.email || `Signer ${index + 1}`}
                           </span>
+                          {signer.role !== "signer" && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-600 text-gray-300 capitalize">
+                              {signer.role}
+                            </span>
+                          )}
                         </div>
                         {signer.email && signer.name && (
                           <p className="text-xs text-gray-400 truncate">
@@ -303,17 +601,28 @@ export function SignerPanel({
                         <div>
                           <label className="flex items-center gap-1 text-xs text-gray-400 mb-1">
                             <Mail className="w-3 h-3" />
-                            Email
+                            Email <span className="text-red-400">*</span>
                           </label>
-                          <input
-                            type="email"
-                            value={signer.email}
-                            onChange={(e) =>
-                              updateSigner(signer.id, { email: e.target.value })
-                            }
-                            placeholder="signer@example.com"
-                            className="w-full px-2 py-1.5 text-sm bg-gray-600 border border-gray-500 rounded text-white placeholder-gray-400 focus:outline-none focus:border-purple-500"
-                          />
+                          <div className="flex gap-1">
+                            <input
+                              type="email"
+                              value={signer.email}
+                              onChange={(e) =>
+                                updateSigner(signer.id, { email: e.target.value })
+                              }
+                              placeholder="signer@example.com"
+                              className="flex-1 px-2 py-1.5 text-sm bg-gray-600 border border-gray-500 rounded text-white placeholder-gray-400 focus:outline-none focus:border-purple-500"
+                            />
+                            {canAutofill && (
+                              <button
+                                onClick={() => autofillSigner(signer.id)}
+                                className="px-2 py-1.5 text-xs bg-purple-600 hover:bg-purple-700 text-white rounded transition-colors"
+                                title="Autofill from record"
+                              >
+                                Fill
+                              </button>
+                            )}
+                          </div>
                         </div>
 
                         {/* Name */}
@@ -333,12 +642,75 @@ export function SignerPanel({
                           />
                         </div>
 
+                        {/* Role and Sign Order */}
+                        <div className="grid grid-cols-2 gap-2">
+                          {/* Role */}
+                          <div>
+                            <label className="flex items-center gap-1 text-xs text-gray-400 mb-1">
+                              <UserCheck className="w-3 h-3" />
+                              Role
+                            </label>
+                            <select
+                              value={signer.role}
+                              onChange={(e) =>
+                                updateSigner(signer.id, {
+                                  role: e.target.value as Signer["role"],
+                                })
+                              }
+                              className="w-full px-2 py-1.5 text-sm bg-gray-600 border border-gray-500 rounded text-white focus:outline-none focus:border-purple-500"
+                            >
+                              <option value="signer">Signer</option>
+                              <option value="viewer">Viewer</option>
+                              <option value="approver">Approver</option>
+                            </select>
+                          </div>
+
+                          {/* Sign Order */}
+                          <div>
+                            <label className="flex items-center gap-1 text-xs text-gray-400 mb-1">
+                              <ListOrdered className="w-3 h-3" />
+                              Order
+                            </label>
+                            <input
+                              type="number"
+                              value={signer.signOrder}
+                              onChange={(e) =>
+                                updateSigner(signer.id, {
+                                  signOrder: parseInt(e.target.value) || 0,
+                                })
+                              }
+                              min="0"
+                              className="w-full px-2 py-1.5 text-sm bg-gray-600 border border-gray-500 rounded text-white focus:outline-none focus:border-purple-500"
+                              title="0 = parallel, 1+ = sequential order"
+                            />
+                          </div>
+                        </div>
+                        <p className="text-[10px] text-gray-500 -mt-2">
+                          Order 0 = all sign at once, 1+ = sign in order
+                        </p>
+
                         {/* Field Assignment */}
                         {signatureFields.length > 0 && (
                           <div>
-                            <label className="text-xs text-gray-400 mb-1 block">
-                              Assigned Fields
-                            </label>
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="text-xs text-gray-400">
+                                Assigned Fields
+                              </label>
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => selectAllFieldsForSigner(signer.id)}
+                                  className="text-[10px] text-purple-400 hover:text-purple-300"
+                                >
+                                  Select All
+                                </button>
+                                <button
+                                  onClick={() => deselectAllFieldsForSigner(signer.id)}
+                                  className="text-[10px] text-gray-400 hover:text-gray-300"
+                                >
+                                  Deselect All
+                                </button>
+                              </div>
+                            </div>
                             <div className="space-y-1 max-h-32 overflow-y-auto">
                               {signatureFields.map((field) => {
                                 const isAssigned =
@@ -359,7 +731,7 @@ export function SignerPanel({
                                       }
                                       className="w-3.5 h-3.5 rounded border-gray-400 text-purple-600 focus:ring-purple-500"
                                     />
-                                    <span className="text-xs text-gray-300 flex-1">
+                                    <span className="text-xs text-gray-300 flex-1 truncate">
                                       {field.label}
                                     </span>
                                     <span
@@ -392,6 +764,150 @@ export function SignerPanel({
             </div>
           )}
         </div>
+
+        {/* Status Column Configuration */}
+        {recordId && availableFields.length > 0 && onStatusConfigChange && (
+          <div className="bg-gray-700/50 rounded-lg overflow-hidden">
+            <button
+              onClick={() => setShowStatusConfig(!showStatusConfig)}
+              className="w-full px-3 py-2 flex items-center justify-between hover:bg-gray-700/70"
+            >
+              <div className="flex items-center gap-2">
+                <Database className="w-4 h-4 text-purple-400" />
+                <span className="text-xs font-medium text-gray-300 uppercase">
+                  Auto-Update Status
+                </span>
+                {statusConfig?.fieldId && (
+                  <span className="text-[10px] bg-green-600/30 text-green-400 px-1.5 py-0.5 rounded">
+                    Enabled
+                  </span>
+                )}
+              </div>
+              {showStatusConfig ? (
+                <ChevronUp className="w-4 h-4 text-gray-500" />
+              ) : (
+                <ChevronDown className="w-4 h-4 text-gray-500" />
+              )}
+            </button>
+            
+            {showStatusConfig && (
+              <div className="px-3 pb-3 space-y-3">
+                <p className="text-[10px] text-gray-500">
+                  Automatically update a record field when signing is complete or declined.
+                </p>
+
+                {/* Field Selection */}
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">
+                    Field to Update
+                  </label>
+                  <select
+                    value={statusConfig?.fieldId || ""}
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        onStatusConfigChange({
+                          fieldId: e.target.value,
+                          valueOnComplete: statusConfig?.valueOnComplete || "Signed",
+                          valueOnDecline: statusConfig?.valueOnDecline || "Declined",
+                        });
+                      } else {
+                        onStatusConfigChange(null);
+                      }
+                    }}
+                    className="w-full px-2 py-1.5 text-sm bg-gray-600 border border-gray-500 rounded text-white focus:outline-none focus:border-purple-500"
+                  >
+                    <option value="">Don't auto-update</option>
+                    {availableFields
+                      .filter((f) => f.type === "single_select" || f.type === "text")
+                      .map((field) => (
+                        <option key={field.id} value={field.id}>
+                          {field.name} ({field.type === "single_select" ? "Select" : "Text"})
+                        </option>
+                      ))}
+                  </select>
+                </div>
+
+                {/* Status Values */}
+                {statusConfig?.fieldId && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-xs text-gray-400 mb-1 block">
+                        When Completed
+                      </label>
+                      {statusFieldOptions.length > 0 ? (
+                        <select
+                          value={statusConfig.valueOnComplete}
+                          onChange={(e) =>
+                            onStatusConfigChange({
+                              ...statusConfig,
+                              valueOnComplete: e.target.value,
+                            })
+                          }
+                          className="w-full px-2 py-1.5 text-sm bg-gray-600 border border-gray-500 rounded text-white focus:outline-none focus:border-green-500"
+                        >
+                          {statusFieldOptions.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input
+                          type="text"
+                          value={statusConfig.valueOnComplete}
+                          onChange={(e) =>
+                            onStatusConfigChange({
+                              ...statusConfig,
+                              valueOnComplete: e.target.value,
+                            })
+                          }
+                          placeholder="Signed"
+                          className="w-full px-2 py-1.5 text-sm bg-gray-600 border border-gray-500 rounded text-white placeholder-gray-400 focus:outline-none focus:border-green-500"
+                        />
+                      )}
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-400 mb-1 block">
+                        When Declined
+                      </label>
+                      {statusFieldOptions.length > 0 ? (
+                        <select
+                          value={statusConfig.valueOnDecline}
+                          onChange={(e) =>
+                            onStatusConfigChange({
+                              ...statusConfig,
+                              valueOnDecline: e.target.value,
+                            })
+                          }
+                          className="w-full px-2 py-1.5 text-sm bg-gray-600 border border-gray-500 rounded text-white focus:outline-none focus:border-red-500"
+                        >
+                          {statusFieldOptions.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input
+                          type="text"
+                          value={statusConfig.valueOnDecline}
+                          onChange={(e) =>
+                            onStatusConfigChange({
+                              ...statusConfig,
+                              valueOnDecline: e.target.value,
+                            })
+                          }
+                          placeholder="Declined"
+                          className="w-full px-2 py-1.5 text-sm bg-gray-600 border border-gray-500 rounded text-white placeholder-gray-400 focus:outline-none focus:border-red-500"
+                        />
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Footer - Send Button */}
@@ -428,4 +944,3 @@ export function SignerPanel({
     </div>
   );
 }
-

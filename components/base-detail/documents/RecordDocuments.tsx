@@ -576,6 +576,15 @@ export const RecordDocuments = ({
         onClose={handleEditorClose}
         onSave={handleEditorSave}
         onRequestSignature={handleRequestSignatureFromEditor}
+        // Record context for enhanced signature request features
+        recordId={recordId}
+        availableFields={fields?.map(f => ({
+          id: f.id,
+          name: f.name,
+          type: f.type,
+          options: f.options as Record<string, { name?: string; label?: string }> | undefined
+        }))}
+        recordValues={recordValues}
       />
 
       {/* Signature Request Modal */}
@@ -613,6 +622,7 @@ export const RecordDocuments = ({
           email: s.email,
           name: s.name,
           role: s.role,
+          signOrder: s.signOrder,
         }))}
         initialSignatureFields={signatureRequestData?.signatureFields.map(f => ({
           id: f.id,

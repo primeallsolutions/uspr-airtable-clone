@@ -1351,6 +1351,15 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
             setSignatureRequestData(data);
             setShowSignatureRequestModal(true);
           }}
+          // Record context for enhanced signature request features
+          recordId={recordId}
+          availableFields={tableFields.map(f => ({
+            id: f.id,
+            name: f.name,
+            type: f.type,
+            options: f.options as Record<string, { name?: string; label?: string }> | undefined
+          }))}
+          recordValues={recordsData.find(r => r.id === recordId)?.values}
         />
       )}
 
@@ -1464,6 +1473,7 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
           email: s.email,
           name: s.name,
           role: s.role,
+          signOrder: s.signOrder,
         }))}
         initialSignatureFields={signatureRequestData?.signatureFields.map(f => ({
           id: f.id,

@@ -26,7 +26,6 @@ import {
   Undo2,
   Redo2,
   FileSignature,
-  Send,
   Keyboard,
   Pen,
   CalendarCheck,
@@ -44,7 +43,6 @@ interface ToolbarProps {
   hasChanges: boolean;
   canUndo: boolean;
   canRedo: boolean;
-  hasSignatureFields: boolean;
   onPageChange: (page: number) => void;
   onZoomIn: () => void;
   onZoomOut: () => void;
@@ -56,7 +54,6 @@ interface ToolbarProps {
   onClose: () => void;
   onUndo: () => void;
   onRedo: () => void;
-  onRequestSignature?: () => void;
 }
 
 export function Toolbar({
@@ -69,7 +66,6 @@ export function Toolbar({
   hasChanges,
   canUndo,
   canRedo,
-  hasSignatureFields,
   onPageChange,
   onZoomIn,
   onZoomOut,
@@ -81,7 +77,6 @@ export function Toolbar({
   onClose,
   onUndo,
   onRedo,
-  onRequestSignature,
 }: ToolbarProps) {
   const zoom = ZOOM_LEVELS[zoomIndex];
   const [showShortcuts, setShowShortcuts] = useState(false);
@@ -311,26 +306,6 @@ export function Toolbar({
         </div>
 
         <div className="w-px h-6 bg-gray-600" />
-
-        {/* Request Signature Button */}
-        {onRequestSignature && (
-          <>
-            <button
-              onClick={onRequestSignature}
-              disabled={!hasSignatureFields && !hasChanges}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                hasSignatureFields
-                  ? "bg-purple-600 hover:bg-purple-700 text-white"
-                  : "bg-gray-600 hover:bg-gray-500 text-gray-300"
-              } disabled:opacity-50 disabled:cursor-not-allowed`}
-              title={hasSignatureFields ? "Send for signature" : "Add signature fields first, or save and send existing document"}
-            >
-              <Send className="w-4 h-4" />
-              Request Signature
-            </button>
-            <div className="w-px h-6 bg-gray-600" />
-          </>
-        )}
 
         <IconButton
           icon={<Download className="w-4 h-4" />}

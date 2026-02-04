@@ -105,6 +105,21 @@ export interface SignerData {
   email: string;
   name: string;
   role: "signer" | "viewer" | "approver";
+  signOrder: number;
+}
+
+// Request metadata for signature requests
+export interface RequestMetadata {
+  title: string;
+  message: string;
+  expiresAt: string;
+}
+
+// Status column configuration for auto-updating records
+export interface StatusConfig {
+  fieldId: string;
+  valueOnComplete: string;
+  valueOnDecline: string;
 }
 
 // Signature request data passed from PDF Editor
@@ -112,6 +127,19 @@ export interface SignatureRequestData {
   signatureFields: SignatureFieldAnnotation[];
   signers: SignerData[];
   fieldAssignments: Record<string, string>; // fieldId -> signerId
+  // Enhanced metadata
+  title: string;
+  message?: string;
+  expiresAt?: string;
+  statusConfig?: StatusConfig;
+}
+
+// Field definition for record context
+export interface FieldDefinition {
+  id: string;
+  name: string;
+  type: string;
+  options?: Record<string, { name?: string; label?: string }>;
 }
 
 // Editor props (same interface as old PdfEditor for compatibility)
@@ -125,6 +153,10 @@ export interface PdfEditorProps {
   onClose: () => void;
   onSave: (file: File) => Promise<void>;
   onRequestSignature?: (data: SignatureRequestData) => void;
+  // Record context for enhanced features
+  recordId?: string | null;
+  availableFields?: FieldDefinition[];
+  recordValues?: Record<string, unknown>;
 }
 
 // Zoom configuration

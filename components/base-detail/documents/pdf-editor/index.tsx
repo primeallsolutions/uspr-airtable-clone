@@ -14,7 +14,7 @@
 import React, { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { Loader2, PenTool, Share2, Edit3 } from "lucide-react";
 
-import type { PdfEditorProps, Tool, TextItem, Point } from "./types";
+import type { PdfEditorProps, Tool, TextItem, Point, RequestMetadata, StatusConfig } from "./types";
 import { ZOOM_LEVELS, DEFAULT_ZOOM_INDEX } from "./types";
 import { usePdfLoader } from "./hooks/usePdfLoader";
 import { useAnnotationStore } from "./hooks/useAnnotationStore";
@@ -128,6 +128,9 @@ export function PdfEditor({
   onClose,
   onSave,
   onRequestSignature,
+  recordId,
+  availableFields = [],
+  recordValues,
 }: PdfEditorProps) {
   // PDF loading state
   const { status, document, bytes, numPages, error, reset } = usePdfLoader(
@@ -148,11 +151,19 @@ export function PdfEditor({
   const [showPostSavePrompt, setShowPostSavePrompt] = useState(false);
   const [savedDocumentName, setSavedDocumentName] = useState<string | null>(null);
 
-  // Signer panel state
-  const [showSignerPanel, setShowSignerPanel] = useState(false);
+  // Signer panel state - open by default
+  const [showSignerPanel, setShowSignerPanel] = useState(true);
   const [signers, setSigners] = useState<Signer[]>([]);
   const [fieldAssignments, setFieldAssignments] = useState<Record<string, string>>({});
   const [isSendingRequest, setIsSendingRequest] = useState(false);
+  
+  // Request metadata and status config
+  const [requestMetadata, setRequestMetadata] = useState<RequestMetadata>({
+    title: "",
+    message: "",
+    expiresAt: "",
+  });
+  const [statusConfig, setStatusConfig] = useState<StatusConfig | null>(null);
 
   // Text editing state
   const [editingText, setEditingText] = useState<{
@@ -173,6 +184,7 @@ export function PdfEditor({
     addSignature,
     addSignatureField,
     getSignatureFields,
+    updateAnnotation,
     clearAnnotations,
     hasChanges,
     selectedAnnotationId,
@@ -216,7 +228,7 @@ export function PdfEditor({
       // === Save Shortcut (Ctrl/Cmd + S) ===
       if (isMod && e.key === "s") {
         e.preventDefault();
-        if (hasChanges && !isSaving && onSave) {
+        if (hasChanges() && !isSaving) {
           // Trigger save - need to call handleSave
           setIsSaving(true);
           // Note: The actual save is handled by the toolbar button
@@ -560,7 +572,7 @@ export function PdfEditor({
   const handleRequestSignature = useCallback(() => {
     const signatureFields = getSignatureFields();
     if (onRequestSignature) {
-      // Pass full signature request data including signers and field assignments
+      // Pass full signature request data including signers, field assignments, and metadata
       onRequestSignature({
         signatureFields,
         signers: signers.map(s => ({
@@ -568,11 +580,16 @@ export function PdfEditor({
           email: s.email,
           name: s.name,
           role: s.role,
+          signOrder: s.signOrder ?? 0,
         })),
         fieldAssignments,
+        title: requestMetadata.title || `Signature Request - ${documentName}`,
+        message: requestMetadata.message || undefined,
+        expiresAt: requestMetadata.expiresAt || undefined,
+        statusConfig: statusConfig || undefined,
       });
     }
-  }, [getSignatureFields, onRequestSignature, signers, fieldAssignments]);
+  }, [getSignatureFields, onRequestSignature, signers, fieldAssignments, requestMetadata, documentName, statusConfig]);
 
   // Handle field assignment changes from signer panel
   const handleFieldAssignmentChange = useCallback((fieldId: string, signerId: string) => {
@@ -581,6 +598,11 @@ export function PdfEditor({
       [fieldId]: signerId,
     }));
   }, []);
+
+  // Handle field label changes from signer panel
+  const handleFieldLabelChange = useCallback((fieldId: string, newLabel: string) => {
+    updateAnnotation(fieldId, { label: newLabel });
+  }, [updateAnnotation]);
 
   // Handle sending signature request directly from the panel
   const handleSendSignatureRequest = useCallback(async () => {
@@ -617,14 +639,19 @@ export function PdfEditor({
             email: s.email,
             name: s.name,
             role: s.role,
+            signOrder: s.signOrder ?? 0,
           })),
           fieldAssignments,
+          title: requestMetadata.title || `Signature Request - ${documentName}`,
+          message: requestMetadata.message || undefined,
+          expiresAt: requestMetadata.expiresAt || undefined,
+          statusConfig: statusConfig || undefined,
         });
       } finally {
         setIsSendingRequest(false);
       }
     }
-  }, [getSignatureFields, signers, fieldAssignments, onRequestSignature]);
+  }, [getSignatureFields, signers, fieldAssignments, onRequestSignature, requestMetadata, documentName, statusConfig]);
 
   // Handle post-save prompt close
   const handlePostSaveClose = useCallback(() => {
@@ -708,7 +735,6 @@ export function PdfEditor({
           hasChanges={hasChanges()}
           canUndo={canUndo()}
           canRedo={canRedo()}
-          hasSignatureFields={getSignatureFields().length > 0}
           onPageChange={handlePageChange}
           onZoomIn={handleZoomIn}
           onZoomOut={handleZoomOut}
@@ -720,7 +746,6 @@ export function PdfEditor({
           onClose={handleClose}
           onUndo={undo}
           onRedo={redo}
-          onRequestSignature={onRequestSignature ? handleRequestSignature : undefined}
         />
 
         {/* Main Content */}
@@ -803,6 +828,14 @@ export function PdfEditor({
             onSendRequest={handleSendSignatureRequest}
             isSending={isSendingRequest}
             documentName={documentName}
+            onFieldLabelChange={handleFieldLabelChange}
+            requestMetadata={requestMetadata}
+            onRequestMetadataChange={setRequestMetadata}
+            recordId={recordId}
+            availableFields={availableFields}
+            statusConfig={statusConfig ?? undefined}
+            onStatusConfigChange={setStatusConfig}
+            recordValues={recordValues}
           />
         </div>
 
