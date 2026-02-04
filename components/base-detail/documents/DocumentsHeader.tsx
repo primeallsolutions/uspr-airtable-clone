@@ -6,7 +6,6 @@ type DocumentsHeaderProps = {
   uploadProgress: { current: number; total: number };
   onAddFolder: () => void;
   onUpload: (files: FileList | null) => void;
-  onManageTemplates?: () => void;
   onRequestSignature?: () => void;
   onViewSignatures?: () => void;
   onMergeDocuments?: () => void;
@@ -18,7 +17,6 @@ export const DocumentsHeader = ({
   uploadProgress,
   onAddFolder,
   onUpload,
-  onManageTemplates,
   onRequestSignature,
   onViewSignatures,
   onMergeDocuments,
@@ -30,16 +28,6 @@ export const DocumentsHeader = ({
         <span className="font-semibold truncate">{prefixLabel}</span>
       </div>
       <div className="flex items-center gap-2 ml-auto">
-        {onManageTemplates && (
-          <button
-            onClick={onManageTemplates}
-            className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:border-purple-400 hover:text-purple-700 transition-colors"
-            title="Manage document templates"
-          >
-            <FileText className="w-4 h-4" />
-            Templates
-          </button>
-        )}
         {onRequestSignature && (
           <button
             onClick={onRequestSignature}

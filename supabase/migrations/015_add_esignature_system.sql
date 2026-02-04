@@ -48,7 +48,7 @@ create table if not exists public.signature_fields (
   y_position numeric not null, -- Y coordinate in PDF points
   width numeric default 150, -- Signature field width
   height numeric default 50, -- Signature field height
-  field_type text not null default 'signature' check (field_type in ('signature', 'initial', 'date', 'text')),
+  field_type text not null default 'signature' check (field_type in ('signature', 'initial', 'date', 'text', 'number', 'checkbox')),
   label text, -- Optional label for the field
   is_required boolean not null default true,
   created_at timestamp with time zone not null default now()

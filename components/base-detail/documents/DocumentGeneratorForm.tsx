@@ -718,8 +718,6 @@ export const DocumentGeneratorForm = ({
         body: JSON.stringify({
           templateId: template.id,
           baseId,
-          tableId: tableId || null,
-          recordId: recordId || null,
           fieldValues,
           fieldOverrides: Object.keys(fieldOverridesObj).length > 0 ? fieldOverridesObj : undefined,
           outputFileName: outputFileName || undefined,
