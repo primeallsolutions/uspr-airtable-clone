@@ -15,6 +15,7 @@ import type {
   TextEditAnnotation,
   SignatureAnnotation,
   SignatureFieldAnnotation,
+  TextFormatting,
   Rect,
   Point,
 } from "../types";
@@ -44,7 +45,7 @@ interface AnnotationStore {
   
   // Add annotations
   addHighlight: (pageIndex: number, rect: Rect, color?: string) => string;
-  addTextBox: (pageIndex: number, position: Point, content: string, fontSize?: number) => string;
+  addTextBox: (pageIndex: number, position: Point, content: string, formatting?: Partial<TextFormatting>) => string;
   addTextEdit: (
     pageIndex: number,
     originalX: number,
@@ -53,7 +54,8 @@ interface AnnotationStore {
     height: number,
     originalText: string,
     newContent: string,
-    fontSize: number
+    fontSize: number,
+    formatting?: Partial<TextFormatting>
   ) => string;
   addSignature: (pageIndex: number, position: Point, imageData: string, width?: number, height?: number) => string;
   addSignatureField: (
@@ -125,8 +127,9 @@ export const useAnnotationStore = create<AnnotationStore>((set, get) => ({
     return id;
   },
 
-  addTextBox: (pageIndex, position, content, fontSize = 14) => {
+  addTextBox: (pageIndex, position, content, formatting) => {
     const id = generateId();
+    const fontSize = formatting?.fontSize ?? 14;
     const annotation: TextBoxAnnotation = {
       id,
       type: "textBox",
@@ -137,7 +140,12 @@ export const useAnnotationStore = create<AnnotationStore>((set, get) => ({
       height: fontSize * 1.5,
       content,
       fontSize,
-      color: "#000000",
+      color: formatting?.color ?? "#000000",
+      fontFamily: formatting?.fontFamily,
+      fontWeight: formatting?.fontWeight,
+      fontStyle: formatting?.fontStyle,
+      textDecoration: formatting?.textDecoration,
+      backgroundColor: formatting?.backgroundColor,
     };
     set((state) => ({
       undoStack: [...state.undoStack.slice(-MAX_HISTORY_SIZE + 1), cloneAnnotations(state.annotations)],
@@ -147,7 +155,7 @@ export const useAnnotationStore = create<AnnotationStore>((set, get) => ({
     return id;
   },
 
-  addTextEdit: (pageIndex, originalX, originalY, width, height, originalText, newContent, fontSize) => {
+  addTextEdit: (pageIndex, originalX, originalY, width, height, originalText, newContent, fontSize, formatting) => {
     const id = generateId();
     const annotation: TextEditAnnotation = {
       id,
@@ -161,8 +169,13 @@ export const useAnnotationStore = create<AnnotationStore>((set, get) => ({
       originalText,
       originalX,
       originalY,
-      fontSize,
-      color: "#000000",
+      fontSize: formatting?.fontSize ?? fontSize,
+      color: formatting?.color ?? "#000000",
+      fontFamily: formatting?.fontFamily,
+      fontWeight: formatting?.fontWeight,
+      fontStyle: formatting?.fontStyle,
+      textDecoration: formatting?.textDecoration,
+      backgroundColor: formatting?.backgroundColor,
     };
     set((state) => ({
       undoStack: [...state.undoStack.slice(-MAX_HISTORY_SIZE + 1), cloneAnnotations(state.annotations)],

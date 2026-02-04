@@ -7,7 +7,7 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { Check, X, RotateCcw } from "lucide-react";
-import type { TextItem } from "../types";
+import type { TextItem, TextFormatting } from "../types";
 import { useAnnotationStore } from "../hooks/useAnnotationStore";
 
 interface TextEditOverlayProps {
@@ -16,6 +16,7 @@ interface TextEditOverlayProps {
   pageIndex: number;
   pageHeight: number;
   zoom: number;
+  formatting: TextFormatting;
   onClose: () => void;
 }
 
@@ -25,6 +26,7 @@ export function TextEditOverlay({
   pageIndex,
   pageHeight,
   zoom,
+  formatting,
   onClose,
 }: TextEditOverlayProps) {
   const { findTextEdit, addTextEdit, updateAnnotation, removeAnnotation, selectAnnotation } =
@@ -57,11 +59,20 @@ export function TextEditOverlay({
         removeAnnotation(existingEdit.id);
       }
     } else if (existingEdit) {
-      // Update existing edit
-      updateAnnotation(existingEdit.id, { content: trimmedText });
+      // Update existing edit with formatting
+      updateAnnotation(existingEdit.id, { 
+        content: trimmedText,
+        fontSize: formatting.fontSize,
+        color: formatting.color,
+        fontFamily: formatting.fontFamily,
+        fontWeight: formatting.fontWeight,
+        fontStyle: formatting.fontStyle,
+        textDecoration: formatting.textDecoration,
+        backgroundColor: formatting.backgroundColor,
+      });
       selectAnnotation(existingEdit.id);
     } else {
-      // Create new edit
+      // Create new edit with formatting
       const newId = addTextEdit(
         pageIndex,
         textItem.x,
@@ -70,7 +81,8 @@ export function TextEditOverlay({
         textItem.height,
         textItem.str,
         trimmedText,
-        textItem.fontSize
+        textItem.fontSize,
+        formatting
       );
       selectAnnotation(newId);
     }
@@ -111,13 +123,18 @@ export function TextEditOverlay({
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={handleKeyDown}
-          className="bg-white text-black outline-none border-2 border-blue-500 rounded-sm shadow-lg"
+          className="outline-none border-2 border-blue-500 rounded-sm shadow-lg"
           style={{
-            fontSize: textItem.fontSize * zoom,
+            fontSize: formatting.fontSize * zoom,
             lineHeight: 1.2,
             padding: "2px 6px",
             minWidth: Math.max(textItem.width * zoom + 40, 120),
-            fontFamily: "Helvetica, Arial, sans-serif",
+            fontFamily: formatting.fontFamily,
+            fontWeight: formatting.fontWeight,
+            fontStyle: formatting.fontStyle,
+            textDecoration: formatting.textDecoration === "none" ? undefined : formatting.textDecoration,
+            color: formatting.color,
+            backgroundColor: formatting.backgroundColor === "transparent" ? "white" : formatting.backgroundColor,
           }}
         />
         

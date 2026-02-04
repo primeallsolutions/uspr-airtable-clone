@@ -117,18 +117,55 @@ export function PageCanvas({
           ctx.fillRect(screenPos.x, screenPos.y, screenWidth, screenHeight);
           break;
 
-        case "textBox":
-          ctx.font = `${ann.fontSize * zoom}px Arial`;
+        case "textBox": {
+          // Build font string with formatting
+          const textBoxFontStyle = ann.fontStyle === "italic" ? "italic " : "";
+          const textBoxFontWeight = ann.fontWeight === "bold" ? "bold " : "";
+          const textBoxFontFamily = ann.fontFamily || "Arial";
+          ctx.font = `${textBoxFontStyle}${textBoxFontWeight}${ann.fontSize * zoom}px ${textBoxFontFamily}`;
+          
+          // Draw background if set
+          if (ann.backgroundColor && ann.backgroundColor !== "transparent") {
+            const textMetrics = ctx.measureText(ann.content);
+            ctx.fillStyle = ann.backgroundColor;
+            ctx.fillRect(
+              screenPos.x - 2, 
+              screenPos.y, 
+              textMetrics.width + 4, 
+              ann.fontSize * zoom + 4
+            );
+          }
+          
           ctx.fillStyle = ann.color;
           ctx.fillText(ann.content, screenPos.x, screenPos.y + ann.fontSize * zoom);
+          
+          // Draw underline or strikethrough
+          if (ann.textDecoration === "underline" || ann.textDecoration === "line-through") {
+            const textMetrics = ctx.measureText(ann.content);
+            ctx.strokeStyle = ann.color;
+            ctx.lineWidth = 1;
+            const yOffset = ann.textDecoration === "underline" 
+              ? ann.fontSize * zoom + 2 
+              : ann.fontSize * zoom * 0.6;
+            ctx.beginPath();
+            ctx.moveTo(screenPos.x, screenPos.y + yOffset);
+            ctx.lineTo(screenPos.x + textMetrics.width, screenPos.y + yOffset);
+            ctx.stroke();
+          }
           break;
+        }
 
-        case "textEdit":
+        case "textEdit": {
           // TextEdit uses screen-like coordinates directly (from textItem extraction)
           const textEditX = ann.x * zoom;
           const textEditY = ann.y * zoom;
           const textEditWidth = ann.width * zoom;
           const textEditHeight = ann.height * zoom;
+          
+          // Build font string with formatting
+          const editFontStyle = ann.fontStyle === "italic" ? "italic " : "";
+          const editFontWeight = ann.fontWeight === "bold" ? "bold " : "";
+          const editFontFamily = ann.fontFamily || "Arial";
           
           // IMPORTANT: First cover the ORIGINAL position (where the text was in the PDF)
           // This prevents the "copy" effect when moving text
@@ -143,11 +180,32 @@ export function PageCanvas({
             ctx.fillRect(textEditX - 2, textEditY - 2, textEditWidth + 4, textEditHeight + 4);
           }
           
+          // Draw background color if set
+          if (ann.backgroundColor && ann.backgroundColor !== "transparent") {
+            ctx.fillStyle = ann.backgroundColor;
+            ctx.fillRect(textEditX - 2, textEditY - 2, textEditWidth + 4, textEditHeight + 4);
+          }
+          
           // Draw the text at the current position
-          ctx.font = `${ann.fontSize * zoom}px Arial`;
+          ctx.font = `${editFontStyle}${editFontWeight}${ann.fontSize * zoom}px ${editFontFamily}`;
           ctx.fillStyle = ann.color;
           ctx.fillText(ann.content, textEditX, textEditY + ann.fontSize * zoom);
+          
+          // Draw underline or strikethrough
+          if (ann.textDecoration === "underline" || ann.textDecoration === "line-through") {
+            const textMetrics = ctx.measureText(ann.content);
+            ctx.strokeStyle = ann.color;
+            ctx.lineWidth = 1;
+            const yOffset = ann.textDecoration === "underline" 
+              ? ann.fontSize * zoom + 2 
+              : ann.fontSize * zoom * 0.6;
+            ctx.beginPath();
+            ctx.moveTo(textEditX, textEditY + yOffset);
+            ctx.lineTo(textEditX + textMetrics.width, textEditY + yOffset);
+            ctx.stroke();
+          }
           break;
+        }
 
         case "signature":
           // Use cached image for immediate drawing (no async delay)

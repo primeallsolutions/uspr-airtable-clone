@@ -33,11 +33,13 @@ import { PostActionPrompt, type ActionSuggestion } from "../PostActionPrompt";
 function TextBoxEditor({
   position,
   zoom,
+  formatting,
   onSave,
   onCancel,
 }: {
   position: Point;
   zoom: number;
+  formatting: TextFormatting;
   onSave: (text: string) => void;
   onCancel: () => void;
 }) {
@@ -88,14 +90,19 @@ function TextBoxEditor({
         onChange={(e) => setText(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder="Type text here..."
-        className="bg-white text-black outline-none border-2 border-green-500 rounded-sm shadow-lg resize-none"
+        className="outline-none border-2 border-green-500 rounded-sm shadow-lg resize-none"
         style={{
-          fontSize: 14 * zoom,
+          fontSize: formatting.fontSize * zoom,
           lineHeight: 1.4,
           padding: "6px 10px",
           minWidth: 220,
           minHeight: 60,
-          fontFamily: "Helvetica, Arial, sans-serif",
+          fontFamily: formatting.fontFamily,
+          fontWeight: formatting.fontWeight,
+          fontStyle: formatting.fontStyle,
+          textDecoration: formatting.textDecoration === "none" ? undefined : formatting.textDecoration,
+          color: formatting.color,
+          backgroundColor: formatting.backgroundColor === "transparent" ? "white" : formatting.backgroundColor,
         }}
         rows={3}
       />
@@ -505,11 +512,11 @@ export function PdfEditor({
   const handleTextBoxSave = useCallback(
     (text: string) => {
       if (textBoxPosition) {
-        addTextBox(currentPage - 1, textBoxPosition.pdf, text);
+        addTextBox(currentPage - 1, textBoxPosition.pdf, text, textFormatting);
         setTextBoxPosition(null);
       }
     },
-    [textBoxPosition, currentPage, addTextBox]
+    [textBoxPosition, currentPage, addTextBox, textFormatting]
   );
 
   const handleTextBoxCancel = useCallback(() => {
@@ -812,6 +819,7 @@ export function PdfEditor({
                     pageIndex={currentPage - 1}
                     pageHeight={pageHeight}
                     zoom={zoom}
+                    formatting={textFormatting}
                     onClose={() => setEditingText(null)}
                   />
                 )}
@@ -821,6 +829,7 @@ export function PdfEditor({
                   <TextBoxEditor
                     position={textBoxPosition.screen}
                     zoom={zoom}
+                    formatting={textFormatting}
                     onSave={handleTextBoxSave}
                     onCancel={handleTextBoxCancel}
                   />

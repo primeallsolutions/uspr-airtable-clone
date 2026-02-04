@@ -34,6 +34,12 @@ export interface TextBoxAnnotation extends BaseAnnotation {
   content: string;
   fontSize: number;
   color: string;
+  // Extended formatting options
+  fontFamily?: string;
+  fontWeight?: "normal" | "bold";
+  fontStyle?: "normal" | "italic";
+  textDecoration?: "none" | "underline" | "line-through";
+  backgroundColor?: string;
 }
 
 // Text edit annotation (modification of existing PDF text)
@@ -45,6 +51,12 @@ export interface TextEditAnnotation extends BaseAnnotation {
   originalY: number;
   fontSize: number;
   color: string;
+  // Extended formatting options
+  fontFamily?: string;
+  fontWeight?: "normal" | "bold";
+  fontStyle?: "normal" | "italic";
+  textDecoration?: "none" | "underline" | "line-through";
+  backgroundColor?: string;
 }
 
 // Signature annotation (embedded image)
