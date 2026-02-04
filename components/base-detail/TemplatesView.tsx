@@ -88,7 +88,7 @@ export const TemplatesView = ({ baseId, baseName = "Base", tables = [], records 
     } finally {
       setLoadingRecords(false);
     }
-  }, [baseId]);
+  }, []);
 
   // Get primary field value for a record
   const getPrimaryValue = (record: RecordRow, fieldsForTable: FieldRow[] = []): string => {

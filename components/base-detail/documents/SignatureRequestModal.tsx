@@ -427,7 +427,7 @@ export const SignatureRequestModal = ({
       toast.error("Failed to load template preview");
       setPdfLoading(false);
     }
-  }, [baseId, tableId]); // Removed signers and pdfLoading from deps
+  }, [baseId]);
 
   // Track if we've loaded for this template to prevent duplicate loads
   const loadedTemplateRef = useRef<string | null>(null);
