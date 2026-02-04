@@ -17,6 +17,7 @@ import {
   FileEdit,
   PenTool,
   CheckSquare,
+  Edit3,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -26,6 +27,7 @@ import {
 
 import { SignatureRequestModal } from "./SignatureRequestModal";
 import { SignatureRequestStatus } from "./SignatureRequestStatus";
+import { PdfEditor } from "./pdf-editor";
 import type { FieldRow } from "@/lib/types/base-detail";
 
 type RecordDocumentsProps = {
@@ -82,6 +84,13 @@ export const RecordDocuments = ({
   const [previewDoc, setPreviewDoc] = useState<RecordDocument | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
+  
+  // PDF Editor state
+  const [editorDoc, setEditorDoc] = useState<RecordDocument | null>(null);
+  const [editorSignedUrl, setEditorSignedUrl] = useState<string | null>(null);
+  
+  // Signature request state - document to use when opening signature modal from editor
+  const [signatureRequestDoc, setSignatureRequestDoc] = useState<RecordDocument | null>(null);
   
   // Modal stack management - only one modal visible at a time
   type ModalType = 'none' | 'signature-request' | 'signature-status';
@@ -162,16 +171,76 @@ export const RecordDocuments = ({
     }
   };
 
-  // Handle preview
+  // Handle preview - opens PdfEditor for PDFs, simple preview for other files
   const handlePreview = async (doc: RecordDocument) => {
     try {
       const url = await RecordDocumentsService.getSignedUrl(doc.document_path);
-      setPreviewUrl(url);
-      setPreviewDoc(doc);
+      
+      if (doc.mime_type === "application/pdf") {
+        // Open in PdfEditor for full editing capabilities
+        setEditorDoc(doc);
+        setEditorSignedUrl(url);
+      } else {
+        // Keep existing simple preview for images/other files
+        setPreviewUrl(url);
+        setPreviewDoc(doc);
+      }
     } catch (err) {
       console.error("Failed to get preview URL:", err);
       toast.error("Failed to load preview");
     }
+  };
+
+  // Handle PDF Editor close
+  const handleEditorClose = () => {
+    setEditorDoc(null);
+    setEditorSignedUrl(null);
+  };
+
+  // Handle saving edited PDF
+  const handleEditorSave = async (file: File) => {
+    if (!editorDoc) return;
+    
+    const toastId = toast.loading("Saving document...");
+    
+    try {
+      // Upload edited file as a new version (preserves original)
+      await RecordDocumentsService.uploadAndAttach({
+        recordId,
+        baseId,
+        tableId,
+        file,
+      });
+      
+      // Refresh document list
+      await loadDocuments();
+      
+      // Close editor
+      setEditorDoc(null);
+      setEditorSignedUrl(null);
+      
+      toast.success("Document saved successfully", { id: toastId });
+    } catch (err) {
+      console.error("Failed to save document:", err);
+      toast.error("Failed to save document", { id: toastId });
+    }
+  };
+
+  // Handle request signature from PDF Editor
+  // Note: signatureFields param is available but we use the SignatureRequestModal's
+  // built-in field placement instead for better UX
+  const handleRequestSignatureFromEditor = (_signatureFields?: unknown[]) => {
+    if (!editorDoc) return;
+    
+    // Save reference to current doc for signature request
+    setSignatureRequestDoc(editorDoc);
+    
+    // Close editor
+    setEditorDoc(null);
+    setEditorSignedUrl(null);
+    
+    // Open signature modal with this document pre-selected
+    setActiveModal('signature-request');
   };
 
   // Handle download
@@ -309,10 +378,20 @@ export const RecordDocuments = ({
 
                 {/* Actions */}
                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  {/* Edit button for PDFs - opens full editor */}
+                  {doc.mime_type === "application/pdf" && (
+                    <button
+                      onClick={() => handlePreview(doc)}
+                      className="p-1.5 text-gray-500 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+                      title="Edit document"
+                    >
+                      <Edit3 className="w-4 h-4" />
+                    </button>
+                  )}
                   <button
                     onClick={() => handlePreview(doc)}
                     className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                    title="Preview"
+                    title={doc.mime_type === "application/pdf" ? "View/Edit" : "Preview"}
                   >
                     <ExternalLink className="w-4 h-4" />
                   </button>
@@ -412,13 +491,35 @@ export const RecordDocuments = ({
         </div>
       )}
 
+      {/* PDF Editor Modal */}
+      <PdfEditor
+        document={editorDoc ? {
+          path: editorDoc.document_path,
+          mimeType: editorDoc.mime_type || undefined,
+        } : null}
+        signedUrl={editorSignedUrl}
+        isOpen={Boolean(editorDoc)}
+        onClose={handleEditorClose}
+        onSave={handleEditorSave}
+        onRequestSignature={handleRequestSignatureFromEditor}
+      />
+
       {/* Signature Request Modal */}
       <SignatureRequestModal
         isOpen={activeModal === 'signature-request'}
-        onClose={() => setActiveModal('none')}
+        onClose={() => {
+          setActiveModal('none');
+          setSignatureRequestDoc(null);
+        }}
         baseId={baseId}
         tableId={tableId}
         recordId={recordId}
+        selectedDocument={signatureRequestDoc ? {
+          path: signatureRequestDoc.document_path,
+          size: signatureRequestDoc.size_bytes || 0,
+          mimeType: signatureRequestDoc.mime_type || "application/pdf",
+          createdAt: signatureRequestDoc.created_at,
+        } : undefined}
         availableFields={fields?.map(f => ({
           id: f.id,
           name: f.name,
@@ -429,6 +530,7 @@ export const RecordDocuments = ({
         onRequestCreated={() => {
           toast.success("Signature request created successfully");
           setActiveModal('none');
+          setSignatureRequestDoc(null);
         }}
       />
 

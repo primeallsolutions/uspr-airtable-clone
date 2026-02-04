@@ -1198,8 +1198,6 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
             // Set the document for signature request
             setSignatureRequestDoc(docToSign);
             setShowSignatureRequestModal(true);
-            // Log signature fields info for debugging
-            console.log(`Opening signature request with ${signatureFields.length} pre-placed fields`);
           }}
         />
       )}
