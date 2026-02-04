@@ -249,7 +249,13 @@ export const SignatureRequestModal = ({
       
       const urlResponse = await fetch(`/api/documents/signed-url?${urlParams}`, { headers });
       if (!urlResponse.ok) {
-        throw new Error("Failed to get document URL");
+        const errorData = await urlResponse.json().catch(() => ({ error: "Unknown error" }));
+        console.error("Signed URL API error:", { 
+          status: urlResponse.status, 
+          error: errorData,
+          params: Object.fromEntries(urlParams.entries())
+        });
+        throw new Error(errorData.error || `Failed to get document URL (${urlResponse.status})`);
       }
       const urlData = await urlResponse.json();
       setPdfUrl(urlData.url);

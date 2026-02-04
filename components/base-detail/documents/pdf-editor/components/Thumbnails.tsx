@@ -54,12 +54,39 @@ function ThumbnailItem({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const renderTaskRef = useRef<any>(null);
   const isRenderedRef = useRef(false);
+  const renderGenerationRef = useRef(0);
+
+  const cancelRender = useCallback(async () => {
+    if (renderTaskRef.current) {
+      try {
+        renderTaskRef.current.cancel();
+        await renderTaskRef.current.promise.catch(() => {
+          // Ignore cancellation errors
+        });
+      } catch {
+        // Ignore
+      }
+      renderTaskRef.current = null;
+    }
+  }, []);
 
   const renderThumbnail = useCallback(async () => {
     if (!canvasRef.current || isRenderedRef.current) return;
 
+    const currentGeneration = ++renderGenerationRef.current;
+
+    // Cancel any existing render and wait for completion
+    await cancelRender();
+
+    // Check if a newer render was requested
+    if (currentGeneration !== renderGenerationRef.current) return;
+
     try {
       const page = await document.getPage(pageNumber);
+      
+      // Check if still valid
+      if (currentGeneration !== renderGenerationRef.current) return;
+      
       const viewport = page.getViewport({ scale: 0.2 });
 
       const canvas = canvasRef.current;
@@ -70,15 +97,10 @@ function ThumbnailItem({
 
       canvas.width = viewport.width;
       canvas.height = viewport.height;
+      context.clearRect(0, 0, canvas.width, canvas.height);
 
-      // Cancel any existing render
-      if (renderTaskRef.current) {
-        try {
-          renderTaskRef.current.cancel();
-        } catch {
-          // Ignore
-        }
-      }
+      // Check again if still valid
+      if (currentGeneration !== renderGenerationRef.current) return;
 
       const renderTask = page.render({
         canvasContext: context,
@@ -88,27 +110,26 @@ function ThumbnailItem({
       renderTaskRef.current = renderTask;
 
       await renderTask.promise;
-      isRenderedRef.current = true;
+      renderTaskRef.current = null;
+      
+      if (currentGeneration === renderGenerationRef.current) {
+        isRenderedRef.current = true;
+      }
     } catch (err: any) {
       if (err?.name !== "RenderingCancelledException") {
         console.error("Failed to render thumbnail:", err);
       }
     }
-  }, [document, pageNumber]);
+  }, [document, pageNumber, cancelRender]);
 
   useEffect(() => {
     renderThumbnail();
 
     return () => {
-      if (renderTaskRef.current) {
-        try {
-          renderTaskRef.current.cancel();
-        } catch {
-          // Ignore
-        }
-      }
+      renderGenerationRef.current++;
+      cancelRender();
     };
-  }, [renderThumbnail]);
+  }, [renderThumbnail, cancelRender]);
 
   return (
     <button

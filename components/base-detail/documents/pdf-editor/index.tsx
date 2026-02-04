@@ -650,16 +650,8 @@ export function PdfEditor({
     return suggestions;
   }, [onRequestSignature, handleRequestSignature, clearAnnotations]);
 
-  // Don't render if not open
-  if (!isOpen || !docInfo) return null;
-
-  // Count annotation types for status bar
-  const annotationCount = annotations.filter(
-    (a) => a.type !== "textEdit"
-  ).length;
-  const textEditCount = annotations.filter((a) => a.type === "textEdit").length;
-
   // Count signature field types for status bar
+  // NOTE: This useMemo MUST be before the early return to maintain consistent hook order
   const signatureFieldCounts = useMemo(() => {
     const fields = getSignatureFields();
     return {
@@ -668,6 +660,15 @@ export function PdfEditor({
       date: fields.filter(f => f.fieldType === "date").length,
     };
   }, [annotations, getSignatureFields]);
+
+  // Don't render if not open
+  if (!isOpen || !docInfo) return null;
+
+  // Count annotation types for status bar
+  const annotationCount = annotations.filter(
+    (a) => a.type !== "textEdit"
+  ).length;
+  const textEditCount = annotations.filter((a) => a.type === "textEdit").length;
 
   return (
     <div

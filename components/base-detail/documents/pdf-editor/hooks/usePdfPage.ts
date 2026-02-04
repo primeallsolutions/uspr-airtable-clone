@@ -28,18 +28,22 @@ export function usePdfPage(
   const [state, setState] = useState<PdfPageState>(initialState);
   const renderTaskRef = useRef<any>(null);
   const pageRef = useRef<PDFPageProxy | null>(null);
-  const isRenderingRef = useRef(false);
+  // Use a render generation counter to invalidate stale renders
+  const renderGenerationRef = useRef(0);
 
-  const cancelRender = useCallback(() => {
+  const cancelRender = useCallback(async () => {
     if (renderTaskRef.current) {
       try {
         renderTaskRef.current.cancel();
+        // Wait for the cancellation to complete
+        await renderTaskRef.current.promise.catch(() => {
+          // Ignore cancellation errors
+        });
       } catch {
         // Ignore cancel errors
       }
       renderTaskRef.current = null;
     }
-    isRenderingRef.current = false;
   }, []);
 
   const renderPage = useCallback(async () => {
@@ -47,14 +51,16 @@ export function usePdfPage(
       return;
     }
 
-    // Prevent concurrent renders
-    if (isRenderingRef.current) {
+    // Increment generation to invalidate any in-progress render
+    const currentGeneration = ++renderGenerationRef.current;
+
+    // Cancel any existing render and wait for it to complete
+    await cancelRender();
+
+    // Check if a newer render was requested while we were cancelling
+    if (currentGeneration !== renderGenerationRef.current) {
       return;
     }
-
-    // Cancel any existing render
-    cancelRender();
-    isRenderingRef.current = true;
 
     setState((prev) => ({
       ...prev,
@@ -65,6 +71,12 @@ export function usePdfPage(
     try {
       // Get the page
       const page = await document.getPage(pageNumber);
+      
+      // Check if this render is still valid
+      if (currentGeneration !== renderGenerationRef.current) {
+        return;
+      }
+      
       pageRef.current = page;
 
       // Get viewport with zoom and rotation
@@ -72,19 +84,25 @@ export function usePdfPage(
 
       const canvas = canvasRef.current;
       if (!canvas) {
-        isRenderingRef.current = false;
         return;
       }
 
       const context = canvas.getContext("2d");
       if (!context) {
-        isRenderingRef.current = false;
         return;
       }
 
-      // Set canvas dimensions
+      // Set canvas dimensions (this also clears the canvas)
       canvas.width = viewport.width;
       canvas.height = viewport.height;
+      
+      // Clear the canvas explicitly to ensure a fresh start
+      context.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Check again if this render is still valid
+      if (currentGeneration !== renderGenerationRef.current) {
+        return;
+      }
 
       // Render the page
       const renderTask = page.render({
@@ -95,6 +113,14 @@ export function usePdfPage(
       renderTaskRef.current = renderTask;
 
       await renderTask.promise;
+      
+      // Clear the task ref after successful completion
+      renderTaskRef.current = null;
+
+      // Check if this render is still valid before updating state
+      if (currentGeneration !== renderGenerationRef.current) {
+        return;
+      }
 
       // Extract text content for editing
       const textContent = await page.getTextContent();
@@ -123,27 +149,32 @@ export function usePdfPage(
         }
       }
 
+      // Final check before updating state
+      if (currentGeneration !== renderGenerationRef.current) {
+        return;
+      }
+
       setState({
         status: "ready",
         pageNumber,
         viewport: { width: viewport.width, height: viewport.height },
         textItems,
       });
-
-      isRenderingRef.current = false;
     } catch (err: any) {
       // Ignore cancellation errors
       if (err?.name === "RenderingCancelledException") {
         return;
       }
 
-      console.error("Failed to render page:", err);
-      setState((prev) => ({
-        ...prev,
-        status: "error",
-        textItems: [],
-      }));
-      isRenderingRef.current = false;
+      // Only report error if this is still the current render
+      if (currentGeneration === renderGenerationRef.current) {
+        console.error("Failed to render page:", err);
+        setState((prev) => ({
+          ...prev,
+          status: "error",
+          textItems: [],
+        }));
+      }
     }
   }, [document, pageNumber, zoom, rotation, canvasRef, cancelRender]);
 
@@ -154,6 +185,8 @@ export function usePdfPage(
     }
 
     return () => {
+      // Increment generation to invalidate in-progress renders
+      renderGenerationRef.current++;
       cancelRender();
     };
   }, [document, pageNumber, zoom, rotation, renderPage, cancelRender]);
@@ -161,6 +194,7 @@ export function usePdfPage(
   // Cleanup on unmount
   useEffect(() => {
     return () => {
+      renderGenerationRef.current++;
       cancelRender();
       pageRef.current = null;
     };

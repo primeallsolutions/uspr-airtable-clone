@@ -59,11 +59,12 @@ function getAdminClient(): SupabaseClient {
 const BUCKET = process.env.NEXT_PUBLIC_SUPABASE_DOCUMENTS_BUCKET || "documents";
 
 const basePrefix = (baseId: string, tableId?: string | null, recordId?: string | null) => {
+  // Record-scoped documents are stored at bases/{baseId}/records/{recordId}/ 
+  // regardless of tableId (matching documents-service.ts recordPrefix)
   if (recordId) {
-    return tableId 
-      ? `bases/${baseId}/tables/${tableId}/records/${recordId}/`
-      : `bases/${baseId}/records/${recordId}/`;
+    return `bases/${baseId}/records/${recordId}/`;
   }
+  // Table/base-scoped documents
   return tableId ? `bases/${baseId}/tables/${tableId}/` : `bases/${baseId}/`;
 };
 
