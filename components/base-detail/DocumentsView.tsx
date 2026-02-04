@@ -1,15 +1,16 @@
 import { useMemo, useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabaseClient";
-import type { TableRow } from "@/lib/types/base-detail";
+import type { FieldRow, RecordRow, TableRow } from "@/lib/types/base-detail";
 import { DocumentsService, type StoredDocument } from "@/lib/services/documents-service";
 import { DocumentActivityService } from "@/lib/services/document-activity-service";
+import { DocumentVersionService } from "@/lib/services/document-version-service";
 import { DocumentsHeader } from "./documents/DocumentsHeader";
-import { DocumentsSidebar } from "./documents/DocumentsSidebar";
+import { DocumentsSidebar, type DocumentView } from "./documents/DocumentsSidebar";
 import { DocumentsList } from "./documents/DocumentsList";
 import { DocumentPreview } from "./documents/DocumentPreview";
 import { ActivityFeed } from "./documents/ActivityFeed";
-import { PdfEditor } from "./documents/PdfEditor";
+import { PdfEditor } from "./documents/pdf-editor";
 import { TemplateManagementModal } from "./documents/TemplateManagementModal";
 import { SignatureRequestModal } from "./documents/SignatureRequestModal";
 import { SignatureRequestStatus } from "./documents/SignatureRequestStatus";
@@ -26,6 +27,7 @@ import { AuditLogViewer } from "./documents/AuditLogViewer";
 import { TransactionFolderSetupModal } from "./documents/TransactionFolderSetupModal";
 import { PhotoGallery } from "./documents/PhotoGallery";
 import { isFolder, isPdf } from "./documents/utils";
+import { BaseDetailService } from "@/lib/services/base-detail-service";
 import type { DocumentTemplate } from "@/lib/services/template-service";
 
 // Type for folder tree nodes
@@ -72,7 +74,6 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
   const [isInitialLoad, setIsInitialLoad] = useState<boolean>(true);
   const [editorDoc, setEditorDoc] = useState<StoredDocument | null>(null);
   const [editorSignedUrl, setEditorSignedUrl] = useState<string | null>(null);
-  const [showTemplateManagement, setShowTemplateManagement] = useState<boolean>(false);
   const [showTemplateFieldEditor, setShowTemplateFieldEditor] = useState<boolean>(false);
   const [showDocumentGenerator, setShowDocumentGenerator] = useState<boolean>(false);
   const [selectedTemplate, setSelectedTemplate] = useState<DocumentTemplate | null>(null);
@@ -83,6 +84,7 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
   const [selectedFolder, setSelectedFolder] = useState<{ path: string; name: string } | null>(null);
   const [showSignatureRequestModal, setShowSignatureRequestModal] = useState<boolean>(false);
   const [showSignatureStatus, setShowSignatureStatus] = useState<boolean>(false);
+  const [signatureRequestDoc, setSignatureRequestDoc] = useState<StoredDocument | null>(null);
   const [showMergePackModal, setShowMergePackModal] = useState<boolean>(false);
   const [showMergeWithReorderModal, setShowMergeWithReorderModal] = useState<boolean>(false);
   const [showActivityFeed, setShowActivityFeed] = useState<boolean>(true);
@@ -93,11 +95,26 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
   const [showAuditLog, setShowAuditLog] = useState<boolean>(false);
   const [showFolderSetup, setShowFolderSetup] = useState<boolean>(false);
   const [checkedDocuments, setCheckedDocuments] = useState<string[]>([]);
+  const [currentView, setCurrentView] = useState<DocumentView>('folder');
 
   const currentPrefix = useMemo(
     () => (folderPath && !folderPath.endsWith("/") ? `${folderPath}/` : folderPath),
     [folderPath]
   );
+
+  const [recordsData, setRecordsData] = useState<RecordRow[]>([]);
+  const [tableFields, setTableFields] = useState<FieldRow[]>([]);
+  useEffect(() => {
+    const fetchFields = async () => {
+      const [recordsData, fieldsData] = await Promise.all([
+        BaseDetailService.getRecords(selectedTable?.id || ""),
+        BaseDetailService.getFields(selectedTable?.id || "")
+      ]);
+      setRecordsData(recordsData);
+      setTableFields(fieldsData);
+    };
+    fetchFields();
+  }, [selectedTable?.id]);
 
   const refresh = useCallback(async () => {
     try {
@@ -172,10 +189,10 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
       await DocumentActivityService.logActivity({
         baseId,
         tableId: selectedTable?.id,
+        recordId,
         action: 'folder_create',
         folderPath: currentPrefix + name + "/",
-        documentName: name,
-        ...(recordId && { metadata: { recordId } }),
+        documentName: name
       });
       
       toast.success("Folder created successfully", {
@@ -282,6 +299,7 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
         await DocumentActivityService.logActivity({
           baseId,
           tableId: selectedTable?.id,
+          recordId,
           action: 'upload',
           documentPath: currentPrefix + file.name,
           documentName: file.name,
@@ -332,21 +350,78 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
   };
 
   const visibleDocs = useMemo(() => {
+    // For "recent" view - show documents from last 7 days
+    if (currentView === 'recent') {
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      return allDocs
+        .filter((doc) => {
+          if (isFolder(doc)) return false;
+          return new Date(doc.createdAt) >= sevenDaysAgo;
+        })
+        .map((doc) => {
+          // Show full path as relative name for context
+          return { ...doc, relative: doc.path };
+        });
+    }
+
+    // For "all" view - show all documents
+    if (currentView === 'all') {
+      return allDocs
+        .filter((doc) => !isFolder(doc))
+        .map((doc) => {
+          // Show full path as relative name for context
+          return { ...doc, relative: doc.path };
+        });
+    }
+
+    // For "folder" view - existing behavior
     const prefixLen = currentPrefix.length;
     return allDocs
       .filter((doc) => {
         // Only include files, not folders
         if (isFolder(doc)) return false;
+        
+        // For root (uncategorized) - show files with no folder prefix
+        if (currentPrefix === "") {
+          // File is in root if it has no "/" in the path (just a filename)
+          return !doc.path.includes("/");
+        }
+        
         // Only include files in the current folder (not subfolders)
         if (!doc.path.startsWith(currentPrefix)) return false;
         const relative = doc.path.slice(prefixLen);
         return !relative.includes("/"); // Exclude files in subfolders
       })
       .map((doc) => {
-        const relative = doc.path.slice(prefixLen);
+        const relative = currentPrefix === "" ? doc.path : doc.path.slice(prefixLen);
         return { ...doc, relative };
       });
-  }, [allDocs, currentPrefix]);
+  }, [allDocs, currentPrefix, currentView]);
+
+  // Count files in root (uncategorized) - no folder prefix
+  const uncategorizedCount = useMemo(() => {
+    return allDocs.filter((doc) => {
+      if (isFolder(doc)) return false;
+      // File is in root if it has no "/" in the path (just a filename)
+      return !doc.path.includes("/");
+    }).length;
+  }, [allDocs]);
+
+  // Count recent uploads (last 7 days)
+  const recentCount = useMemo(() => {
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    return allDocs.filter((doc) => {
+      if (isFolder(doc)) return false;
+      return new Date(doc.createdAt) >= sevenDaysAgo;
+    }).length;
+  }, [allDocs]);
+
+  // Total document count (all files)
+  const totalDocCount = useMemo(() => {
+    return allDocs.filter((doc) => !isFolder(doc)).length;
+  }, [allDocs]);
 
   // Build folder tree structure
   const folderTree = useMemo((): FolderNode[] => {
@@ -464,13 +539,16 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
     ensureDefaultFolders();
   }, [baseId, selectedTable?.id, recordId, rootFolders.length, defaultFolderEnsured, refresh, defaultFolders]);
 
-  // Auto-select the first folder when none selected
+  // Auto-select behavior: if there are uncategorized files, stay on root
+  // Otherwise, select the first folder
   useEffect(() => {
-    if (!folderPath && rootFolders.length > 0) {
+    // Only auto-select if folderPath hasn't been explicitly set yet (initial load)
+    // and we're not already showing uncategorized files
+    if (folderPath === "" && uncategorizedCount === 0 && rootFolders.length > 0) {
       setFolderPath(`${rootFolders[0]}/`);
       setSelectedDocPath(null);
     }
-  }, [folderPath, rootFolders]);
+  }, [folderPath, rootFolders, uncategorizedCount]);
 
   const selectedDoc = useMemo(() => {
     if (!selectedDocPath) return null;
@@ -550,6 +628,7 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
       await DocumentActivityService.logActivity({
         baseId,
         tableId: selectedTable?.id,
+        recordId,
         action: 'delete',
         documentPath: selectedDoc.path,
         documentName: fileName,
@@ -575,6 +654,13 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
     if (!selectedDoc || isFolder(selectedDoc)) return;
     setShowRenameModal(true);
   };
+
+  // Handler for requesting signature from document preview
+  const handleRequestSignatureForDocument = (doc: StoredDocument) => {
+    setSignatureRequestDoc(doc);
+    setShowSignatureRequestModal(true);
+  };
+
   const handleDeleteChecked = async () => {
     if (checkedDocuments.length === 0) return;
     const confirmDelete = window.confirm(
@@ -615,6 +701,7 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
       await DocumentActivityService.logActivity({
         baseId,
         tableId: selectedTable?.id,
+        recordId,
         action: 'rename',
         documentPath: newRelative,
         documentName: newName,
@@ -638,6 +725,14 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
   const handleFolderSelect = (folder: string) => {
     setFolderPath(folder);
     setSelectedDocPath(null);
+    setCurrentView('folder');
+  };
+
+  // Handle view changes (recent, all, folder)
+  const handleViewChange = (view: DocumentView) => {
+    setCurrentView(view);
+    setSelectedDocPath(null);
+    // For folder view, keep the current folder path; for others, it doesn't matter
   };
 
   const handleFolderRename = (folderPath: string, folderName: string) => {
@@ -669,6 +764,7 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
       await DocumentActivityService.logActivity({
         baseId,
         tableId: selectedTable?.id,
+        recordId,
         action: 'folder_rename',
         folderPath: selectedFolder.path,
         documentName: newName,
@@ -718,6 +814,7 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
       await DocumentActivityService.logActivity({
         baseId,
         tableId: selectedTable?.id,
+        recordId,
         action: 'folder_delete',
         folderPath: selectedFolder.path,
         documentName: selectedFolder.name,
@@ -781,19 +878,80 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
       const originalPath = editorDoc.path;
       const originalFileName = originalPath.split("/").pop() || file.name;
       
-      // Delete the old file first
+      // Build the full document path for version tracking
+      const prefix = recordId 
+        ? `bases/${baseId}/records/${recordId}/`
+        : selectedTable?.id 
+          ? `bases/${baseId}/tables/${selectedTable.id}/`
+          : `bases/${baseId}/`;
+      const fullDocPath = `${prefix}${originalPath}`;
+      
+      // Download and save original file as a version BEFORE editing
+      try {
+        const originalUrl = await DocumentsService.getSignedUrl(
+          baseId, 
+          selectedTable?.id ?? null, 
+          originalPath, 
+          600, 
+          recordId
+        );
+        const response = await fetch(originalUrl);
+        const originalBlob = await response.blob();
+        const originalFile = new File([originalBlob], originalFileName, { 
+          type: editorDoc.mimeType || "application/pdf" 
+        });
+        
+        // Create version of the original file before replacing
+        await DocumentVersionService.createVersion({
+          documentPath: fullDocPath,
+          baseId,
+          tableId: selectedTable?.id,
+          file: originalFile,
+          notes: "Original version before edit",
+        });
+      } catch (versionErr) {
+        console.warn("Failed to create version of original file:", versionErr);
+        // Continue with save even if version creation fails
+      }
+      
+      // Delete the old file
       await DocumentsService.deleteDocument(baseId, selectedTable?.id ?? null, originalPath, recordId);
       
       // Upload the edited file with the SAME name (preserving original filename)
       const editedFile = new File([file], originalFileName, { type: file.type });
       
-      const newPath = await DocumentsService.uploadDocument({
+      await DocumentsService.uploadDocument({
         baseId,
         tableId: selectedTable?.id,
         recordId, // Pass recordId for record-scoped uploads
         folderPath: currentPrefix,
         file: editedFile,
         preserveName: true, // Keep the original filename
+      });
+      
+      // Create version of the edited file as the new current version
+      try {
+        await DocumentVersionService.createVersion({
+          documentPath: fullDocPath,
+          baseId,
+          tableId: selectedTable?.id,
+          file: editedFile,
+          notes: "Edited version",
+        });
+      } catch (versionErr) {
+        console.warn("Failed to create version of edited file:", versionErr);
+        // Continue even if version creation fails
+      }
+      
+      // Log activity for the edit
+      await DocumentActivityService.logActivity({
+        baseId,
+        tableId: selectedTable?.id,
+        recordId,
+        action: 'edit',
+        documentPath: fullDocPath,
+        documentName: originalFileName,
+        metadata: { editType: 'pdf_annotation' },
       });
       
       // Refresh to show updated document
@@ -804,6 +962,10 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
       if (selectedDocPath === originalPath) {
         setSelectedDocPath(fullNewPath);
       }
+      
+      toast.success("Document saved", {
+        description: "Your changes have been saved with version history.",
+      });
     } catch (err) {
       console.error("Failed to save edited document", err);
       throw err; // Re-throw to let PdfEditor handle the error
@@ -853,7 +1015,6 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
         uploadProgress={uploadProgress}
         onAddFolder={handleAddFolder}
         onUpload={handleUpload}
-        onManageTemplates={() => setShowTemplateManagement(true)}
         onRequestSignature={() => setShowSignatureRequestModal(true)}
         onViewSignatures={() => setShowSignatureStatus(true)}
         onMergeDocuments={() => setShowMergeWithReorderModal(true)}
@@ -867,6 +1028,11 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
           onFolderRename={handleFolderRename}
           onFolderDelete={handleFolderDelete}
           loading={loading && isInitialLoad}
+          uncategorizedCount={uncategorizedCount}
+          recentCount={recentCount}
+          totalDocCount={totalDocCount}
+          currentView={currentView}
+          onViewChange={handleViewChange}
         />
 
         {/* Tab Navigation */}
@@ -926,6 +1092,7 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
               <>
                 <DocumentsList
                   documents={visibleDocs}
+                  allDocs={allDocs}
                   selectedDocPath={selectedDocPath}
                   loading={loading && isInitialLoad}
                   error={error}
@@ -936,6 +1103,7 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
                   baseId={baseId}
                   tableId={selectedTable?.id}
                   recordId={recordId}
+                  currentView={currentView}
                 />
 
                 <DocumentPreview
@@ -949,6 +1117,7 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
                   onDelete={handleDeleteSelected}
                   onSplit={selectedDoc && isPdf(selectedDoc.mimeType) ? () => handleDocumentSplit(selectedDoc) : undefined}
                   loading={loading && isInitialLoad && !selectedDoc}
+                  onRequestSignature={handleRequestSignatureForDocument}
                 />
               
                 {/* Activity Feed Sidebar */}
@@ -994,24 +1163,6 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
           onSave={handleEditorSave}
         />
       )}
-
-      {/* Template Management Modal */}
-      <TemplateManagementModal
-        isOpen={showTemplateManagement}
-        onClose={() => setShowTemplateManagement(false)}
-        baseId={baseId}
-        tableId={selectedTable?.id ?? null}
-        onTemplateSelect={(template) => {
-          setSelectedTemplate(template);
-          setShowTemplateManagement(false);
-          setShowDocumentGenerator(true);
-        }}
-        onEditFields={(template) => {
-          setSelectedTemplate(template);
-          setShowTemplateManagement(false);
-          setShowTemplateFieldEditor(true);
-        }}
-      />
 
       {/* Template Field Editor */}
       {selectedTemplate && (
@@ -1091,20 +1242,31 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
       {/* Signature Request Modal */}
       <SignatureRequestModal
         isOpen={showSignatureRequestModal}
-        onClose={() => setShowSignatureRequestModal(false)}
+        onClose={() => {
+          setShowSignatureRequestModal(false);
+          setSignatureRequestDoc(null);
+        }}
         baseId={baseId}
         tableId={selectedTable?.id ?? null}
-        selectedDocument={selectedDoc && !isFolder(selectedDoc) ? {
-          path: selectedDoc.path,
-          size: selectedDoc.size,
-          mimeType: selectedDoc.mimeType,
-          createdAt: selectedDoc.createdAt
+        selectedDocument={signatureRequestDoc ? {
+          path: signatureRequestDoc.path,
+          size: signatureRequestDoc.size,
+          mimeType: signatureRequestDoc.mimeType,
+          createdAt: signatureRequestDoc.createdAt
         } : null}
         onRequestCreated={() => {
           setShowSignatureRequestModal(false);
+          setSignatureRequestDoc(null);
           setShowSignatureStatus(true);
         }}
         recordId={recordId}
+        recordValues={recordsData.find(r => r.id === recordId)?.values || undefined}
+        availableFields={tableFields.map(f => ({
+          id: f.id,
+          name: f.name,
+          type: f.type,
+          options: f.options as Record<string, { name?: string; label?: string }> | undefined
+        }))}
       />
 
       {/* Signature Request Status */}

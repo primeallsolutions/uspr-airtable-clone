@@ -76,6 +76,7 @@ export const TopNavigation = ({
   const tabs: { id: TopTab; label: string }[] = [
     { id: 'data', label: 'Data' },
     { id: 'automations', label: 'Automations' },
+    { id: 'templates', label: 'Templates' },
   ];
 
   if (showInterfacesTab) {
@@ -84,7 +85,6 @@ export const TopNavigation = ({
   if (showFormsTab) {
     tabs.push({ id: 'forms', label: 'Forms' });
   }
-  // Removed 'documents' tab - documents are now accessed per-record in RecordDetailsModal
 
   return (
     <div className="border-b border-gray-200 bg-white">

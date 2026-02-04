@@ -542,17 +542,26 @@ export const ESignatureService = {
   },
 
   /**
-   * Send signature request email using Nodemailer
+   * Send signature request email using Resend
    */
   async sendSignatureRequestEmail(
     signer: SignatureRequestSigner & { signature_request_id: string },
     request: SignatureRequest
   ): Promise<void> {
+    // #region agent log
+    const DEBUG_ENDPOINT = 'http://127.0.0.1:7242/ingest/618db0db-dc88-4b24-9388-3127a0884ae1';
+    fetch(DEBUG_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'esign-service.ts:sendSignatureRequestEmail:entry',message:'sendSignatureRequestEmail called',data:{signerEmail:signer.email,requestTitle:request.title,requestId:signer.signature_request_id},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'D'})}).catch(()=>{});
+    // #endregion
+    
     try {
       const { EmailService } = await import("./email-service");
       
       const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
       const signUrl = `${baseUrl}/sign/${signer.access_token}`;
+      
+      // #region agent log
+      fetch(DEBUG_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'esign-service.ts:sendSignatureRequestEmail:beforeGenerate',message:'About to generate email and call sendEmail',data:{signerEmail:signer.email,signUrl,baseUrl},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'D'})}).catch(()=>{});
+      // #endregion
       
       const html = EmailService.generateSignatureRequestEmail({
         signerName: signer.name || signer.email.split("@")[0],
@@ -568,9 +577,16 @@ export const ESignatureService = {
         html,
       });
 
+      // #region agent log
+      fetch(DEBUG_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'esign-service.ts:sendSignatureRequestEmail:success',message:'Email sent successfully via EmailService',data:{signerEmail:signer.email},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'D'})}).catch(()=>{});
+      // #endregion
+      
       console.log(`Signature request email sent to ${signer.email}`);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
+      // #region agent log
+      fetch(DEBUG_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'esign-service.ts:sendSignatureRequestEmail:error',message:'Error caught in sendSignatureRequestEmail',data:{signerEmail:signer.email,error:errorMessage},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'C'})}).catch(()=>{});
+      // #endregion
       console.error(`Failed to send email to ${signer.email}:`, errorMessage);
       // Re-throw so the caller can handle the error appropriately
       throw error;

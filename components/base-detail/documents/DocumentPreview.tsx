@@ -1,6 +1,6 @@
 "use client";
 
-import { Eye, Hash, CalendarClock, Pencil, Trash2, Scissors, History } from "lucide-react";
+import { Eye, Hash, CalendarClock, Pencil, Trash2, Scissors, History, PenTool } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { StoredDocument } from "@/lib/services/documents-service";
 import { PdfViewer } from "../PdfViewer";
@@ -21,6 +21,8 @@ type DocumentPreviewProps = {
   loading?: boolean;
   // Transaction metadata support
   recordId?: string | null;
+  // Signature request support
+  onRequestSignature?: (doc: StoredDocument) => void;
 };
 
 export const DocumentPreview = ({
@@ -34,6 +36,7 @@ export const DocumentPreview = ({
   onSplit,
   loading = false,
   recordId,
+  onRequestSignature,
 }: DocumentPreviewProps) => {
   const [showVersionHistory, setShowVersionHistory] = useState(false);
 
@@ -212,7 +215,7 @@ export const DocumentPreview = ({
             {showVersionHistory && baseId && selectedDoc && (
               <div className="border-t border-gray-200 p-4">
                 <DocumentVersionHistory
-                  documentPath={selectedDoc.path}
+                  documentPath={`bases/${baseId}/records/${recordId}/${selectedDoc.path}` /* hardcoded to assume we are in a record */}
                   baseId={baseId}
                   tableId={tableId}
                   onVersionRestored={() => {
