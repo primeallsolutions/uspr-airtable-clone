@@ -174,7 +174,17 @@ export const RecordDocuments = ({
   // Handle preview - opens PdfEditor for PDFs, simple preview for other files
   const handlePreview = async (doc: RecordDocument) => {
     try {
-      const url = await RecordDocumentsService.getSignedUrl(doc.document_path);
+      console.log("[RecordDocuments] Previewing document:", doc.document_name, "Path:", doc.document_path);
+      // Pass baseId, recordId, and tableId to help construct full path for relative paths
+      const url = await RecordDocumentsService.getSignedUrl(
+        doc.document_path, 
+        3600, 
+        { 
+          baseId: doc.base_id || baseId, 
+          recordId: doc.record_id || recordId,
+          tableId: doc.table_id || tableId 
+        }
+      );
       
       if (doc.mime_type === "application/pdf") {
         // Open in PdfEditor for full editing capabilities
@@ -185,9 +195,36 @@ export const RecordDocuments = ({
         setPreviewUrl(url);
         setPreviewDoc(doc);
       }
-    } catch (err) {
-      console.error("Failed to get preview URL:", err);
-      toast.error("Failed to load preview");
+    } catch (err: unknown) {
+      console.error("[RecordDocuments] Failed to get preview URL for:", doc.document_path, "Error:", err);
+      
+      // Check if file was not found in storage
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      const isNotFound = errorMessage.toLowerCase().includes("not found") || 
+                         errorMessage.includes("Object not found") ||
+                         errorMessage === "";  // Empty error often means file not found
+      
+      if (isNotFound) {
+        // Offer to clean up the orphaned record
+        const shouldCleanup = window.confirm(
+          `The file "${doc.document_name}" was not found in storage. It may have been deleted.\n\n` +
+          `Path: ${doc.document_path}\n\n` +
+          `Would you like to remove this entry from your documents list?`
+        );
+        
+        if (shouldCleanup) {
+          try {
+            await RecordDocumentsService.removeOrphanedRecord(doc.id);
+            toast.success("Removed missing document from list");
+            await loadDocuments();
+          } catch (cleanupErr) {
+            console.error("Failed to clean up orphaned record:", cleanupErr);
+            toast.error("Failed to remove document entry");
+          }
+        }
+      } else {
+        toast.error(`Failed to load preview: ${errorMessage || "Unknown error"}`);
+      }
     }
   };
 
@@ -246,16 +283,46 @@ export const RecordDocuments = ({
   // Handle download
   const handleDownload = async (doc: RecordDocument) => {
     try {
-      const url = await RecordDocumentsService.getSignedUrl(doc.document_path);
+      // Pass baseId, recordId, and tableId to help construct full path for relative paths
+      const url = await RecordDocumentsService.getSignedUrl(
+        doc.document_path,
+        3600,
+        { 
+          baseId: doc.base_id || baseId, 
+          recordId: doc.record_id || recordId,
+          tableId: doc.table_id || tableId 
+        }
+      );
       const link = document.createElement("a");
       link.href = url;
       link.download = doc.document_name;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-    } catch (err) {
+    } catch (err: unknown) {
       console.error("Failed to download:", err);
-      toast.error("Failed to download document");
+      
+      // Check if file was not found in storage
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      if (errorMessage.includes("not found") || errorMessage.includes("Object not found")) {
+        const shouldCleanup = window.confirm(
+          `The file "${doc.document_name}" was not found in storage. It may have been deleted.\n\n` +
+          `Would you like to remove this entry from your documents list?`
+        );
+        
+        if (shouldCleanup) {
+          try {
+            await RecordDocumentsService.removeOrphanedRecord(doc.id);
+            toast.success("Removed missing document from list");
+            await loadDocuments();
+          } catch (cleanupErr) {
+            console.error("Failed to clean up orphaned record:", cleanupErr);
+            toast.error("Failed to remove document entry");
+          }
+        }
+      } else {
+        toast.error("Failed to download document");
+      }
     }
   };
 
