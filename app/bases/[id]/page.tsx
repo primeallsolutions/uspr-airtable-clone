@@ -159,7 +159,7 @@ export default function BaseDetailPage() {
         }
       }
     }
-  }, [searchParams]); // Only depend on searchParams to avoid re-running on table/records changes
+  }, [searchParams, selectedTableId, loadingRecords, records.length, setSelectedTableId]);
 
   // Effect to handle opening the pending record once records are loaded for the correct table
   useEffect(() => {

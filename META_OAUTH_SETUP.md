@@ -46,6 +46,7 @@ Your users will simply click "Connect with Facebook" and authorize your app - no
    ```
    http://localhost:3000/api/meta/callback
    https://yourdomain.com/api/meta/callback
+   https://uspr-base.vercel.app/api/meta/callback
    ```
 6. Set **Deauthorize Callback URL**: `https://yourdomain.com/api/meta/deauthorize` (optional)
 7. Save changes

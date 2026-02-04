@@ -124,9 +124,10 @@ function ThumbnailItem({
 
   useEffect(() => {
     renderThumbnail();
+    const generationAtMount = renderGenerationRef.current;
 
     return () => {
-      renderGenerationRef.current++;
+      renderGenerationRef.current = generationAtMount + 1;
       cancelRender();
     };
   }, [renderThumbnail, cancelRender]);

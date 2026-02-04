@@ -810,7 +810,7 @@ export function PdfEditor({
       initial: fields.filter(f => f.fieldType === "initial").length,
       date: fields.filter(f => f.fieldType === "date").length,
     };
-  }, [annotations, getSignatureFields]);
+  }, [getSignatureFields]);
 
   // Don't render if not open
   if (!isOpen || !docInfo) return null;

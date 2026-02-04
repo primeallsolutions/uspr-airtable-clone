@@ -1,26 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
-// Fail fast if SUPABASE_SERVICE_ROLE_KEY is missing - this is required for admin operations
-if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-  throw new Error(
-    "SUPABASE_SERVICE_ROLE_KEY is required for signed URL generation. " +
-    "Please set it in your environment variables."
-  );
-}
-
-// Create admin client for server-side operations (only created after validating service role key exists)
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY,
-  {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
-  }
-);
-
 // Helper to get authenticated Supabase client from request
 // Returns null if no valid authentication is provided
 async function getSupabaseClient(request: NextRequest): Promise<SupabaseClient | null> {
@@ -52,7 +32,28 @@ async function getSupabaseClient(request: NextRequest): Promise<SupabaseClient |
 }
 
 // Helper to get admin client for authenticated server-side operations
+let supabaseAdmin: SupabaseClient | null = null;
 function getAdminClient(): SupabaseClient {
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!serviceRoleKey) {
+    throw new Error(
+      "SUPABASE_SERVICE_ROLE_KEY is required for signed URL generation. Please set it in your environment variables."
+    );
+  }
+
+  if (!supabaseAdmin) {
+    supabaseAdmin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      serviceRoleKey,
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false,
+        },
+      }
+    );
+  }
+
   return supabaseAdmin;
 }
 
