@@ -124,6 +124,56 @@ export default function BaseDetailPage() {
     loadRecords,
     loadAllFields
   } = useBaseDetail(baseId);
+
+  // State for opening a record details modal from URL params (e.g., coming back from documents page)
+  const [initialOpenRecordId, setInitialOpenRecordId] = useState<string | null>(null);
+  // Pending record ID to open - used to delay opening until records are loaded after table switch
+  const [pendingOpenRecordId, setPendingOpenRecordId] = useState<string | null>(null);
+  // Track which table the pending record belongs to
+  const [pendingOpenTableId, setPendingOpenTableId] = useState<string | null>(null);
+
+  // Check for openRecord param to re-open record details modal
+  // This effect saves the pending record ID and switches tables if needed
+  useEffect(() => {
+    const openRecordId = searchParams?.get('openRecord');
+    const openTableId = searchParams?.get('tableId');
+    
+    if (openRecordId) {
+      // Remove query params from URL to prevent re-opening on navigation
+      window.history.replaceState({}, '', window.location.pathname);
+      
+      // If a specific table is requested and it's different from current, switch to it
+      if (openTableId && openTableId !== selectedTableId) {
+        // Save the pending record to open once the table's records are loaded
+        setPendingOpenRecordId(openRecordId);
+        setPendingOpenTableId(openTableId);
+        setSelectedTableId(openTableId);
+      } else {
+        // Same table or no table specified - can open immediately if records are loaded
+        if (!loadingRecords && records.length > 0) {
+          setInitialOpenRecordId(openRecordId);
+        } else {
+          // Records not loaded yet, save as pending
+          setPendingOpenRecordId(openRecordId);
+          setPendingOpenTableId(selectedTableId);
+        }
+      }
+    }
+  }, [searchParams]); // Only depend on searchParams to avoid re-running on table/records changes
+
+  // Effect to handle opening the pending record once records are loaded for the correct table
+  useEffect(() => {
+    if (pendingOpenRecordId && pendingOpenTableId) {
+      // Check if we're on the correct table and records are loaded
+      if (selectedTableId === pendingOpenTableId && !loadingRecords) {
+        // Records are now available for the target table - open the record
+        setInitialOpenRecordId(pendingOpenRecordId);
+        // Clear the pending state
+        setPendingOpenRecordId(null);
+        setPendingOpenTableId(null);
+      }
+    }
+  }, [selectedTableId, loadingRecords, pendingOpenRecordId, pendingOpenTableId]);
   
   const {
     viewMode,
@@ -1108,6 +1158,8 @@ export default function BaseDetailPage() {
                   colorAssignments={colorAssignments}
                   showCreatedAt={showCreatedAt}
                   scrollContainerRef={gridScrollRef}
+                  initialOpenRecordId={initialOpenRecordId}
+                  onInitialRecordOpened={() => setInitialOpenRecordId(null)}
                 />
               ) : (
                 <KanbanView
@@ -1121,6 +1173,8 @@ export default function BaseDetailPage() {
                   onAddRow={handleAddRow}
                   savingCell={savingCell}
                   canDeleteRow={can.delete ?? true}
+                  initialOpenRecordId={initialOpenRecordId}
+                  onInitialRecordOpened={() => setInitialOpenRecordId(null)}
                 />
               )}
             </div>
