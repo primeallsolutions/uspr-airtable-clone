@@ -1,11 +1,11 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
-import { FileText, Image as ImageIcon, File, Loader2, Trash2, Search, X, LayoutGrid, List, ArrowUpDown, Clock, Files, FilePen, Copy, FolderOutput, CalendarPlus, Calendar, PenTool, Eye, MoreVertical, Download, FileUp } from "lucide-react";
+import { FileText, Image as ImageIcon, File, Loader2, Trash2, Search, X, LayoutGrid, List, ArrowUpDown, Clock, Files, FilePen, Copy, FolderOutput, CalendarPlus, Calendar, PenTool, Eye, MoreVertical, Download, FileUp, GripVertical } from "lucide-react";
 import type { StoredDocument } from "@/lib/services/documents-service";
 import { DocumentsService } from "@/lib/services/documents-service";
 import { formatSize, isImage, isPdf, isFolder } from "./utils";
 import { DocumentSkeleton } from "./DocumentsSkeleton";
 import { DocumentThumbnail } from "./DocumentThumbnail";
-import type { DocumentView } from "./DocumentsSidebar";
+import type { DocumentView, DocumentDragData } from "./DocumentsSidebar";
 import { CopyMoveModal } from "./CopyMoveModal";
 import { DocumentStatusBadge, DocumentStatusDot, type DocumentStatus } from "./DocumentStatusBadge";
 
@@ -69,6 +69,8 @@ type DocumentsListProps = {
   onDocumentSign?: (doc: StoredDocument & { relative: string }) => void;
   onDocumentDownload?: (doc: StoredDocument & { relative: string }) => void;
   onDocumentDelete?: (doc: StoredDocument & { relative: string }) => void;
+  onDocumentDragStart?: (dragData: DocumentDragData) => void;
+  onDocumentDragEnd?: () => void;
   baseId: string;
   tableId?: string | null;
   recordId?: string | null;
@@ -96,6 +98,8 @@ export const DocumentsList = ({
   onDocumentSign,
   onDocumentDownload,
   onDocumentDelete,
+  onDocumentDragStart,
+  onDocumentDragEnd,
   baseId,
   tableId,
   recordId,
@@ -504,115 +508,144 @@ export const DocumentsList = ({
                       const docStatus = documentStatuses?.get(doc.path);
                       const docIndex = getDocIndex(doc);
                       const isFocused = focusedIndex === docIndex;
+                      
+                      // Drag handlers for documents
+                      const handleDocDragStart = (e: React.DragEvent) => {
+                        const dragData: DocumentDragData = {
+                          type: "document",
+                          path: doc.path,
+                          name: doc.relative,
+                        };
+                        e.dataTransfer.setData("text/plain", JSON.stringify(dragData));
+                        e.dataTransfer.setData("application/json", JSON.stringify(dragData));
+                        e.dataTransfer.effectAllowed = "move";
+                        onDocumentDragStart?.(dragData);
+                      };
+                      
+                      const handleDocDragEnd = () => {
+                        onDocumentDragEnd?.();
+                      };
+                      
                       return (
-                        <button
+                        <div
                           key={doc.path}
-                          ref={(el) => {
-                            if (el) itemRefs.current.set(docIndex, el);
-                          }}
-                          onClick={() => {
-                            if (!isFolder(doc)) {
-                              setFocusedIndex(docIndex);
-                              onDocumentSelect(doc.path);
-                            }
-                          }}
-                          onDoubleClick={() => {
-                            if (!isFolder(doc) && onDocumentEdit && isPdf(doc.mimeType)) {
-                              onDocumentEdit(doc);
-                            }
-                          }}
-                          onFocus={() => setFocusedIndex(docIndex)}
-                          className={`group w-full text-left px-4 py-3 flex items-center gap-3 transition-colors ${
-                            selectedDocPath === doc.path 
-                              ? "bg-blue-50 border-l-4 border-blue-500" 
-                              : isFocused 
-                                ? "bg-gray-100 ring-2 ring-inset ring-blue-300" 
-                                : "hover:bg-gray-50"
-                          }`}
-                          title={isPdf(doc.mimeType) ? "Double-click to edit • Press E to edit, S to sign" : ""}
+                          draggable={true}
+                          onDragStart={handleDocDragStart}
+                          onDragEnd={handleDocDragEnd}
+                          className="group flex items-center hover:bg-gray-50 transition-colors"
                         >
-                          <div className="shrink-0 relative">
-                            {renderDocIcon(doc.mimeType)}
-                            {docStatus && docStatus.status !== "draft" && (
-                              <DocumentStatusDot 
-                                status={docStatus.status} 
-                                className="absolute -top-0.5 -right-0.5"
-                              />
-                            )}
+                          {/* Drag handle */}
+                          <div className="pl-2 pr-1 cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 transition-colors">
+                            <GripVertical className="w-3.5 h-3.5" />
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm font-semibold text-gray-900 truncate">
-                                {doc.relative}
-                              </span>
+                          <button
+                            ref={(el) => {
+                              if (el) itemRefs.current.set(docIndex, el);
+                            }}
+                            onClick={() => {
+                              if (!isFolder(doc)) {
+                                setFocusedIndex(docIndex);
+                                onDocumentSelect(doc.path);
+                              }
+                            }}
+                            onDoubleClick={() => {
+                              if (!isFolder(doc) && onDocumentEdit && isPdf(doc.mimeType)) {
+                                onDocumentEdit(doc);
+                              }
+                            }}
+                            onFocus={() => setFocusedIndex(docIndex)}
+                            className={`flex-1 text-left px-3 py-3 flex items-center gap-3 transition-colors ${
+                              selectedDocPath === doc.path 
+                                ? "bg-blue-50 border-l-4 border-blue-500" 
+                                : isFocused 
+                                  ? "bg-gray-100 ring-2 ring-inset ring-blue-300" 
+                                  : ""
+                            }`}
+                            title={isPdf(doc.mimeType) ? "Double-click to edit • Press E to edit, S to sign • Drag to move" : "Drag to move to another folder"}
+                          >
+                            <div className="shrink-0 relative">
+                              {renderDocIcon(doc.mimeType)}
                               {docStatus && docStatus.status !== "draft" && (
-                                <DocumentStatusBadge 
+                                <DocumentStatusDot 
                                   status={docStatus.status} 
-                                  size="sm"
-                                  signersProgress={docStatus.signersProgress}
+                                  className="absolute -top-0.5 -right-0.5"
                                 />
                               )}
                             </div>
-                            <div className="text-xs text-gray-500 flex items-center gap-2">
-                              <span>{formatSize(doc.size)}</span>
-                              <span>•</span>
-                              <span>{new Date(doc.createdAt).toLocaleTimeString()}</span>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-semibold text-gray-900 truncate">
+                                  {doc.relative}
+                                </span>
+                                {docStatus && docStatus.status !== "draft" && (
+                                  <DocumentStatusBadge 
+                                    status={docStatus.status} 
+                                    size="sm"
+                                    signersProgress={docStatus.signersProgress}
+                                  />
+                                )}
+                              </div>
+                              <div className="text-xs text-gray-500 flex items-center gap-2">
+                                <span>{formatSize(doc.size)}</span>
+                                <span>•</span>
+                                <span>{new Date(doc.createdAt).toLocaleTimeString()}</span>
+                              </div>
                             </div>
-                          </div>
-                          {/* Hover Actions - always visible on hover */}
-                          <div className="shrink-0 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                            {/* Sign Button - Primary for PDFs */}
-                            {onDocumentSign && isPdf(doc.mimeType) && (
+                            {/* Hover Actions - always visible on hover */}
+                            <div className="shrink-0 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                              {/* Sign Button - Primary for PDFs */}
+                              {onDocumentSign && isPdf(doc.mimeType) && (
+                                <span
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onDocumentSign(doc);
+                                  }}
+                                  className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors"
+                                  title="Request signature (S)"
+                                >
+                                  <PenTool className="w-4 h-4" />
+                                </span>
+                              )}
+                              {/* Edit Button */}
+                              {onDocumentEdit && isPdf(doc.mimeType) && (
+                                <span
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onDocumentEdit(doc);
+                                  }}
+                                  className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                                  title="Edit document (E)"
+                                >
+                                  <FilePen className="w-4 h-4" />
+                                </span>
+                              )}
+                              {/* Download Button */}
+                              {onDocumentDownload && (
+                                <span
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onDocumentDownload(doc);
+                                  }}
+                                  className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-md transition-colors"
+                                  title="Download (D)"
+                                >
+                                  <Download className="w-4 h-4" />
+                                </span>
+                              )}
+                              {/* Move/Copy Button */}
                               <span
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  onDocumentSign(doc);
-                                }}
-                                className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors"
-                                title="Request signature (S)"
-                              >
-                                <PenTool className="w-4 h-4" />
-                              </span>
-                            )}
-                            {/* Edit Button */}
-                            {onDocumentEdit && isPdf(doc.mimeType) && (
-                              <span
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onDocumentEdit(doc);
-                                }}
-                                className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
-                                title="Edit document (E)"
-                              >
-                                <FilePen className="w-4 h-4" />
-                              </span>
-                            )}
-                            {/* Download Button */}
-                            {onDocumentDownload && (
-                              <span
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onDocumentDownload(doc);
+                                  openCopyMoveModal(doc);
                                 }}
                                 className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-md transition-colors"
-                                title="Download (D)"
+                                title="Move or copy"
                               >
-                                <Download className="w-4 h-4" />
+                                <FolderOutput className="w-4 h-4" />
                               </span>
-                            )}
-                            {/* Move/Copy Button */}
-                            <span
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                openCopyMoveModal(doc);
-                              }}
-                              className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-md transition-colors"
-                              title="Move or copy"
-                            >
-                              <FolderOutput className="w-4 h-4" />
-                            </span>
-                          </div>
-                        </button>
+                            </div>
+                          </button>
+                        </div>
                       );
                     })}
                   </div>
@@ -624,115 +657,144 @@ export const DocumentsList = ({
                   const docStatus = documentStatuses?.get(doc.path);
                   const docIndex = getDocIndex(doc);
                   const isFocused = focusedIndex === docIndex;
+                  
+                  // Drag handlers for documents
+                  const handleDocDragStart = (e: React.DragEvent) => {
+                    const dragData: DocumentDragData = {
+                      type: "document",
+                      path: doc.path,
+                      name: doc.relative,
+                    };
+                    e.dataTransfer.setData("text/plain", JSON.stringify(dragData));
+                    e.dataTransfer.setData("application/json", JSON.stringify(dragData));
+                    e.dataTransfer.effectAllowed = "move";
+                    onDocumentDragStart?.(dragData);
+                  };
+                  
+                  const handleDocDragEnd = () => {
+                    onDocumentDragEnd?.();
+                  };
+                  
                   return (
-                    <button
+                    <div
                       key={doc.path}
-                      ref={(el) => {
-                        if (el) itemRefs.current.set(docIndex, el);
-                      }}
-                      onClick={() => {
-                        if (!isFolder(doc)) {
-                          setFocusedIndex(docIndex);
-                          onDocumentSelect(doc.path);
-                        }
-                      }}
-                      onDoubleClick={() => {
-                        if (!isFolder(doc) && onDocumentEdit && isPdf(doc.mimeType)) {
-                          onDocumentEdit(doc);
-                        }
-                      }}
-                      onFocus={() => setFocusedIndex(docIndex)}
-                      className={`group w-full text-left px-4 py-3 flex items-center gap-3 transition-colors ${
-                        selectedDocPath === doc.path 
-                          ? "bg-blue-50 border-l-4 border-blue-500" 
-                          : isFocused 
-                            ? "bg-gray-100 ring-2 ring-inset ring-blue-300" 
-                            : "hover:bg-gray-50"
-                      }`}
-                      title={isPdf(doc.mimeType) ? "Double-click to edit • Press E to edit, S to sign" : ""}
+                      draggable={true}
+                      onDragStart={handleDocDragStart}
+                      onDragEnd={handleDocDragEnd}
+                      className="group flex items-center hover:bg-gray-50 transition-colors"
                     >
-                      <div className="shrink-0 relative">
-                        {renderDocIcon(doc.mimeType)}
-                        {docStatus && docStatus.status !== "draft" && (
-                          <DocumentStatusDot 
-                            status={docStatus.status} 
-                            className="absolute -top-0.5 -right-0.5"
-                          />
-                        )}
+                      {/* Drag handle */}
+                      <div className="pl-2 pr-1 cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 transition-colors">
+                        <GripVertical className="w-3.5 h-3.5" />
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-semibold text-gray-900 truncate">
-                            {doc.relative}
-                          </span>
+                      <button
+                        ref={(el) => {
+                          if (el) itemRefs.current.set(docIndex, el);
+                        }}
+                        onClick={() => {
+                          if (!isFolder(doc)) {
+                            setFocusedIndex(docIndex);
+                            onDocumentSelect(doc.path);
+                          }
+                        }}
+                        onDoubleClick={() => {
+                          if (!isFolder(doc) && onDocumentEdit && isPdf(doc.mimeType)) {
+                            onDocumentEdit(doc);
+                          }
+                        }}
+                        onFocus={() => setFocusedIndex(docIndex)}
+                        className={`flex-1 text-left px-3 py-3 flex items-center gap-3 transition-colors ${
+                          selectedDocPath === doc.path 
+                            ? "bg-blue-50 border-l-4 border-blue-500" 
+                            : isFocused 
+                              ? "bg-gray-100 ring-2 ring-inset ring-blue-300" 
+                              : ""
+                        }`}
+                        title={isPdf(doc.mimeType) ? "Double-click to edit • Press E to edit, S to sign • Drag to move" : "Drag to move to another folder"}
+                      >
+                        <div className="shrink-0 relative">
+                          {renderDocIcon(doc.mimeType)}
                           {docStatus && docStatus.status !== "draft" && (
-                            <DocumentStatusBadge 
+                            <DocumentStatusDot 
                               status={docStatus.status} 
-                              size="sm"
-                              signersProgress={docStatus.signersProgress}
+                              className="absolute -top-0.5 -right-0.5"
                             />
                           )}
                         </div>
-                        <div className="text-xs text-gray-500 flex items-center gap-2">
-                          <span>{formatSize(doc.size)}</span>
-                          <span>•</span>
-                          <span>{new Date(doc.createdAt).toLocaleString()}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-semibold text-gray-900 truncate">
+                              {doc.relative}
+                            </span>
+                            {docStatus && docStatus.status !== "draft" && (
+                              <DocumentStatusBadge 
+                                status={docStatus.status} 
+                                size="sm"
+                                signersProgress={docStatus.signersProgress}
+                              />
+                            )}
+                          </div>
+                          <div className="text-xs text-gray-500 flex items-center gap-2">
+                            <span>{formatSize(doc.size)}</span>
+                            <span>•</span>
+                            <span>{new Date(doc.createdAt).toLocaleString()}</span>
+                          </div>
                         </div>
-                      </div>
-                      {/* Hover Actions - always visible on hover */}
-                      <div className="shrink-0 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                        {/* Sign Button - Primary for PDFs */}
-                        {onDocumentSign && isPdf(doc.mimeType) && (
+                        {/* Hover Actions - always visible on hover */}
+                        <div className="shrink-0 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                          {/* Sign Button - Primary for PDFs */}
+                          {onDocumentSign && isPdf(doc.mimeType) && (
+                            <span
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onDocumentSign(doc);
+                              }}
+                              className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors"
+                              title="Request signature (S)"
+                            >
+                              <PenTool className="w-4 h-4" />
+                            </span>
+                          )}
+                          {/* Edit Button */}
+                          {onDocumentEdit && isPdf(doc.mimeType) && (
+                            <span
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onDocumentEdit(doc);
+                              }}
+                              className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                              title="Edit document (E)"
+                            >
+                              <FilePen className="w-4 h-4" />
+                            </span>
+                          )}
+                          {/* Download Button */}
+                          {onDocumentDownload && (
+                            <span
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onDocumentDownload(doc);
+                              }}
+                              className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-md transition-colors"
+                              title="Download (D)"
+                            >
+                              <Download className="w-4 h-4" />
+                            </span>
+                          )}
+                          {/* Move/Copy Button */}
                           <span
                             onClick={(e) => {
                               e.stopPropagation();
-                              onDocumentSign(doc);
-                            }}
-                            className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors"
-                            title="Request signature (S)"
-                          >
-                            <PenTool className="w-4 h-4" />
-                          </span>
-                        )}
-                        {/* Edit Button */}
-                        {onDocumentEdit && isPdf(doc.mimeType) && (
-                          <span
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onDocumentEdit(doc);
-                            }}
-                            className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
-                            title="Edit document (E)"
-                          >
-                            <FilePen className="w-4 h-4" />
-                          </span>
-                        )}
-                        {/* Download Button */}
-                        {onDocumentDownload && (
-                          <span
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onDocumentDownload(doc);
+                              openCopyMoveModal(doc);
                             }}
                             className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-md transition-colors"
-                            title="Download (D)"
+                            title="Move or copy"
                           >
-                            <Download className="w-4 h-4" />
+                            <FolderOutput className="w-4 h-4" />
                           </span>
-                        )}
-                        {/* Move/Copy Button */}
-                        <span
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openCopyMoveModal(doc);
-                          }}
-                          className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-md transition-colors"
-                          title="Move or copy"
-                        >
-                          <FolderOutput className="w-4 h-4" />
-                        </span>
-                      </div>
-                    </button>
+                        </div>
+                      </button>
+                    </div>
                   );
                 })
               )

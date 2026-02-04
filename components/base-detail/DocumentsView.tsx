@@ -6,7 +6,7 @@ import { DocumentsService, type StoredDocument } from "@/lib/services/documents-
 import { DocumentActivityService } from "@/lib/services/document-activity-service";
 import { DocumentVersionService } from "@/lib/services/document-version-service";
 import { DocumentsHeader } from "./documents/DocumentsHeader";
-import { DocumentsSidebar, type DocumentView } from "./documents/DocumentsSidebar";
+import { DocumentsSidebar, type DocumentView, type DocumentDragData } from "./documents/DocumentsSidebar";
 import { DocumentsList } from "./documents/DocumentsList";
 import { DocumentPreview } from "./documents/DocumentPreview";
 import { ActivityFeed } from "./documents/ActivityFeed";
@@ -102,6 +102,9 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
   // Post-upload prompt state
   const [showUploadPrompt, setShowUploadPrompt] = useState(false);
   const [lastUploadedDoc, setLastUploadedDoc] = useState<StoredDocument | null>(null);
+  
+  // Drag and drop state for documents
+  const [draggingDocument, setDraggingDocument] = useState<DocumentDragData | null>(null);
 
   // Keyboard shortcuts panel
   const keyboardShortcuts = useKeyboardShortcutsPanel();
@@ -885,6 +888,115 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
     }
   };
 
+  const handleFolderMove = async (sourcePath: string, targetParentPath: string) => {
+    const folderName = sourcePath.split("/").filter(Boolean).pop() || "folder";
+    const targetDescription = targetParentPath 
+      ? `into "${targetParentPath.split("/").filter(Boolean).pop()}"` 
+      : "to root level";
+    
+    const toastId = toast.loading(`Moving folder "${folderName}" ${targetDescription}...`);
+    
+    try {
+      const newPath = await DocumentsService.moveFolder({
+        baseId,
+        tableId: selectedTable?.id ?? null,
+        recordId,
+        sourceFolderPath: sourcePath,
+        targetParentPath,
+      });
+      
+      // Update folder path if we were viewing the moved folder
+      if (folderPath === sourcePath || folderPath.startsWith(sourcePath)) {
+        const relativePath = folderPath.slice(sourcePath.length);
+        setFolderPath(newPath + relativePath);
+      }
+      
+      // Log activity
+      await DocumentActivityService.logActivity({
+        baseId,
+        tableId: selectedTable?.id,
+        recordId,
+        action: 'folder_rename', // Reusing folder_rename action type for moves
+        folderPath: newPath,
+        documentName: folderName,
+        metadata: { movedFrom: sourcePath, movedTo: newPath },
+      });
+      
+      await refresh();
+      toast.success("Folder moved", {
+        id: toastId,
+        description: `"${folderName}" has been moved ${targetDescription}.`,
+      });
+    } catch (err) {
+      console.error("Failed to move folder", err);
+      const errorMessage = err instanceof Error ? err.message : "Unable to move folder";
+      toast.error("Failed to move folder", {
+        id: toastId,
+        description: errorMessage,
+      });
+      throw err;
+    }
+  };
+
+  const handleDocumentMove = async (documentPath: string, targetFolderPath: string) => {
+    const docName = documentPath.split("/").pop() || "document";
+    const targetDescription = targetFolderPath 
+      ? `to "${targetFolderPath.split("/").filter(Boolean).pop()}"` 
+      : "to Uncategorized";
+    
+    const toastId = toast.loading(`Moving "${docName}" ${targetDescription}...`);
+    
+    try {
+      await DocumentsService.moveDocument({
+        baseId,
+        tableId: selectedTable?.id ?? null,
+        recordId,
+        sourceRelativePath: documentPath,
+        targetFolderPath,
+      });
+      
+      // Clear selection if we moved the selected document
+      if (selectedDocPath === documentPath) {
+        setSelectedDocPath(null);
+        setSignedUrl(null);
+      }
+      
+      // Log activity
+      await DocumentActivityService.logActivity({
+        baseId,
+        tableId: selectedTable?.id,
+        recordId,
+        action: 'rename', // Reusing rename action type for moves
+        documentPath: targetFolderPath + docName,
+        documentName: docName,
+        metadata: { movedFrom: documentPath, movedTo: targetFolderPath },
+      });
+      
+      await refresh();
+      toast.success("Document moved", {
+        id: toastId,
+        description: `"${docName}" has been moved ${targetDescription}.`,
+      });
+    } catch (err) {
+      console.error("Failed to move document", err);
+      const errorMessage = err instanceof Error ? err.message : "Unable to move document";
+      toast.error("Failed to move document", {
+        id: toastId,
+        description: errorMessage,
+      });
+      throw err;
+    }
+  };
+  
+  // Document drag handlers
+  const handleDocumentDragStart = (dragData: DocumentDragData) => {
+    setDraggingDocument(dragData);
+  };
+  
+  const handleDocumentDragEnd = () => {
+    setDraggingDocument(null);
+  };
+
   const handleDocumentEdit = async (doc: StoredDocument & { relative: string }) => {
     // Only allow editing PDFs
     if (!isPdf(doc.mimeType)) {
@@ -1076,6 +1188,8 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
           onFolderSelect={handleFolderSelect}
           onFolderRename={handleFolderRename}
           onFolderDelete={handleFolderDelete}
+          onFolderMove={handleFolderMove}
+          onDocumentMove={handleDocumentMove}
           loading={loading && isInitialLoad}
           uncategorizedCount={uncategorizedCount}
           recentCount={recentCount}
@@ -1150,6 +1264,8 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
                   checkedDocuments={checkedDocuments}
                   onDocumentSelect={setSelectedDocPath}
                   onDocumentEdit={handleDocumentEdit}
+                  onDocumentDragStart={handleDocumentDragStart}
+                  onDocumentDragEnd={handleDocumentDragEnd}
                   baseId={baseId}
                   tableId={selectedTable?.id}
                   recordId={recordId}
