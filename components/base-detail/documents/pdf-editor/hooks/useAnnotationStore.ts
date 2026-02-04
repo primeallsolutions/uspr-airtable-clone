@@ -19,6 +19,7 @@ import type {
   Rect,
   Point,
 } from "../types";
+import { calculateAnnotationDimensions } from "../utils/coordinates";
 
 function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -130,20 +131,33 @@ export const useAnnotationStore = create<AnnotationStore>((set, get) => ({
   addTextBox: (pageIndex, position, content, formatting) => {
     const id = generateId();
     const fontSize = formatting?.fontSize ?? 14;
+    const fontFamily = formatting?.fontFamily ?? "Arial";
+    const fontWeight = formatting?.fontWeight ?? "normal";
+    const fontStyle = formatting?.fontStyle ?? "normal";
+    
+    // Calculate dimensions based on content and formatting
+    const dimensions = calculateAnnotationDimensions(
+      content,
+      fontSize,
+      fontFamily,
+      fontWeight,
+      fontStyle
+    );
+    
     const annotation: TextBoxAnnotation = {
       id,
       type: "textBox",
       pageIndex,
       x: position.x,
       y: position.y,
-      width: Math.max(content.length * fontSize * 0.6, 100),
-      height: fontSize * 1.5,
+      width: dimensions.width,
+      height: dimensions.height,
       content,
       fontSize,
       color: formatting?.color ?? "#000000",
-      fontFamily: formatting?.fontFamily,
-      fontWeight: formatting?.fontWeight,
-      fontStyle: formatting?.fontStyle,
+      fontFamily,
+      fontWeight,
+      fontStyle,
       textDecoration: formatting?.textDecoration,
       backgroundColor: formatting?.backgroundColor,
     };

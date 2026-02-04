@@ -9,6 +9,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { Check, X, RotateCcw } from "lucide-react";
 import type { TextItem, TextFormatting } from "../types";
 import { useAnnotationStore } from "../hooks/useAnnotationStore";
+import { calculateAnnotationDimensions } from "../utils/coordinates";
 
 interface TextEditOverlayProps {
   textItem: TextItem;
@@ -45,10 +46,16 @@ export function TextEditOverlay({
   const hasChanges = text !== (existingEdit?.content ?? textItem.str);
   const isModified = text !== textItem.str;
 
+  // Update text state when textItem changes (switching between items)
+  useEffect(() => {
+    const newText = existingEdit?.content ?? textItem.str;
+    setText(newText);
+  }, [textItem.str, textItem.x, textItem.y, existingEdit?.content]);
+
   useEffect(() => {
     inputRef.current?.focus();
     inputRef.current?.select();
-  }, []);
+  }, [textItem.x, textItem.y]); // Re-focus when text item changes
 
   const handleSave = () => {
     const trimmedText = text.trim();
@@ -59,9 +66,20 @@ export function TextEditOverlay({
         removeAnnotation(existingEdit.id);
       }
     } else if (existingEdit) {
-      // Update existing edit with formatting
+      // Calculate new dimensions based on content and formatting
+      const dimensions = calculateAnnotationDimensions(
+        trimmedText,
+        formatting.fontSize,
+        formatting.fontFamily,
+        formatting.fontWeight,
+        formatting.fontStyle
+      );
+      
+      // Update existing edit with formatting and new dimensions
       updateAnnotation(existingEdit.id, { 
         content: trimmedText,
+        width: dimensions.width,
+        height: dimensions.height,
         fontSize: formatting.fontSize,
         color: formatting.color,
         fontFamily: formatting.fontFamily,

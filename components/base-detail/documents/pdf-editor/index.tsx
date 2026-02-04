@@ -16,6 +16,7 @@ import { Loader2, PenTool, Share2, Edit3 } from "lucide-react";
 
 import type { PdfEditorProps, Tool, TextItem, Point, RequestMetadata, StatusConfig, TextFormatting } from "./types";
 import { ZOOM_LEVELS, DEFAULT_ZOOM_INDEX, DEFAULT_TEXT_FORMATTING } from "./types";
+import { calculateAnnotationDimensions } from "./utils/coordinates";
 import { usePdfLoader } from "./hooks/usePdfLoader";
 import { useAnnotationStore } from "./hooks/useAnnotationStore";
 import { savePdfWithAnnotations, downloadPdf } from "./utils/pdf-save";
@@ -215,24 +216,36 @@ export function PdfEditor({
   const zoom = ZOOM_LEVELS[zoomIndex];
 
   // Auto-detect formatting from selected annotation
+  // This ensures the toolbar reflects the selected annotation's formatting
   useEffect(() => {
-    if (!selectedAnnotationId) return;
+    // When no annotation is selected, reset to default formatting
+    if (!selectedAnnotationId) {
+      setTextFormatting(DEFAULT_TEXT_FORMATTING);
+      return;
+    }
     
     const selectedAnn = getSelectedAnnotation();
-    if (!selectedAnn) return;
+    if (!selectedAnn) {
+      setTextFormatting(DEFAULT_TEXT_FORMATTING);
+      return;
+    }
     
     // Only sync formatting for text-based annotations
     if (selectedAnn.type === "textBox" || selectedAnn.type === "textEdit") {
-      setTextFormatting(prev => ({
-        ...prev,
-        fontSize: selectedAnn.fontSize || prev.fontSize,
-        color: selectedAnn.color || prev.color,
-        fontFamily: selectedAnn.fontFamily || prev.fontFamily,
-        fontWeight: selectedAnn.fontWeight || prev.fontWeight,
-        fontStyle: selectedAnn.fontStyle || prev.fontStyle,
-        textDecoration: selectedAnn.textDecoration || prev.textDecoration,
-        backgroundColor: selectedAnn.backgroundColor || prev.backgroundColor,
-      }));
+      // Replace formatting entirely with the annotation's values
+      // Use DEFAULT_TEXT_FORMATTING as fallback for undefined properties
+      setTextFormatting({
+        fontSize: selectedAnn.fontSize ?? DEFAULT_TEXT_FORMATTING.fontSize,
+        color: selectedAnn.color ?? DEFAULT_TEXT_FORMATTING.color,
+        fontFamily: selectedAnn.fontFamily ?? DEFAULT_TEXT_FORMATTING.fontFamily,
+        fontWeight: selectedAnn.fontWeight ?? DEFAULT_TEXT_FORMATTING.fontWeight,
+        fontStyle: selectedAnn.fontStyle ?? DEFAULT_TEXT_FORMATTING.fontStyle,
+        textDecoration: selectedAnn.textDecoration ?? DEFAULT_TEXT_FORMATTING.textDecoration,
+        backgroundColor: selectedAnn.backgroundColor ?? DEFAULT_TEXT_FORMATTING.backgroundColor,
+      });
+    } else {
+      // Non-text annotation selected, reset to defaults
+      setTextFormatting(DEFAULT_TEXT_FORMATTING);
     }
   }, [selectedAnnotationId, getSelectedAnnotation]);
 
@@ -512,26 +525,47 @@ export function PdfEditor({
   }, [selectAnnotation]);
 
   const handleTextFormattingChange = useCallback((updates: Partial<TextFormatting>) => {
-    setTextFormatting(prev => ({ ...prev, ...updates }));
+    const newFormatting = { ...textFormatting, ...updates };
+    setTextFormatting(newFormatting);
     
-    // If a text annotation is selected, also update its formatting
+    // If a text annotation is selected, also update its formatting immediately
     if (selectedAnnotationId) {
       const selectedAnn = getSelectedAnnotation();
       if (selectedAnn && (selectedAnn.type === "textBox" || selectedAnn.type === "textEdit")) {
-        updateAnnotation(selectedAnnotationId, {
-          ...updates,
-          // Map textFormatting properties to annotation properties
-          fontSize: updates.fontSize,
-          color: updates.color,
-          fontFamily: updates.fontFamily,
-          fontWeight: updates.fontWeight,
-          fontStyle: updates.fontStyle,
-          textDecoration: updates.textDecoration,
-          backgroundColor: updates.backgroundColor,
-        });
+        // Build the update object with only defined values
+        const annotationUpdates: Record<string, unknown> = {};
+        
+        if (updates.fontSize !== undefined) annotationUpdates.fontSize = updates.fontSize;
+        if (updates.color !== undefined) annotationUpdates.color = updates.color;
+        if (updates.fontFamily !== undefined) annotationUpdates.fontFamily = updates.fontFamily;
+        if (updates.fontWeight !== undefined) annotationUpdates.fontWeight = updates.fontWeight;
+        if (updates.fontStyle !== undefined) annotationUpdates.fontStyle = updates.fontStyle;
+        if (updates.textDecoration !== undefined) annotationUpdates.textDecoration = updates.textDecoration;
+        if (updates.backgroundColor !== undefined) annotationUpdates.backgroundColor = updates.backgroundColor;
+        
+        // Recalculate dimensions when any formatting that affects size changes
+        const content = selectedAnn.content;
+        const fontSize = updates.fontSize ?? selectedAnn.fontSize;
+        const fontFamily = updates.fontFamily ?? selectedAnn.fontFamily ?? "Arial";
+        const fontWeight = updates.fontWeight ?? selectedAnn.fontWeight ?? "normal";
+        const fontStyle = updates.fontStyle ?? selectedAnn.fontStyle ?? "normal";
+        
+        // Calculate proper dimensions using canvas measurement
+        const dimensions = calculateAnnotationDimensions(
+          content,
+          fontSize,
+          fontFamily,
+          fontWeight,
+          fontStyle
+        );
+        
+        annotationUpdates.width = dimensions.width;
+        annotationUpdates.height = dimensions.height;
+        
+        updateAnnotation(selectedAnnotationId, annotationUpdates);
       }
     }
-  }, [selectedAnnotationId, getSelectedAnnotation, updateAnnotation]);
+  }, [selectedAnnotationId, getSelectedAnnotation, updateAnnotation, textFormatting]);
 
   const handleTextClick = useCallback((item: TextItem, index: number) => {
     setEditingText({ item, index });
@@ -869,6 +903,7 @@ export function PdfEditor({
                 {/* Text Edit Overlay for editing existing text */}
                 {editingText && (
                   <TextEditOverlay
+                    key={`${editingText.item.x}-${editingText.item.y}`} // Key ensures React remounts when switching
                     textItem={editingText.item}
                     textIndex={editingText.index}
                     pageIndex={currentPage - 1}
@@ -885,6 +920,7 @@ export function PdfEditor({
                   if (!ann || ann.type !== "textBox" || ann.pageIndex !== currentPage - 1) return null;
                   return (
                     <TextBoxEditOverlay
+                      key={ann.id} // Key ensures React remounts when switching annotations
                       annotation={ann}
                       pageHeight={pageHeight}
                       zoom={zoom}

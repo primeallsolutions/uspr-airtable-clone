@@ -9,7 +9,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { Check, X, Trash2 } from "lucide-react";
 import type { TextBoxAnnotation, TextFormatting } from "../types";
 import { useAnnotationStore } from "../hooks/useAnnotationStore";
-import { pdfToScreen } from "../utils/coordinates";
+import { pdfToScreen, calculateAnnotationDimensions } from "../utils/coordinates";
 
 interface TextBoxEditOverlayProps {
   annotation: TextBoxAnnotation;
@@ -32,10 +32,15 @@ export function TextBoxEditOverlay({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const hasChanges = text !== annotation.content;
 
+  // Update text state when annotation changes (switching between annotations)
+  useEffect(() => {
+    setText(annotation.content);
+  }, [annotation.id, annotation.content]);
+
   useEffect(() => {
     textareaRef.current?.focus();
     textareaRef.current?.select();
-  }, []);
+  }, [annotation.id]); // Re-focus when annotation changes
 
   const handleSave = () => {
     const trimmedText = text.trim();
@@ -44,9 +49,20 @@ export function TextBoxEditOverlay({
       // Empty text - delete the annotation
       removeAnnotation(annotation.id);
     } else {
-      // Update the annotation with new text and formatting
+      // Calculate new dimensions based on content and formatting
+      const dimensions = calculateAnnotationDimensions(
+        trimmedText,
+        formatting.fontSize,
+        formatting.fontFamily,
+        formatting.fontWeight,
+        formatting.fontStyle
+      );
+      
+      // Update the annotation with new text, formatting, and dimensions
       updateAnnotation(annotation.id, {
         content: trimmedText,
+        width: dimensions.width,
+        height: dimensions.height,
         fontSize: formatting.fontSize,
         color: formatting.color,
         fontFamily: formatting.fontFamily,
