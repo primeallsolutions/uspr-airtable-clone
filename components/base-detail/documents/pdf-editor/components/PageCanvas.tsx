@@ -20,6 +20,7 @@ interface PageCanvasProps {
   rotation: number;
   activeTool: Tool;
   onTextClick?: (textItem: TextItem, index: number) => void;
+  onTextBoxClick?: (annotationId: string) => void;
   onCanvasClick?: (pdfPoint: Point, screenPoint: Point) => void;
   onPanStart?: () => void;
   onPanMove?: (deltaX: number, deltaY: number) => void;
@@ -33,6 +34,7 @@ export function PageCanvas({
   rotation,
   activeTool,
   onTextClick,
+  onTextBoxClick,
   onCanvasClick,
   onPanStart,
   onPanMove,
@@ -471,7 +473,15 @@ export function PageCanvas({
         onPanStart?.();
         e.preventDefault();
       } else if (activeTool === "edit") {
-        // Find clicked text item
+        // First check if clicking on a textBox annotation
+        const clickedAnnotation = findAnnotationAtPosition(screenX, screenY);
+        if (clickedAnnotation && clickedAnnotation.type === "textBox") {
+          onTextBoxClick?.(clickedAnnotation.id);
+          e.preventDefault();
+          return;
+        }
+        
+        // Then check for original PDF text items
         for (let i = 0; i < textItems.length; i++) {
           const item = textItems[i];
           const margin = 5;
@@ -487,7 +497,7 @@ export function PageCanvas({
         }
       }
     },
-    [activeTool, viewport, pageHeight, zoom, textItems, onTextClick, findAnnotationAtPosition, onPanStart, pageNumber, findTextEdit, addTextEdit, selectAnnotation]
+    [activeTool, viewport, pageHeight, zoom, textItems, onTextClick, onTextBoxClick, findAnnotationAtPosition, onPanStart, pageNumber, findTextEdit, addTextEdit, selectAnnotation]
   );
 
   const handleMouseMove = useCallback(
@@ -690,6 +700,40 @@ export function PageCanvas({
               />
             );
           })}
+        </div>
+      )}
+
+      {/* TextBox Annotation Layer for Edit Mode - allow editing added text annotations */}
+      {activeTool === "edit" && (
+        <div
+          className="absolute top-0 left-0 w-full h-full pointer-events-none"
+          style={{ zIndex: 6 }}
+        >
+          {pageAnnotations
+            .filter((ann) => ann.type === "textBox")
+            .map((ann) => {
+              const screenPos = pdfToScreen(ann.x, ann.y + ann.height, pageHeight, zoom);
+              const screenWidth = ann.width * zoom;
+              const screenHeight = ann.height * zoom;
+              
+              return (
+                <div
+                  key={ann.id}
+                  className="absolute pointer-events-auto cursor-text hover:bg-green-100/50 hover:outline hover:outline-2 hover:outline-green-500 transition-all rounded-sm"
+                  style={{
+                    left: screenPos.x,
+                    top: screenPos.y,
+                    width: screenWidth,
+                    height: screenHeight,
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onTextBoxClick?.(ann.id);
+                  }}
+                  title="Click to edit this text"
+                />
+              );
+            })}
         </div>
       )}
 

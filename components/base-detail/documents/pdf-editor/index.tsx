@@ -24,6 +24,7 @@ import { Toolbar } from "./components/Toolbar";
 import { Thumbnails } from "./components/Thumbnails";
 import { PageCanvas } from "./components/PageCanvas";
 import { TextEditOverlay } from "./components/TextEditOverlay";
+import { TextBoxEditOverlay } from "./components/TextBoxEditOverlay";
 import { StatusBar } from "./components/StatusBar";
 import { SignerPanel, type Signer } from "./components/SignerPanel";
 import { SignatureCapture } from "../SignatureCapture";
@@ -175,11 +176,14 @@ export function PdfEditor({
   });
   const [statusConfig, setStatusConfig] = useState<StatusConfig | null>(null);
 
-  // Text editing state
+  // Text editing state (for editing original PDF text)
   const [editingText, setEditingText] = useState<{
     item: TextItem;
     index: number;
   } | null>(null);
+  
+  // Text box editing state (for editing added text annotations)
+  const [editingTextBox, setEditingTextBox] = useState<string | null>(null);
 
   // Text box creation state
   const [textBoxPosition, setTextBoxPosition] = useState<{ pdf: Point; screen: Point } | null>(null);
@@ -199,6 +203,8 @@ export function PdfEditor({
     hasChanges,
     selectedAnnotationId,
     selectAnnotation,
+    getSelectedAnnotation,
+    getAnnotationById,
     removeSelectedAnnotation,
     undo,
     redo,
@@ -207,6 +213,28 @@ export function PdfEditor({
   } = useAnnotationStore();
 
   const zoom = ZOOM_LEVELS[zoomIndex];
+
+  // Auto-detect formatting from selected annotation
+  useEffect(() => {
+    if (!selectedAnnotationId) return;
+    
+    const selectedAnn = getSelectedAnnotation();
+    if (!selectedAnn) return;
+    
+    // Only sync formatting for text-based annotations
+    if (selectedAnn.type === "textBox" || selectedAnn.type === "textEdit") {
+      setTextFormatting(prev => ({
+        ...prev,
+        fontSize: selectedAnn.fontSize || prev.fontSize,
+        color: selectedAnn.color || prev.color,
+        fontFamily: selectedAnn.fontFamily || prev.fontFamily,
+        fontWeight: selectedAnn.fontWeight || prev.fontWeight,
+        fontStyle: selectedAnn.fontStyle || prev.fontStyle,
+        textDecoration: selectedAnn.textDecoration || prev.textDecoration,
+        backgroundColor: selectedAnn.backgroundColor || prev.backgroundColor,
+      }));
+    }
+  }, [selectedAnnotationId, getSelectedAnnotation]);
 
   // Reset state when closing
   useEffect(() => {
@@ -471,6 +499,7 @@ export function PdfEditor({
   const handleToolChange = useCallback((tool: Tool) => {
     setActiveTool(tool);
     setEditingText(null);
+    setEditingTextBox(null);
     setTextBoxPosition(null);
     
     // Clear any selected annotation when switching tools
@@ -484,11 +513,36 @@ export function PdfEditor({
 
   const handleTextFormattingChange = useCallback((updates: Partial<TextFormatting>) => {
     setTextFormatting(prev => ({ ...prev, ...updates }));
-  }, []);
+    
+    // If a text annotation is selected, also update its formatting
+    if (selectedAnnotationId) {
+      const selectedAnn = getSelectedAnnotation();
+      if (selectedAnn && (selectedAnn.type === "textBox" || selectedAnn.type === "textEdit")) {
+        updateAnnotation(selectedAnnotationId, {
+          ...updates,
+          // Map textFormatting properties to annotation properties
+          fontSize: updates.fontSize,
+          color: updates.color,
+          fontFamily: updates.fontFamily,
+          fontWeight: updates.fontWeight,
+          fontStyle: updates.fontStyle,
+          textDecoration: updates.textDecoration,
+          backgroundColor: updates.backgroundColor,
+        });
+      }
+    }
+  }, [selectedAnnotationId, getSelectedAnnotation, updateAnnotation]);
 
   const handleTextClick = useCallback((item: TextItem, index: number) => {
     setEditingText({ item, index });
+    setEditingTextBox(null); // Close any textBox editing
   }, []);
+
+  const handleTextBoxClick = useCallback((annotationId: string) => {
+    setEditingTextBox(annotationId);
+    setEditingText(null); // Close any text editing
+    selectAnnotation(annotationId);
+  }, [selectAnnotation]);
 
   const handleCanvasClick = useCallback(
     (pdfPoint: Point, screenPoint: Point) => {
@@ -807,6 +861,7 @@ export function PdfEditor({
                   rotation={rotation}
                   activeTool={activeTool}
                   onTextClick={handleTextClick}
+                  onTextBoxClick={handleTextBoxClick}
                   onCanvasClick={handleCanvasClick}
                   onPanMove={handlePanMove}
                 />
@@ -823,6 +878,21 @@ export function PdfEditor({
                     onClose={() => setEditingText(null)}
                   />
                 )}
+
+                {/* TextBox Edit Overlay for editing added text annotations */}
+                {editingTextBox && (() => {
+                  const ann = getAnnotationById(editingTextBox);
+                  if (!ann || ann.type !== "textBox" || ann.pageIndex !== currentPage - 1) return null;
+                  return (
+                    <TextBoxEditOverlay
+                      annotation={ann}
+                      pageHeight={pageHeight}
+                      zoom={zoom}
+                      formatting={textFormatting}
+                      onClose={() => setEditingTextBox(null)}
+                    />
+                  );
+                })()}
 
                 {/* Text Box Editor for adding new text */}
                 {textBoxPosition && (
