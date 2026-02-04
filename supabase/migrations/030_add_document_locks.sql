@@ -155,7 +155,7 @@ BEGIN
         END;
     END IF;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Function to release a lock
 CREATE OR REPLACE FUNCTION release_document_lock(
@@ -183,7 +183,7 @@ BEGIN
         RETURN QUERY SELECT FALSE, 'No lock found for this user'::TEXT;
     END IF;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Function to check lock status
 CREATE OR REPLACE FUNCTION check_document_lock(
@@ -234,7 +234,7 @@ BEGIN
         AND expires_at > NOW()
     );
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Function to force release a lock (admin only)
 CREATE OR REPLACE FUNCTION force_release_document_lock(
@@ -273,7 +273,7 @@ BEGIN
         RETURN QUERY SELECT FALSE, 'No lock found'::TEXT;
     END IF;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Scheduled job to clean up expired locks (run via pg_cron or external scheduler)
 -- Clean locks that have been expired for more than 1 hour
@@ -289,7 +289,7 @@ BEGIN
     
     RETURN v_deleted;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- RLS Policies
 ALTER TABLE document_locks ENABLE ROW LEVEL SECURITY;
@@ -341,11 +341,19 @@ CREATE POLICY "Base owners can delete any lock"
         )
     );
 
--- Grant execute on functions
+-- Revoke public access and grant execute only to authenticated role
+-- This ensures SECURITY DEFINER functions are only callable by authenticated users
+REVOKE ALL ON FUNCTION acquire_document_lock FROM PUBLIC;
+REVOKE ALL ON FUNCTION release_document_lock FROM PUBLIC;
+REVOKE ALL ON FUNCTION check_document_lock FROM PUBLIC;
+REVOKE ALL ON FUNCTION force_release_document_lock FROM PUBLIC;
+REVOKE ALL ON FUNCTION cleanup_expired_document_locks FROM PUBLIC;
+
 GRANT EXECUTE ON FUNCTION acquire_document_lock TO authenticated;
 GRANT EXECUTE ON FUNCTION release_document_lock TO authenticated;
 GRANT EXECUTE ON FUNCTION check_document_lock TO authenticated;
 GRANT EXECUTE ON FUNCTION force_release_document_lock TO authenticated;
+-- cleanup_expired_document_locks is for admin/cron jobs, not regular users
 
 COMMENT ON TABLE document_locks IS 'Tracks active document locks to prevent concurrent editing conflicts';
 COMMENT ON FUNCTION acquire_document_lock IS 'Attempts to acquire a lock on a document, returns success status';

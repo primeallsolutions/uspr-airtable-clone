@@ -30,6 +30,7 @@ interface BatchResult {
   errors: Array<{ path: string; error: string }>;
   results?: Array<{ path: string; newPath?: string }>;
   downloadUrl?: string;
+  downloadManifest?: Array<{ path: string; url: string; fileName: string }>;
 }
 
 /**
@@ -357,7 +358,7 @@ async function handleBatchDownloadUrls(
   }
 
   // Return the download manifest
-  (result as any).downloadManifest = downloadUrls;
+  result.downloadManifest = downloadUrls;
 }
 
 /**

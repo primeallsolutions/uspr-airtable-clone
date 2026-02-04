@@ -94,6 +94,34 @@ function getExtension(filename: string): string {
 }
 
 /**
+ * Normalize and validate folder path to prevent path traversal attacks
+ */
+function normalizeFolderPath(folderPath: string): string {
+  if (!folderPath) return "";
+  
+  // Convert backslashes to forward slashes and strip leading slashes
+  let normalized = folderPath
+    .replace(/\\/g, "/")
+    .replace(/^\/+/, "");
+  
+  // Split into segments and filter out ".." and empty segments
+  const segments = normalized.split("/").filter(segment => {
+    // Reject ".." segments and empty segments
+    return segment !== ".." && segment !== "." && segment.length > 0;
+  });
+  
+  // Rejoin the path
+  normalized = segments.join("/");
+  
+  // Final safety check: reject if the path still contains ".." anywhere
+  if (normalized.includes("..")) {
+    return "";
+  }
+  
+  return normalized;
+}
+
+/**
  * Build storage path for document
  */
 function buildStoragePath(params: {
@@ -116,7 +144,9 @@ function buildStoragePath(params: {
     prefix = `bases/${baseId}/`;
   }
   
-  const safeFolder = folderPath ? (folderPath.endsWith("/") ? folderPath : `${folderPath}/`) : "";
+  // Normalize and validate folderPath to prevent path traversal
+  const normalizedFolder = normalizeFolderPath(folderPath);
+  const safeFolder = normalizedFolder ? `${normalizedFolder}/` : "";
   const safeName = sanitizeFileName(fileName);
   
   // Add timestamp prefix unless preserving name
@@ -261,9 +291,10 @@ export async function POST(request: Request) {
 
     if (uploadError) {
       console.error("Upload error:", uploadError);
+      const isProduction = process.env.NODE_ENV === "production";
       return NextResponse.json({ 
         error: "Failed to upload file",
-        details: uploadError.message
+        ...(isProduction ? {} : { details: uploadError.message })
       }, { status: 500 });
     }
 

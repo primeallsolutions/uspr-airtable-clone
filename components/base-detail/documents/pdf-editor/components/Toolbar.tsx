@@ -178,7 +178,7 @@ export function Toolbar({
             onClick={onRedo}
             disabled={!canRedo}
             className="p-1.5 rounded text-white hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed"
-            title="Redo (Ctrl+Shift+Z)"
+            title="Redo (Ctrl+Y / Ctrl+Shift+Z)"
           >
             <Redo2 className="w-4 h-4" />
           </button>
@@ -355,7 +355,7 @@ export function Toolbar({
                   <div className="text-gray-400 text-xs uppercase mb-1">Actions</div>
                   <div className="grid grid-cols-2 gap-1">
                     <ShortcutItem keys={["Ctrl", "Z"]} description="Undo" />
-                    <ShortcutItem keys={["Ctrl", "Y"]} description="Redo" />
+                    <ShortcutItem keys={["Ctrl", "Y", "/", "⇧Z"]} description="Redo" />
                     <ShortcutItem keys={["Ctrl", "S"]} description="Save" />
                     <ShortcutItem keys={["Del"]} description="Delete" />
                     <ShortcutItem keys={["Esc"]} description="Cancel" />
