@@ -135,6 +135,7 @@ export function SignatureFieldPlacer({
       const renderContext = {
         canvasContext: context,
         viewport: viewport,
+        canvas: canvas,
       };
 
       const renderTask = page.render(renderContext);

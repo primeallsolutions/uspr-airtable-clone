@@ -166,14 +166,22 @@ export function SignerManager({
     if (!onFieldAssignmentChange) return;
     
     const newAssignments = { ...fieldSignerAssignments };
-    const fields = mode === "template" ? templateFields : documentSignatureFields;
-    
-    fields.forEach((field) => {
-      const fieldKey = "id" in field ? field.id : (field.field_key || "");
-      if (newAssignments[fieldKey] === signerEmail) {
-        newAssignments[fieldKey] = "";
-      }
-    });
+    if (mode === "template") {
+      templateFields.forEach((field) => {
+        const key = field.id || field.field_key;
+        if (!key) return;
+        if (newAssignments[key] === signerEmail) {
+          newAssignments[key] = "";
+        }
+      });
+    } else {
+      documentSignatureFields.forEach((field) => {
+        if (!field.id) return;
+        if (newAssignments[field.id] === signerEmail) {
+          newAssignments[field.id] = "";
+        }
+      });
+    }
     onFieldAssignmentChange(newAssignments);
   };
 
