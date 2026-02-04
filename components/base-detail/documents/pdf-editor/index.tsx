@@ -138,7 +138,6 @@ export function PdfEditor({
   const [currentPage, setCurrentPage] = useState(1);
   const [zoomIndex, setZoomIndex] = useState(DEFAULT_ZOOM_INDEX);
   const [rotation, setRotation] = useState(0);
-  const [isFullscreen, setIsFullscreen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   // Tool state
@@ -672,17 +671,11 @@ export function PdfEditor({
 
   return (
     <div
-      className={`fixed inset-0 z-50 bg-black/80 flex flex-col ${
-        isFullscreen ? "" : "p-4"
-      }`}
+      className="fixed inset-0 z-50 bg-black/80 flex flex-col"
       onClick={handleClose}
     >
       <div
-        className={`bg-gray-900 flex flex-col overflow-hidden ${
-          isFullscreen
-            ? "w-full h-full"
-            : "rounded-xl max-w-7xl max-h-[95vh] mx-auto w-full"
-        }`}
+        className="bg-gray-900 flex flex-col overflow-hidden w-full h-full"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Toolbar */}
@@ -692,7 +685,6 @@ export function PdfEditor({
           numPages={numPages || 1}
           zoomIndex={zoomIndex}
           activeTool={activeTool}
-          isFullscreen={isFullscreen}
           isSaving={isSaving}
           hasChanges={hasChanges()}
           canUndo={canUndo()}
@@ -704,7 +696,6 @@ export function PdfEditor({
           onZoomReset={handleZoomReset}
           onRotate={handleRotate}
           onToolChange={handleToolChange}
-          onFullscreenToggle={() => setIsFullscreen(!isFullscreen)}
           onDownload={handleDownload}
           onSave={handleSave}
           onClose={handleClose}

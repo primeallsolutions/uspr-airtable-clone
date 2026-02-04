@@ -18,8 +18,6 @@ import {
   Highlighter,
   Type,
   PenTool,
-  Maximize2,
-  Minimize2,
   Loader2,
   FileText,
   MousePointer,
@@ -30,7 +28,6 @@ import {
   FileSignature,
   Send,
   Keyboard,
-  HelpCircle,
   Pen,
   CalendarCheck,
 } from "lucide-react";
@@ -43,7 +40,6 @@ interface ToolbarProps {
   numPages: number;
   zoomIndex: number;
   activeTool: Tool;
-  isFullscreen: boolean;
   isSaving: boolean;
   hasChanges: boolean;
   canUndo: boolean;
@@ -55,7 +51,6 @@ interface ToolbarProps {
   onZoomReset: () => void;
   onRotate: () => void;
   onToolChange: (tool: Tool) => void;
-  onFullscreenToggle: () => void;
   onDownload: () => void;
   onSave: () => void;
   onClose: () => void;
@@ -70,7 +65,6 @@ export function Toolbar({
   numPages,
   zoomIndex,
   activeTool,
-  isFullscreen,
   isSaving,
   hasChanges,
   canUndo,
@@ -82,7 +76,6 @@ export function Toolbar({
   onZoomReset,
   onRotate,
   onToolChange,
-  onFullscreenToggle,
   onDownload,
   onSave,
   onClose,
@@ -106,84 +99,137 @@ export function Toolbar({
       <div className="flex items-center gap-2">
         {/* Page Navigation */}
         <div className="flex items-center gap-1 bg-gray-700 rounded-lg px-2 py-1">
-          <button
-            onClick={() => onPageChange(currentPage - 1)}
-            disabled={currentPage <= 1}
-            className="p-1 hover:bg-gray-600 rounded disabled:opacity-50 disabled:cursor-not-allowed"
-            title="Previous page"
-          >
-            <ChevronLeft className="w-4 h-4 text-white" />
-          </button>
+          <div className="relative group">
+            <button
+              onClick={() => onPageChange(currentPage - 1)}
+              disabled={currentPage <= 1}
+              className="p-1 hover:bg-gray-600 rounded disabled:opacity-50 disabled:cursor-not-allowed text-white"
+              aria-label="Previous page"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 hidden group-hover:flex flex-col items-center z-50 pointer-events-none">
+              <div className="w-0 h-0 border-l-[6px] border-r-[6px] border-b-[6px] border-transparent border-b-gray-900" />
+              <div className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 shadow-xl whitespace-nowrap">
+                <div className="text-white text-sm font-medium">Previous Page</div>
+                <div className="flex items-center justify-center gap-1 mt-1">
+                  <kbd className="px-1.5 py-0.5 text-[10px] bg-gray-700 border border-gray-600 rounded font-mono text-gray-300">PgUp</kbd>
+                </div>
+              </div>
+            </div>
+          </div>
           <span className="text-white text-sm px-2">
             {currentPage} / {numPages}
           </span>
-          <button
-            onClick={() => onPageChange(currentPage + 1)}
-            disabled={currentPage >= numPages}
-            className="p-1 hover:bg-gray-600 rounded disabled:opacity-50 disabled:cursor-not-allowed"
-            title="Next page"
-          >
-            <ChevronRight className="w-4 h-4 text-white" />
-          </button>
+          <div className="relative group">
+            <button
+              onClick={() => onPageChange(currentPage + 1)}
+              disabled={currentPage >= numPages}
+              className="p-1 hover:bg-gray-600 rounded disabled:opacity-50 disabled:cursor-not-allowed text-white"
+              aria-label="Next page"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+            <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 hidden group-hover:flex flex-col items-center z-50 pointer-events-none">
+              <div className="w-0 h-0 border-l-[6px] border-r-[6px] border-b-[6px] border-transparent border-b-gray-900" />
+              <div className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 shadow-xl whitespace-nowrap">
+                <div className="text-white text-sm font-medium">Next Page</div>
+                <div className="flex items-center justify-center gap-1 mt-1">
+                  <kbd className="px-1.5 py-0.5 text-[10px] bg-gray-700 border border-gray-600 rounded font-mono text-gray-300">PgDn</kbd>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div className="w-px h-6 bg-gray-600" />
 
         {/* Zoom Controls */}
         <div className="flex items-center gap-1 bg-gray-700 rounded-lg px-2 py-1">
-          <button
-            onClick={onZoomOut}
-            disabled={zoomIndex <= 0}
-            className="p-1 hover:bg-gray-600 rounded disabled:opacity-50"
-            title="Zoom out"
-          >
-            <ZoomOut className="w-4 h-4 text-white" />
-          </button>
-          <button
-            onClick={onZoomReset}
-            className="text-white text-sm px-2 hover:bg-gray-600 rounded"
-            title="Reset zoom"
-          >
-            {Math.round(zoom * 100)}%
-          </button>
-          <button
-            onClick={onZoomIn}
-            disabled={zoomIndex >= ZOOM_LEVELS.length - 1}
-            className="p-1 hover:bg-gray-600 rounded disabled:opacity-50"
-            title="Zoom in"
-          >
-            <ZoomIn className="w-4 h-4 text-white" />
-          </button>
+          <div className="relative group">
+            <button
+              onClick={onZoomOut}
+              disabled={zoomIndex <= 0}
+              className="p-1 hover:bg-gray-600 rounded disabled:opacity-50 text-white"
+              aria-label="Zoom out"
+            >
+              <ZoomOut className="w-4 h-4" />
+            </button>
+            <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 hidden group-hover:flex flex-col items-center z-50 pointer-events-none">
+              <div className="w-0 h-0 border-l-[6px] border-r-[6px] border-b-[6px] border-transparent border-b-gray-900" />
+              <div className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 shadow-xl whitespace-nowrap">
+                <div className="text-white text-sm font-medium">Zoom Out</div>
+                <div className="flex items-center justify-center gap-1 mt-1">
+                  <kbd className="px-1.5 py-0.5 text-[10px] bg-gray-700 border border-gray-600 rounded font-mono text-gray-300">Ctrl+-</kbd>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="relative group">
+            <button
+              onClick={onZoomReset}
+              className="text-white text-sm px-2 hover:bg-gray-600 rounded"
+              aria-label="Reset zoom"
+            >
+              {Math.round(zoom * 100)}%
+            </button>
+            <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 hidden group-hover:flex flex-col items-center z-50 pointer-events-none">
+              <div className="w-0 h-0 border-l-[6px] border-r-[6px] border-b-[6px] border-transparent border-b-gray-900" />
+              <div className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 shadow-xl whitespace-nowrap">
+                <div className="text-white text-sm font-medium">Reset Zoom</div>
+                <div className="flex items-center justify-center gap-1 mt-1">
+                  <kbd className="px-1.5 py-0.5 text-[10px] bg-gray-700 border border-gray-600 rounded font-mono text-gray-300">Ctrl+0</kbd>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="relative group">
+            <button
+              onClick={onZoomIn}
+              disabled={zoomIndex >= ZOOM_LEVELS.length - 1}
+              className="p-1 hover:bg-gray-600 rounded disabled:opacity-50 text-white"
+              aria-label="Zoom in"
+            >
+              <ZoomIn className="w-4 h-4" />
+            </button>
+            <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 hidden group-hover:flex flex-col items-center z-50 pointer-events-none">
+              <div className="w-0 h-0 border-l-[6px] border-r-[6px] border-b-[6px] border-transparent border-b-gray-900" />
+              <div className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 shadow-xl whitespace-nowrap">
+                <div className="text-white text-sm font-medium">Zoom In</div>
+                <div className="flex items-center justify-center gap-1 mt-1">
+                  <kbd className="px-1.5 py-0.5 text-[10px] bg-gray-700 border border-gray-600 rounded font-mono text-gray-300">Ctrl++</kbd>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <button
+        <IconButton
+          icon={<RotateCw className="w-4 h-4" />}
           onClick={onRotate}
-          className="p-2 hover:bg-gray-700 rounded-lg"
-          title="Rotate"
-        >
-          <RotateCw className="w-4 h-4 text-white" />
-        </button>
+          label="Rotate"
+        />
 
         <div className="w-px h-6 bg-gray-600" />
 
         {/* Undo/Redo */}
-        <div className="flex items-center gap-1 bg-gray-700 rounded-lg px-1 py-1">
-          <button
+        <div className="flex items-center gap-0 bg-gray-700 rounded-lg px-0.5 py-0.5">
+          <IconButton
+            icon={<Undo2 className="w-4 h-4" />}
             onClick={onUndo}
             disabled={!canUndo}
-            className="p-1.5 rounded text-white hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed"
-            title="Undo (Ctrl+Z)"
-          >
-            <Undo2 className="w-4 h-4" />
-          </button>
-          <button
+            label="Undo"
+            shortcut="Ctrl+Z"
+            className="p-1.5 hover:bg-gray-600"
+          />
+          <IconButton
+            icon={<Redo2 className="w-4 h-4" />}
             onClick={onRedo}
             disabled={!canRedo}
-            className="p-1.5 rounded text-white hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed"
-            title="Redo (Ctrl+Y / Ctrl+Shift+Z)"
-          >
-            <Redo2 className="w-4 h-4" />
-          </button>
+            label="Redo"
+            shortcut="Ctrl+Y"
+            className="p-1.5 hover:bg-gray-600"
+          />
         </div>
 
         <div className="w-px h-6 bg-gray-600" />
@@ -194,63 +240,72 @@ export function Toolbar({
             icon={<MousePointer className="w-4 h-4" />}
             active={activeTool === "select"}
             onClick={() => onToolChange("select")}
-            title="Select & Move (V) - Click and drag text/annotations to reposition"
+            label="Select"
+            title="Select & Move - Click and drag text/annotations to reposition"
             shortcut="V"
           />
           <ToolButton
             icon={<Hand className="w-4 h-4" />}
             active={activeTool === "pan"}
             onClick={() => onToolChange("pan")}
-            title="Pan (P) - Drag to scroll around the document"
+            label="Pan"
+            title="Pan - Drag to scroll around the document"
             shortcut="P"
           />
           <ToolButton
             icon={<Highlighter className="w-4 h-4" />}
             active={activeTool === "highlight"}
             onClick={() => onToolChange("highlight")}
-            title="Highlight (H) - Click and drag to highlight text"
+            label="Highlight"
+            title="Highlight - Click and drag to highlight text"
             shortcut="H"
           />
           <ToolButton
             icon={<Type className="w-4 h-4" />}
             active={activeTool === "text"}
             onClick={() => onToolChange("text")}
-            title="Add Text (T) - Click to add new text anywhere"
+            label="Add Text"
+            title="Add Text - Click to add new text anywhere"
             shortcut="T"
           />
           <ToolButton
             icon={<Edit3 className="w-4 h-4" />}
             active={activeTool === "edit"}
             onClick={() => onToolChange("edit")}
-            title="Edit Text (E) - Click on existing text to modify it"
+            label="Edit Text"
+            title="Edit Text - Click on existing text to modify it"
             shortcut="E"
           />
           <ToolButton
             icon={<PenTool className="w-4 h-4" />}
             active={activeTool === "signature"}
             onClick={() => onToolChange("signature")}
-            title="Add Your Signature (S) - Draw or upload your signature"
+            label="Signature"
+            title="Add Your Signature - Draw or upload your signature"
             shortcut="S"
           />
           <ToolButton
             icon={<FileSignature className="w-4 h-4" />}
             active={activeTool === "signatureField"}
             onClick={() => onToolChange("signatureField")}
-            title="Signature Field (F) - Add a field for others to sign"
+            label="Signature Field"
+            title="Signature Field - Add a field for others to sign"
             shortcut="F"
           />
           <ToolButton
             icon={<Pen className="w-4 h-4" />}
             active={activeTool === "initialsField"}
             onClick={() => onToolChange("initialsField")}
-            title="Initials Field (I) - Add a field for initials"
+            label="Initials Field"
+            title="Initials Field - Add a field for initials"
             shortcut="I"
           />
           <ToolButton
             icon={<CalendarCheck className="w-4 h-4" />}
             active={activeTool === "dateField"}
             onClick={() => onToolChange("dateField")}
-            title="Date Field (D) - Auto-fills with signing date"
+            label="Date Field"
+            title="Date Field - Auto-fills with signing date"
             shortcut="D"
           />
         </div>
@@ -277,26 +332,11 @@ export function Toolbar({
           </>
         )}
 
-        {/* View Controls */}
-        <button
-          onClick={onFullscreenToggle}
-          className="p-2 hover:bg-gray-700 rounded-lg"
-          title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
-        >
-          {isFullscreen ? (
-            <Minimize2 className="w-4 h-4 text-white" />
-          ) : (
-            <Maximize2 className="w-4 h-4 text-white" />
-          )}
-        </button>
-
-        <button
+        <IconButton
+          icon={<Download className="w-4 h-4" />}
           onClick={onDownload}
-          className="p-2 hover:bg-gray-700 rounded-lg"
-          title="Download"
-        >
-          <Download className="w-4 h-4 text-white" />
-        </button>
+          label="Download"
+        />
 
         {/* Save Button */}
         <button
@@ -318,16 +358,25 @@ export function Toolbar({
         </button>
 
         {/* Keyboard Shortcuts Help */}
-        <div className="relative">
+        <div className="relative group">
           <button
             onClick={() => setShowShortcuts(!showShortcuts)}
-            className={`p-2 rounded-lg transition-colors ${
+            className={`p-2 rounded-lg transition-colors text-white ${
               showShortcuts ? "bg-gray-600" : "hover:bg-gray-700"
             }`}
-            title="Keyboard shortcuts"
+            aria-label="Keyboard shortcuts"
           >
-            <Keyboard className="w-4 h-4 text-white" />
+            <Keyboard className="w-4 h-4" />
           </button>
+          {/* Enhanced tooltip on hover */}
+          {!showShortcuts && (
+            <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 hidden group-hover:flex flex-col items-center z-50 pointer-events-none">
+              <div className="w-0 h-0 border-l-[6px] border-r-[6px] border-b-[6px] border-transparent border-b-gray-900" />
+              <div className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 shadow-xl whitespace-nowrap">
+                <div className="text-white text-sm font-medium">Keyboard Shortcuts</div>
+              </div>
+            </div>
+          )}
           
           {/* Shortcuts Panel */}
           {showShortcuts && (
@@ -402,13 +451,12 @@ export function Toolbar({
         </div>
 
         {/* Close Button */}
-        <button
+        <IconButton
+          icon={<X className="w-5 h-5" />}
           onClick={onClose}
-          className="p-2 hover:bg-gray-700 rounded-lg"
-          title="Close"
-        >
-          <X className="w-5 h-5 text-white" />
-        </button>
+          label="Close"
+          shortcut="Esc"
+        />
       </div>
     </div>
   );
@@ -433,35 +481,91 @@ function ShortcutItem({ keys, description }: { keys: string[]; description: stri
   );
 }
 
-// Tool button component with keyboard shortcut indicator
+// Icon button component with enhanced tooltip
+function IconButton({
+  icon,
+  onClick,
+  label,
+  shortcut,
+  disabled,
+  className = "",
+}: {
+  icon: React.ReactNode;
+  onClick: () => void;
+  label: string;
+  shortcut?: string;
+  disabled?: boolean;
+  className?: string;
+}) {
+  return (
+    <div className="relative group">
+      <button
+        onClick={onClick}
+        disabled={disabled}
+        className={`p-2 rounded-lg text-white hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed ${className}`}
+        aria-label={label}
+      >
+        {icon}
+      </button>
+      {/* Enhanced tooltip on hover */}
+      <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 hidden group-hover:flex flex-col items-center z-50 pointer-events-none">
+        <div className="w-0 h-0 border-l-[6px] border-r-[6px] border-b-[6px] border-transparent border-b-gray-900" />
+        <div className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 shadow-xl whitespace-nowrap">
+          <div className="text-white text-sm font-medium">{label}</div>
+          {shortcut && (
+            <div className="flex items-center justify-center gap-1 mt-1">
+              <kbd className="px-1.5 py-0.5 text-[10px] bg-gray-700 border border-gray-600 rounded font-mono text-gray-300">
+                {shortcut}
+              </kbd>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Tool button component with enhanced tooltip
 function ToolButton({
   icon,
   active,
   onClick,
+  label,
   title,
   shortcut,
 }: {
   icon: React.ReactNode;
   active: boolean;
   onClick: () => void;
+  label: string;
   title: string;
   shortcut?: string;
 }) {
   return (
-    <button
-      onClick={onClick}
-      className={`relative p-1.5 rounded text-white group ${
-        active ? "bg-blue-600" : "hover:bg-gray-600"
-      }`}
-      title={title}
-    >
-      {icon}
-      {/* Show shortcut key on hover */}
-      {shortcut && (
-        <span className="absolute -bottom-1 -right-1 hidden group-hover:flex items-center justify-center w-3.5 h-3.5 text-[9px] font-bold bg-gray-900 border border-gray-600 rounded text-gray-300">
-          {shortcut}
-        </span>
-      )}
-    </button>
+    <div className="relative group">
+      <button
+        onClick={onClick}
+        className={`relative p-1.5 rounded text-white ${
+          active ? "bg-blue-600" : "hover:bg-gray-600"
+        }`}
+        aria-label={title}
+      >
+        {icon}
+      </button>
+      {/* Enhanced tooltip on hover */}
+      <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 hidden group-hover:flex flex-col items-center z-50 pointer-events-none">
+        <div className="w-0 h-0 border-l-[6px] border-r-[6px] border-b-[6px] border-transparent border-b-gray-900" />
+        <div className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 shadow-xl whitespace-nowrap">
+          <div className="text-white text-sm font-medium">{label}</div>
+          {shortcut && (
+            <div className="flex items-center justify-center gap-1 mt-1">
+              <kbd className="px-1.5 py-0.5 text-[10px] bg-gray-700 border border-gray-600 rounded font-mono text-gray-300">
+                {shortcut}
+              </kbd>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
