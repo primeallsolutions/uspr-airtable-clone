@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
-import { FileText, Image as ImageIcon, File, Loader2, Trash2, Search, X, LayoutGrid, List, ArrowUpDown, Clock, Files, FilePen, Copy, FolderOutput } from "lucide-react";
+import { FileText, Image as ImageIcon, File, Loader2, Trash2, Search, X, LayoutGrid, List, ArrowUpDown, Clock, Files, FilePen, Copy, FolderOutput, CalendarPlus, Calendar } from "lucide-react";
 import type { StoredDocument } from "@/lib/services/documents-service";
 import { DocumentsService } from "@/lib/services/documents-service";
 import { formatSize, isImage, isPdf, isFolder } from "./utils";
@@ -18,6 +18,42 @@ const SORT_OPTIONS: { value: SortOption; label: string }[] = [
   { value: 'size-desc', label: 'Largest First' },
   { value: 'size-asc', label: 'Smallest First' },
 ];
+
+// Date group types
+type DateGroup = 'today' | 'yesterday' | 'thisWeek' | 'thisMonth' | 'older';
+
+// Helper to get date group for a document
+const getDateGroup = (dateStr: string): DateGroup => {
+  const date = new Date(dateStr);
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  
+  const startOfWeek = new Date(today);
+  startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay()); // Start of this week (Sunday)
+  
+  const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+  
+  // Reset time for comparison
+  const dateOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const yesterdayOnly = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate());
+  
+  if (dateOnly.getTime() === todayOnly.getTime()) return 'today';
+  if (dateOnly.getTime() === yesterdayOnly.getTime()) return 'yesterday';
+  if (dateOnly >= startOfWeek) return 'thisWeek';
+  if (dateOnly >= startOfMonth) return 'thisMonth';
+  return 'older';
+};
+
+// Date group labels
+const DATE_GROUP_LABELS: Record<DateGroup, string> = {
+  today: 'Today',
+  yesterday: 'Yesterday',
+  thisWeek: 'This Week',
+  thisMonth: 'This Month',
+  older: 'Older',
+};
 
 type DocumentsListProps = {
   documents: Array<StoredDocument & { relative: string }>;
@@ -65,6 +101,7 @@ export const DocumentsList = ({
   // Sorting state (from HEAD)
   const [sortBy, setSortBy] = useState<SortOption>('date-desc');
   const [showSortMenu, setShowSortMenu] = useState(false);
+  const [showDateGroups, setShowDateGroups] = useState(true); // Toggle for date grouping
   
   // Copy/Move state (from remote)
   const [copyMoveModalOpen, setCopyMoveModalOpen] = useState(false);
@@ -103,12 +140,47 @@ export const DocumentsList = ({
     }
   }, [filteredDocuments, sortBy]);
 
+  // Group documents by date (only when date sorting is active)
+  const groupedDocuments = useMemo(() => {
+    if (!showDateGroups || !['date-desc', 'date-asc'].includes(sortBy)) {
+      return null; // No grouping when not sorting by date or grouping disabled
+    }
+    
+    const groups: Record<DateGroup, typeof sortedDocuments> = {
+      today: [],
+      yesterday: [],
+      thisWeek: [],
+      thisMonth: [],
+      older: [],
+    };
+    
+    sortedDocuments.forEach((doc) => {
+      const group = getDateGroup(doc.createdAt);
+      groups[group].push(doc);
+    });
+    
+    // Return ordered array of groups (with documents)
+    const groupOrder: DateGroup[] = sortBy === 'date-asc' 
+      ? ['older', 'thisMonth', 'thisWeek', 'yesterday', 'today']
+      : ['today', 'yesterday', 'thisWeek', 'thisMonth', 'older'];
+    
+    return groupOrder
+      .filter((group) => groups[group].length > 0)
+      .map((group) => ({
+        group,
+        label: DATE_GROUP_LABELS[group],
+        documents: groups[group],
+      }));
+  }, [sortedDocuments, sortBy, showDateGroups]);
+
   // Determine display title based on view
   const displayTitle = useMemo(() => {
     if (viewTitle) return viewTitle;
     switch (currentView) {
+      case 'today':
+        return 'Uploaded Today';
       case 'recent':
-        return 'Recent Uploads';
+        return 'Recent Uploads (7 days)';
       case 'all':
         return 'All Documents';
       default:
@@ -119,6 +191,8 @@ export const DocumentsList = ({
   // Get icon for the view
   const ViewIcon = useMemo(() => {
     switch (currentView) {
+      case 'today':
+        return CalendarPlus;
       case 'recent':
         return Clock;
       case 'all':
@@ -185,6 +259,22 @@ export const DocumentsList = ({
           {displayTitle} ({sortedDocuments.length}{searchQuery && ` of ${documents.length}`})
         </div>
         <div className="flex items-center gap-2">
+          {/* Date Grouping Toggle */}
+          {['date-desc', 'date-asc'].includes(sortBy) && (
+            <button
+              onClick={() => setShowDateGroups(!showDateGroups)}
+              className={`flex items-center gap-1.5 px-2 py-1.5 text-xs rounded-md transition-colors ${
+                showDateGroups 
+                  ? "bg-blue-100 text-blue-700" 
+                  : "text-gray-600 hover:bg-gray-100"
+              }`}
+              title={showDateGroups ? "Hide date groups" : "Show date groups"}
+            >
+              <Calendar className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Group</span>
+            </button>
+          )}
+          
           {/* Sort Dropdown */}
           <div className="relative">
             <button
@@ -287,6 +377,8 @@ export const DocumentsList = ({
             <div className="p-6 text-sm text-gray-500">
               {searchQuery ? (
                 <>No documents found matching &quot;{searchQuery}&quot;.</>
+              ) : currentView === 'today' ? (
+                <>No documents uploaded today.</>
               ) : currentView === 'recent' ? (
                 <>No documents uploaded in the last 7 days.</>
               ) : (
@@ -295,68 +387,141 @@ export const DocumentsList = ({
             </div>
           ) : (
             viewMode === "list" ? (
-              // List View
-              sortedDocuments.map((doc) => {
-                // Double-check: don't allow selecting folders
-                if (isFolder(doc)) return null;
-                return (
-                  <button
-                    key={doc.path}
-                    onClick={() => {
-                      // Validate before selecting
-                      if (!isFolder(doc)) {
-                        onDocumentSelect(doc.path);
-                      }
-                    }}
-                    onDoubleClick={() => {
-                      // Open editor on double-click for PDF files only
-                      if (!isFolder(doc) && onDocumentEdit && isPdf(doc.mimeType)) {
-                        onDocumentEdit(doc);
-                      }
-                    }}
-                    className={`w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-gray-50 transition-colors ${
-                      selectedDocPath === doc.path ? "bg-blue-50 border-l-4 border-blue-500" : ""
-                    }`}
-                    title={isPdf(doc.mimeType) ? "Double-click to edit" : ""}
-                  >
-                    <div className="shrink-0">{renderDocIcon(doc.mimeType)}</div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-semibold text-gray-900 truncate">
-                        {doc.relative}
-                      </div>
-                      <div className="text-xs text-gray-500 flex items-center gap-2">
-                        <span>{formatSize(doc.size)}</span>
-                        <span>•</span>
-                        <span>{new Date(doc.createdAt).toLocaleString()}</span>
-                      </div>
+              // List View with optional date grouping
+              groupedDocuments && groupedDocuments.length > 0 ? (
+                // Grouped by date
+                groupedDocuments.map(({ group, label, documents: groupDocs }) => (
+                  <div key={group}>
+                    {/* Group Header */}
+                    <div className="sticky top-0 px-4 py-2 bg-gray-100 border-b border-gray-200 flex items-center gap-2 z-10">
+                      <Calendar className="w-3.5 h-3.5 text-gray-500" />
+                      <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
+                        {label}
+                      </span>
+                      <span className="text-xs text-gray-400">({groupDocs.length})</span>
                     </div>
-                    <div className="shrink-0 flex items-center gap-1">
-                      {onDocumentEdit && isPdf(doc.mimeType) && (
+                    {/* Group Documents */}
+                    {groupDocs.map((doc) => {
+                      if (isFolder(doc)) return null;
+                      return (
+                        <button
+                          key={doc.path}
+                          onClick={() => {
+                            if (!isFolder(doc)) {
+                              onDocumentSelect(doc.path);
+                            }
+                          }}
+                          onDoubleClick={() => {
+                            if (!isFolder(doc) && onDocumentEdit && isPdf(doc.mimeType)) {
+                              onDocumentEdit(doc);
+                            }
+                          }}
+                          className={`w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-gray-50 transition-colors ${
+                            selectedDocPath === doc.path ? "bg-blue-50 border-l-4 border-blue-500" : ""
+                          }`}
+                          title={isPdf(doc.mimeType) ? "Double-click to edit" : ""}
+                        >
+                          <div className="shrink-0">{renderDocIcon(doc.mimeType)}</div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-semibold text-gray-900 truncate">
+                              {doc.relative}
+                            </div>
+                            <div className="text-xs text-gray-500 flex items-center gap-2">
+                              <span>{formatSize(doc.size)}</span>
+                              <span>•</span>
+                              <span>{new Date(doc.createdAt).toLocaleTimeString()}</span>
+                            </div>
+                          </div>
+                          <div className="shrink-0 flex items-center gap-1">
+                            {onDocumentEdit && isPdf(doc.mimeType) && (
+                              <span
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onDocumentEdit(doc);
+                                }}
+                                className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                title="Edit document"
+                              >
+                                <FilePen className="w-4 h-4" />
+                              </span>
+                            )}
+                            <span
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openCopyMoveModal(doc);
+                              }}
+                              className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                              title="Copy or move document"
+                            >
+                              <FolderOutput className="w-4 h-4" />
+                            </span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ))
+              ) : (
+                // Flat list (no grouping)
+                sortedDocuments.map((doc) => {
+                  if (isFolder(doc)) return null;
+                  return (
+                    <button
+                      key={doc.path}
+                      onClick={() => {
+                        if (!isFolder(doc)) {
+                          onDocumentSelect(doc.path);
+                        }
+                      }}
+                      onDoubleClick={() => {
+                        if (!isFolder(doc) && onDocumentEdit && isPdf(doc.mimeType)) {
+                          onDocumentEdit(doc);
+                        }
+                      }}
+                      className={`w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-gray-50 transition-colors ${
+                        selectedDocPath === doc.path ? "bg-blue-50 border-l-4 border-blue-500" : ""
+                      }`}
+                      title={isPdf(doc.mimeType) ? "Double-click to edit" : ""}
+                    >
+                      <div className="shrink-0">{renderDocIcon(doc.mimeType)}</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-semibold text-gray-900 truncate">
+                          {doc.relative}
+                        </div>
+                        <div className="text-xs text-gray-500 flex items-center gap-2">
+                          <span>{formatSize(doc.size)}</span>
+                          <span>•</span>
+                          <span>{new Date(doc.createdAt).toLocaleString()}</span>
+                        </div>
+                      </div>
+                      <div className="shrink-0 flex items-center gap-1">
+                        {onDocumentEdit && isPdf(doc.mimeType) && (
+                          <span
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onDocumentEdit(doc);
+                            }}
+                            className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                            title="Edit document"
+                          >
+                            <FilePen className="w-4 h-4" />
+                          </span>
+                        )}
                         <span
                           onClick={(e) => {
                             e.stopPropagation();
-                            onDocumentEdit(doc);
+                            openCopyMoveModal(doc);
                           }}
-                          className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                          title="Edit document"
+                          className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                          title="Copy or move document"
                         >
-                          <FilePen className="w-4 h-4" />
+                          <FolderOutput className="w-4 h-4" />
                         </span>
-                      )}
-                      <span
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openCopyMoveModal(doc);
-                        }}
-                        className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                        title="Copy or move document"
-                      >
-                        <FolderOutput className="w-4 h-4" />
-                      </span>
-                    </div>
-                  </button>
-                );
-              })
+                      </div>
+                    </button>
+                  );
+                })
+              )
             ) : (
               // Grid View with Thumbnails
               <div className="grid grid-cols-2 gap-2 p-2">

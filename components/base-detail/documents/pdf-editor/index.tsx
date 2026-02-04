@@ -40,14 +40,15 @@ function TextBoxEditor({
   onCancel: () => void;
 }) {
   const [text, setText] = useState("");
-  const inputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    inputRef.current?.focus();
+    textareaRef.current?.focus();
   }, []);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
+    // Ctrl/Cmd + Enter to save (allows regular Enter for new lines)
+    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
       if (text.trim()) {
         onSave(text.trim());
@@ -55,6 +56,16 @@ function TextBoxEditor({
         onCancel();
       }
     } else if (e.key === "Escape") {
+      e.preventDefault();
+      onCancel();
+    }
+    // Backspace and Delete work naturally in textarea - no special handling needed
+  };
+
+  const handleSave = () => {
+    if (text.trim()) {
+      onSave(text.trim());
+    } else {
       onCancel();
     }
   };
@@ -67,30 +78,43 @@ function TextBoxEditor({
         top: position.y,
         zIndex: 1000,
       }}
+      className="flex flex-col gap-1"
     >
-      <input
-        ref={inputRef}
-        type="text"
+      <textarea
+        ref={textareaRef}
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={handleKeyDown}
-        onBlur={() => {
-          if (text.trim()) {
-            onSave(text.trim());
-          } else {
-            onCancel();
-          }
-        }}
-        placeholder="Type text and press Enter"
-        className="bg-white text-black outline-none border-2 border-green-500 rounded-sm shadow-lg"
+        placeholder="Type text here..."
+        className="bg-white text-black outline-none border-2 border-green-500 rounded-sm shadow-lg resize-none"
         style={{
           fontSize: 14 * zoom,
-          lineHeight: 1.2,
-          padding: "4px 8px",
-          minWidth: 200,
+          lineHeight: 1.4,
+          padding: "6px 10px",
+          minWidth: 220,
+          minHeight: 60,
           fontFamily: "Helvetica, Arial, sans-serif",
         }}
+        rows={3}
       />
+      <div className="flex gap-1 justify-end">
+        <button
+          onClick={onCancel}
+          className="px-2 py-1 text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 rounded transition-colors"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={handleSave}
+          disabled={!text.trim()}
+          className="px-2 py-1 text-xs bg-green-500 hover:bg-green-600 text-white rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          Add Text
+        </button>
+      </div>
+      <div className="text-xs text-gray-400 mt-0.5">
+        Press Ctrl+Enter to save, Escape to cancel
+      </div>
     </div>
   );
 }
@@ -101,6 +125,7 @@ export function PdfEditor({
   isOpen,
   onClose,
   onSave,
+  onRequestSignature,
 }: PdfEditorProps) {
   // PDF loading state
   const { status, document, bytes, numPages, error, reset } = usePdfLoader(
@@ -135,8 +160,17 @@ export function PdfEditor({
     annotations,
     addTextBox,
     addSignature,
+    addSignatureField,
+    getSignatureFields,
     clearAnnotations,
     hasChanges,
+    selectedAnnotationId,
+    selectAnnotation,
+    removeSelectedAnnotation,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
   } = useAnnotationStore();
 
   const zoom = ZOOM_LEVELS[zoomIndex];
@@ -154,6 +188,52 @@ export function PdfEditor({
       reset();
     }
   }, [isOpen, clearAnnotations, reset]);
+
+  // Keyboard event handler for deleting selected annotations and undo/redo
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't handle if user is typing in an input
+      const target = e.target as HTMLElement;
+      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) {
+        return;
+      }
+
+      // Undo: Ctrl+Z (or Cmd+Z on Mac)
+      if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
+        e.preventDefault();
+        if (canUndo()) {
+          undo();
+        }
+        return;
+      }
+
+      // Redo: Ctrl+Shift+Z or Ctrl+Y (or Cmd+Shift+Z on Mac)
+      if ((e.ctrlKey || e.metaKey) && ((e.key === "z" && e.shiftKey) || e.key === "y")) {
+        e.preventDefault();
+        if (canRedo()) {
+          redo();
+        }
+        return;
+      }
+
+      // Delete selected annotation with Delete or Backspace
+      if ((e.key === "Delete" || e.key === "Backspace") && selectedAnnotationId) {
+        e.preventDefault();
+        removeSelectedAnnotation();
+      }
+
+      // Escape to deselect
+      if (e.key === "Escape" && selectedAnnotationId) {
+        e.preventDefault();
+        selectAnnotation(null);
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, selectedAnnotationId, removeSelectedAnnotation, selectAnnotation, undo, redo, canUndo, canRedo]);
 
   // Reset page when document changes
   useEffect(() => {
@@ -215,9 +295,12 @@ export function PdfEditor({
       if (activeTool === "text") {
         // Show inline text editor instead of prompt
         setTextBoxPosition({ pdf: pdfPoint, screen: screenPoint });
+      } else if (activeTool === "signatureField") {
+        // Add signature field marker at clicked position
+        addSignatureField(currentPage - 1, pdfPoint, "signature", "Signature", true);
       }
     },
-    [activeTool]
+    [activeTool, currentPage, addSignatureField]
   );
 
   const handleTextBoxSave = useCallback(
@@ -297,6 +380,13 @@ export function PdfEditor({
     onClose();
   }, [hasChanges, onClose]);
 
+  const handleRequestSignature = useCallback(() => {
+    const signatureFields = getSignatureFields();
+    if (onRequestSignature) {
+      onRequestSignature(signatureFields);
+    }
+  }, [getSignatureFields, onRequestSignature]);
+
   // Don't render if not open
   if (!isOpen || !docInfo) return null;
 
@@ -331,6 +421,9 @@ export function PdfEditor({
           isFullscreen={isFullscreen}
           isSaving={isSaving}
           hasChanges={hasChanges()}
+          canUndo={canUndo()}
+          canRedo={canRedo()}
+          hasSignatureFields={getSignatureFields().length > 0}
           onPageChange={handlePageChange}
           onZoomIn={handleZoomIn}
           onZoomOut={handleZoomOut}
@@ -341,6 +434,9 @@ export function PdfEditor({
           onDownload={handleDownload}
           onSave={handleSave}
           onClose={handleClose}
+          onUndo={undo}
+          onRedo={redo}
+          onRequestSignature={onRequestSignature ? handleRequestSignature : undefined}
         />
 
         {/* Main Content */}

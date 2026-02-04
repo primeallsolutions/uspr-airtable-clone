@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { ChevronRight, ChevronDown, Folder, FolderOpen, MoreVertical, Pencil, Trash2, Inbox, Clock, Files } from "lucide-react";
+import { ChevronRight, ChevronDown, Folder, FolderOpen, MoreVertical, Pencil, Trash2, Inbox, Clock, Files, CalendarPlus } from "lucide-react";
 import { FolderSkeleton } from "./DocumentsSkeleton";
 
 type FolderNode = {
@@ -9,7 +9,7 @@ type FolderNode = {
   children: FolderNode[];
 };
 
-export type DocumentView = 'recent' | 'all' | 'folder';
+export type DocumentView = 'recent' | 'all' | 'folder' | 'today';
 
 type DocumentsSidebarProps = {
   folderTree: FolderNode[];
@@ -21,6 +21,7 @@ type DocumentsSidebarProps = {
   uncategorizedCount?: number; // Count of files in root (no folder)
   recentCount?: number;        // Count of recent uploads (last 7 days)
   totalDocCount?: number;      // Total document count
+  todayCount?: number;         // Count of files uploaded today
   currentView?: DocumentView;  // Current active view
   onViewChange?: (view: DocumentView) => void;  // Handler for view changes
 };
@@ -175,6 +176,7 @@ export const DocumentsSidebar = ({
   uncategorizedCount = 0,
   recentCount = 0,
   totalDocCount = 0,
+  todayCount = 0,
   currentView = 'folder',
   onViewChange,
 }: DocumentsSidebarProps) => {
@@ -231,6 +233,30 @@ export const DocumentsSidebar = ({
         <div className="space-y-2">
           <div className="text-xs font-semibold text-gray-600 uppercase">Quick Access</div>
           <div className="space-y-1">
+            {/* Uploaded Today - highlighted when there are new uploads */}
+            <button
+              onClick={() => handleViewSelect('today')}
+              className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
+                currentView === 'today'
+                  ? "bg-green-100 text-green-800"
+                  : todayCount > 0
+                    ? "bg-green-50 text-green-700 hover:bg-green-100 animate-pulse-subtle"
+                    : "hover:bg-white text-gray-700"
+              }`}
+            >
+              <CalendarPlus className={`w-4 h-4 flex-shrink-0 ${todayCount > 0 && currentView !== 'today' ? "text-green-600" : ""}`} />
+              <span className="truncate">Uploaded Today</span>
+              {todayCount > 0 && (
+                <span className={`ml-auto text-xs px-1.5 py-0.5 rounded-full font-semibold ${
+                  currentView === 'today'
+                    ? "bg-green-200 text-green-900"
+                    : "bg-green-500 text-white"
+                }`}>
+                  {todayCount} new
+                </span>
+              )}
+            </button>
+
             {/* Recent Uploads */}
             <button
               onClick={() => handleViewSelect('recent')}
@@ -241,7 +267,7 @@ export const DocumentsSidebar = ({
               }`}
             >
               <Clock className="w-4 h-4 flex-shrink-0" />
-              <span className="truncate">Recent Uploads</span>
+              <span className="truncate">Recent (7 days)</span>
               {recentCount > 0 && (
                 <span className={`ml-auto text-xs px-1.5 py-0.5 rounded-full ${
                   currentView === 'recent'

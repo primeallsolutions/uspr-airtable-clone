@@ -25,6 +25,10 @@ import {
   MousePointer,
   Hand,
   Edit3,
+  Undo2,
+  Redo2,
+  FileSignature,
+  Send,
 } from "lucide-react";
 import type { Tool } from "../types";
 import { ZOOM_LEVELS } from "../types";
@@ -38,6 +42,9 @@ interface ToolbarProps {
   isFullscreen: boolean;
   isSaving: boolean;
   hasChanges: boolean;
+  canUndo: boolean;
+  canRedo: boolean;
+  hasSignatureFields: boolean;
   onPageChange: (page: number) => void;
   onZoomIn: () => void;
   onZoomOut: () => void;
@@ -48,6 +55,9 @@ interface ToolbarProps {
   onDownload: () => void;
   onSave: () => void;
   onClose: () => void;
+  onUndo: () => void;
+  onRedo: () => void;
+  onRequestSignature?: () => void;
 }
 
 export function Toolbar({
@@ -59,6 +69,9 @@ export function Toolbar({
   isFullscreen,
   isSaving,
   hasChanges,
+  canUndo,
+  canRedo,
+  hasSignatureFields,
   onPageChange,
   onZoomIn,
   onZoomOut,
@@ -69,6 +82,9 @@ export function Toolbar({
   onDownload,
   onSave,
   onClose,
+  onUndo,
+  onRedo,
+  onRequestSignature,
 }: ToolbarProps) {
   const zoom = ZOOM_LEVELS[zoomIndex];
 
@@ -145,6 +161,28 @@ export function Toolbar({
 
         <div className="w-px h-6 bg-gray-600" />
 
+        {/* Undo/Redo */}
+        <div className="flex items-center gap-1 bg-gray-700 rounded-lg px-1 py-1">
+          <button
+            onClick={onUndo}
+            disabled={!canUndo}
+            className="p-1.5 rounded text-white hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed"
+            title="Undo (Ctrl+Z)"
+          >
+            <Undo2 className="w-4 h-4" />
+          </button>
+          <button
+            onClick={onRedo}
+            disabled={!canRedo}
+            className="p-1.5 rounded text-white hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed"
+            title="Redo (Ctrl+Shift+Z)"
+          >
+            <Redo2 className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="w-px h-6 bg-gray-600" />
+
         {/* Tools */}
         <div className="flex items-center gap-1 bg-gray-700 rounded-lg px-1 py-1">
           <ToolButton
@@ -183,9 +221,35 @@ export function Toolbar({
             onClick={() => onToolChange("signature")}
             title="Add Signature"
           />
+          <ToolButton
+            icon={<FileSignature className="w-4 h-4" />}
+            active={activeTool === "signatureField"}
+            onClick={() => onToolChange("signatureField")}
+            title="Add Signature Field (for e-signature requests)"
+          />
         </div>
 
         <div className="w-px h-6 bg-gray-600" />
+
+        {/* Request Signature Button */}
+        {onRequestSignature && (
+          <>
+            <button
+              onClick={onRequestSignature}
+              disabled={!hasSignatureFields && !hasChanges}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                hasSignatureFields
+                  ? "bg-purple-600 hover:bg-purple-700 text-white"
+                  : "bg-gray-600 hover:bg-gray-500 text-gray-300"
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
+              title={hasSignatureFields ? "Send for signature" : "Add signature fields first, or save and send existing document"}
+            >
+              <Send className="w-4 h-4" />
+              Request Signature
+            </button>
+            <div className="w-px h-6 bg-gray-600" />
+          </>
+        )}
 
         {/* View Controls */}
         <button

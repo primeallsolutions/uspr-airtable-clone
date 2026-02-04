@@ -7,7 +7,7 @@
 
 import React, { useRef, useEffect, useCallback, useState } from "react";
 import type { PDFDocumentProxy } from "pdfjs-dist";
-import { Loader2 } from "lucide-react";
+import { Loader2, Trash2 } from "lucide-react";
 import { usePdfPage } from "../hooks/usePdfPage";
 import { useAnnotationStore } from "../hooks/useAnnotationStore";
 import type { Tool, Annotation, TextItem, Rect, Point } from "../types";
@@ -50,9 +50,10 @@ export function PageCanvas({
     canvasRef
   );
   
-  // Subscribe to annotations directly for reactivity
+  // Subscribe to annotations and selection directly for reactivity
   const annotations = useAnnotationStore((state) => state.annotations);
-  const { getAnnotationsForPage, addHighlight, moveAnnotation, addTextEdit, findTextEdit } = useAnnotationStore();
+  const selectedAnnotationId = useAnnotationStore((state) => state.selectedAnnotationId);
+  const { getAnnotationsForPage, addHighlight, moveAnnotation, addTextEdit, findTextEdit, selectAnnotation, removeAnnotation } = useAnnotationStore();
   
   // Drawing state for highlight tool
   const [isDrawing, setIsDrawing] = useState(false);
@@ -163,6 +164,49 @@ export function PageCanvas({
             img.src = ann.imageData;
           }
           break;
+
+        case "signatureField":
+          // Draw signature field marker (dashed border with label)
+          ctx.strokeStyle = "#9333ea"; // Purple
+          ctx.lineWidth = 2;
+          ctx.setLineDash([5, 3]);
+          ctx.strokeRect(screenPos.x, screenPos.y, screenWidth, screenHeight);
+          ctx.setLineDash([]);
+          
+          // Fill with translucent purple
+          ctx.fillStyle = "rgba(147, 51, 234, 0.15)";
+          ctx.fillRect(screenPos.x, screenPos.y, screenWidth, screenHeight);
+          
+          // Draw label
+          ctx.font = `${Math.max(10 * zoom, 10)}px Arial`;
+          ctx.fillStyle = "#7c3aed";
+          const label = ann.label || ann.fieldType;
+          ctx.fillText(
+            label + (ann.isRequired ? " *" : ""),
+            screenPos.x + 4,
+            screenPos.y + 14 * zoom
+          );
+          
+          // Draw icon based on field type
+          ctx.fillStyle = "#9333ea";
+          const iconSize = 12 * zoom;
+          const iconX = screenPos.x + screenWidth - iconSize - 4;
+          const iconY = screenPos.y + 4;
+          
+          if (ann.fieldType === "signature" || ann.fieldType === "initial") {
+            // Draw pen icon
+            ctx.beginPath();
+            ctx.moveTo(iconX, iconY + iconSize);
+            ctx.lineTo(iconX + iconSize * 0.7, iconY);
+            ctx.stroke();
+          } else if (ann.fieldType === "date") {
+            // Draw calendar icon
+            ctx.strokeRect(iconX, iconY, iconSize, iconSize);
+            ctx.moveTo(iconX, iconY + iconSize * 0.3);
+            ctx.lineTo(iconX + iconSize, iconY + iconSize * 0.3);
+            ctx.stroke();
+          }
+          break;
       }
     }
 
@@ -237,10 +281,14 @@ export function PageCanvas({
         setIsDrawing(true);
         setDrawStart({ x: screenX / zoom, y: screenY / zoom });
         setCurrentRect({ x: screenX / zoom, y: screenY / zoom, width: 0, height: 0 });
+        selectAnnotation(null); // Deselect when starting new highlight
       } else if (activeTool === "select") {
         // First check if clicking on an existing annotation to drag it
         const annotation = findAnnotationAtPosition(screenX, screenY);
         if (annotation) {
+          // Select the annotation
+          selectAnnotation(annotation.id);
+          
           // For textEdit annotations, use screen coordinates directly
           if (annotation.type === "textEdit") {
             setIsDragging(true);
@@ -286,7 +334,8 @@ export function PageCanvas({
             );
             
             if (existingEdit) {
-              // Use the existing edit
+              // Select and use the existing edit
+              selectAnnotation(existingEdit.id);
               setIsDragging(true);
               setDraggedAnnotation({
                 id: existingEdit.id,
@@ -308,7 +357,8 @@ export function PageCanvas({
                 item.fontSize
               );
               
-              // Start dragging the newly created annotation
+              // Select and start dragging the newly created annotation
+              selectAnnotation(newId);
               setIsDragging(true);
               setDraggedAnnotation({
                 id: newId,
@@ -322,6 +372,9 @@ export function PageCanvas({
             return;
           }
         }
+        
+        // Clicked on empty space - deselect
+        selectAnnotation(null);
       } else if (activeTool === "pan") {
         setIsPanning(true);
         setPanStart({ x: e.clientX, y: e.clientY });
@@ -344,7 +397,7 @@ export function PageCanvas({
         }
       }
     },
-    [activeTool, viewport, pageHeight, zoom, textItems, onTextClick, findAnnotationAtPosition, onPanStart, pageNumber, findTextEdit, addTextEdit]
+    [activeTool, viewport, pageHeight, zoom, textItems, onTextClick, findAnnotationAtPosition, onPanStart, pageNumber, findTextEdit, addTextEdit, selectAnnotation]
   );
 
   const handleMouseMove = useCallback(
@@ -560,7 +613,7 @@ export function PageCanvas({
             return (
               <div
                 key={idx}
-                className="absolute pointer-events-auto cursor-move hover:bg-yellow-100/30 hover:outline hover:outline-1 hover:outline-yellow-500 hover:outline-dashed transition-all"
+                className="absolute pointer-events-auto cursor-grab hover:cursor-grabbing group"
                 style={{
                   left: item.x * zoom,
                   top: item.y * zoom,
@@ -580,6 +633,7 @@ export function PageCanvas({
                     item.str,
                     item.fontSize
                   );
+                  selectAnnotation(newId);
                   setIsDragging(true);
                   setDraggedAnnotation({
                     id: newId,
@@ -589,10 +643,105 @@ export function PageCanvas({
                     offsetY: e.nativeEvent.offsetY,
                   });
                 }}
-                title="Drag to move"
-              />
+                title="Click and drag to move this text"
+              >
+                {/* Hover overlay with visual indicator */}
+                <div className="absolute inset-0 bg-yellow-400/0 group-hover:bg-yellow-400/20 border border-transparent group-hover:border-yellow-500 group-hover:border-dashed rounded-sm transition-all duration-150" />
+                {/* Move indicator badge */}
+                <div className="absolute -top-5 left-0 opacity-0 group-hover:opacity-100 transition-opacity bg-yellow-500 text-white text-[10px] px-1.5 py-0.5 rounded shadow-sm whitespace-nowrap pointer-events-none">
+                  ✋ Drag to move
+                </div>
+              </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Selection Overlay with Delete Button */}
+      {selectedAnnotationId && pageAnnotations.some(ann => ann.id === selectedAnnotationId) && !isDragging && (
+        <div
+          className="absolute top-0 left-0 w-full h-full pointer-events-none"
+          style={{ zIndex: 10 }}
+        >
+          {pageAnnotations.filter(ann => ann.id === selectedAnnotationId).map((ann) => {
+            let screenPosX: number;
+            let screenPosY: number;
+            let screenWidth: number;
+            let screenHeight: number;
+            
+            if (ann.type === "textEdit") {
+              // TextEdit uses screen coordinates directly
+              screenPosX = ann.x * zoom;
+              screenPosY = ann.y * zoom;
+              screenWidth = ann.width * zoom;
+              screenHeight = ann.height * zoom;
+            } else {
+              // Other annotations use PDF coordinates
+              const screenPos = pdfToScreen(ann.x, ann.y + ann.height, pageHeight, zoom);
+              screenPosX = screenPos.x;
+              screenPosY = screenPos.y;
+              screenWidth = ann.width * zoom;
+              screenHeight = ann.height * zoom;
+            }
+
+            return (
+              <div key={ann.id}>
+                {/* Selection border */}
+                <div
+                  className="absolute border-2 border-blue-500 rounded-sm bg-blue-500/10 shadow-sm"
+                  style={{
+                    left: screenPosX - 2,
+                    top: screenPosY - 2,
+                    width: screenWidth + 4,
+                    height: screenHeight + 4,
+                    pointerEvents: "none",
+                  }}
+                />
+                
+                {/* Action toolbar */}
+                <div
+                  className="absolute pointer-events-auto flex items-center gap-1 bg-gray-800 rounded-lg shadow-lg px-1 py-0.5"
+                  style={{
+                    left: screenPosX,
+                    top: screenPosY - 28,
+                  }}
+                >
+                  {/* Drag handle indicator */}
+                  <span className="text-[10px] text-gray-300 px-1.5 select-none">
+                    ✋ Drag to move
+                  </span>
+                  
+                  {/* Delete button */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removeAnnotation(ann.id);
+                    }}
+                    className="flex items-center justify-center w-5 h-5 bg-red-500 hover:bg-red-600 text-white rounded transition-colors"
+                    title="Delete (Del/Backspace)"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Dragging indicator */}
+      {isDragging && draggedAnnotation && (
+        <div
+          className="absolute pointer-events-none"
+          style={{
+            left: 10,
+            top: 10,
+            zIndex: 100,
+          }}
+        >
+          <div className="bg-blue-600 text-white text-xs px-2 py-1 rounded shadow-lg animate-pulse">
+            Moving annotation...
+          </div>
         </div>
       )}
     </div>

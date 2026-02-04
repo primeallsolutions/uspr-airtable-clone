@@ -350,6 +350,23 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
   };
 
   const visibleDocs = useMemo(() => {
+    // For "today" view - show documents uploaded today
+    if (currentView === 'today') {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      return allDocs
+        .filter((doc) => {
+          if (isFolder(doc)) return false;
+          const docDate = new Date(doc.createdAt);
+          docDate.setHours(0, 0, 0, 0);
+          return docDate.getTime() === today.getTime();
+        })
+        .map((doc) => {
+          // Show full path as relative name for context
+          return { ...doc, relative: doc.path };
+        });
+    }
+
     // For "recent" view - show documents from last 7 days
     if (currentView === 'recent') {
       const sevenDaysAgo = new Date();
@@ -421,6 +438,18 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
   // Total document count (all files)
   const totalDocCount = useMemo(() => {
     return allDocs.filter((doc) => !isFolder(doc)).length;
+  }, [allDocs]);
+
+  // Count documents uploaded today
+  const todayCount = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return allDocs.filter((doc) => {
+      if (isFolder(doc)) return false;
+      const docDate = new Date(doc.createdAt);
+      docDate.setHours(0, 0, 0, 0);
+      return docDate.getTime() === today.getTime();
+    }).length;
   }, [allDocs]);
 
   // Build folder tree structure
@@ -1031,6 +1060,7 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
           uncategorizedCount={uncategorizedCount}
           recentCount={recentCount}
           totalDocCount={totalDocCount}
+          todayCount={todayCount}
           currentView={currentView}
           onViewChange={handleViewChange}
         />
@@ -1161,6 +1191,16 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
           isOpen={Boolean(editorDoc)}
           onClose={handleEditorClose}
           onSave={handleEditorSave}
+          onRequestSignature={(signatureFields) => {
+            // Close the editor and open signature request modal
+            const docToSign = editorDoc;
+            handleEditorClose();
+            // Set the document for signature request
+            setSignatureRequestDoc(docToSign);
+            setShowSignatureRequestModal(true);
+            // Log signature fields info for debugging
+            console.log(`Opening signature request with ${signatureFields.length} pre-placed fields`);
+          }}
         />
       )}
 

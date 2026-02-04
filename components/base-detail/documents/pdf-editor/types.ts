@@ -6,10 +6,10 @@
 import type { PDFDocumentProxy, PDFPageProxy } from "pdfjs-dist";
 
 // Tool types available in the editor
-export type Tool = "select" | "pan" | "highlight" | "text" | "signature" | "edit";
+export type Tool = "select" | "pan" | "highlight" | "text" | "signature" | "edit" | "signatureField";
 
 // Annotation types
-export type AnnotationType = "highlight" | "textBox" | "textEdit" | "signature";
+export type AnnotationType = "highlight" | "textBox" | "textEdit" | "signature" | "signatureField";
 
 // Base annotation interface
 export interface BaseAnnotation {
@@ -53,12 +53,22 @@ export interface SignatureAnnotation extends BaseAnnotation {
   imageData: string; // Base64 PNG data URL
 }
 
+// Signature field marker (for signature requests)
+export interface SignatureFieldAnnotation extends BaseAnnotation {
+  type: "signatureField";
+  label: string;
+  fieldType: "signature" | "initial" | "date" | "text";
+  isRequired: boolean;
+  assignedTo?: string; // Signer identifier
+}
+
 // Union type for all annotations
 export type Annotation =
   | HighlightAnnotation
   | TextBoxAnnotation
   | TextEditAnnotation
-  | SignatureAnnotation;
+  | SignatureAnnotation
+  | SignatureFieldAnnotation;
 
 // Text item extracted from PDF
 export interface TextItem {
@@ -99,6 +109,7 @@ export interface PdfEditorProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (file: File) => Promise<void>;
+  onRequestSignature?: (signatureFields: SignatureFieldAnnotation[]) => void;
 }
 
 // Zoom configuration

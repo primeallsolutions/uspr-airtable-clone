@@ -462,6 +462,12 @@ export const SignatureRequestModal = ({
       return;
     }
 
+    // CRITICAL: Validate page number is within bounds to prevent "Invalid page request" error
+    if (currentPage < 1 || currentPage > pdfDoc.numPages) {
+      console.warn(`Invalid page number ${currentPage}, valid range is 1-${pdfDoc.numPages}`);
+      return;
+    }
+
     // Set rendering flag to prevent concurrent renders
     isRenderingRef.current = true;
     console.log('Starting PDF render...');

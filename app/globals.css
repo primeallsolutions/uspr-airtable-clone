@@ -201,3 +201,17 @@
   border-bottom: 2px solid #94a3b8;
   opacity: 0.8;
 }
+
+/* Subtle pulse animation for new uploads indicator */
+@keyframes pulse-subtle {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+.animate-pulse-subtle {
+  animation: pulse-subtle 2s ease-in-out infinite;
+}
