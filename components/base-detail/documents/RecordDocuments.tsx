@@ -619,6 +619,7 @@ export const RecordDocuments = ({
         }}
         // Pre-populated data from PDF Editor SignerPanel
         initialSigners={signatureRequestData?.signers.map(s => ({
+          id: s.id,
           email: s.email,
           name: s.name,
           role: s.role,

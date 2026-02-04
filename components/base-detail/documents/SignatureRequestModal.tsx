@@ -26,7 +26,7 @@ type SignatureRequestModalProps = {
   // Available records for selection (for base-level templates)
   records?: RecordRow[];
   // Pre-populated signers from PDF Editor SignerPanel
-  initialSigners?: Array<{ email: string; name: string; role: "signer" | "viewer" | "approver"; signOrder?: number }>;
+  initialSigners?: Array<{ id?: string; email: string; name: string; role: "signer" | "viewer" | "approver"; signOrder?: number }>;
   // Pre-populated signature fields from PDF Editor
   initialSignatureFields?: Array<{
     id: string;
@@ -256,17 +256,19 @@ export const SignatureRequestModal = ({
           // Map signer IDs to emails for the field assignments
           const signerIdToEmail: Record<string, string> = {};
           initialSigners.forEach(s => {
-            // The ID is just used internally, we map to email
-            signerIdToEmail[s.email] = s.email;
+            // Map signer.id -> signer.email (if id is available)
+            if (s.id) {
+              signerIdToEmail[s.id] = s.email;
+            }
           });
           
           // Convert field assignments (which may use signer IDs) to use emails
           const emailAssignments: Record<string, string> = {};
-          Object.entries(initialFieldAssignments).forEach(([fieldId, signerId]) => {
-            // Find the signer with this ID and get their email
-            const signer = initialSigners.find(s => s.email === signerId);
-            if (signer) {
-              emailAssignments[fieldId] = signer.email;
+          Object.entries(initialFieldAssignments).forEach(([fieldId, signerIdOrEmail]) => {
+            // First try to look up by ID, then fall back to using the value directly (it might already be an email)
+            const email = signerIdToEmail[signerIdOrEmail] || signerIdOrEmail;
+            if (email) {
+              emailAssignments[fieldId] = email;
             }
           });
           setFieldSignerAssignments(emailAssignments);
