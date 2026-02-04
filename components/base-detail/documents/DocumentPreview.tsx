@@ -14,6 +14,11 @@ import {
   Share2,
   FileText,
   Clock,
+  Upload,
+  CheckCircle2,
+  AlertCircle,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { StoredDocument } from "@/lib/services/documents-service";
@@ -22,6 +27,7 @@ import { isText, isPdf, isImage, isFolder } from "./utils";
 import { PreviewSkeleton } from "./DocumentsSkeleton";
 import { DocumentVersionHistory } from "./DocumentVersionHistory";
 import { TransactionMetadata } from "./TransactionMetadata";
+import { DocumentStatusBadge, type DocumentStatus } from "./DocumentStatusBadge";
 
 type DocumentPreviewProps = {
   selectedDoc: StoredDocument | null;
@@ -45,6 +51,9 @@ type DocumentPreviewProps = {
   onShare?: (doc: StoredDocument) => void;
   // Version count for badge
   versionCount?: number;
+  // Document status for lifecycle display
+  documentStatus?: DocumentStatus;
+  signatureProgress?: { signed: number; total: number };
 };
 
 export const DocumentPreview = ({
@@ -63,9 +72,12 @@ export const DocumentPreview = ({
   onDownload,
   onShare,
   versionCount,
+  documentStatus,
+  signatureProgress,
 }: DocumentPreviewProps) => {
   const [showVersionHistory, setShowVersionHistory] = useState(false);
   const [showQuickActions, setShowQuickActions] = useState(true);
+  const [showLifecycle, setShowLifecycle] = useState(false);
 
   const [textContent, setTextContent] = useState<string | null>(null);
   const [currentDoc, setCurrentDoc] = useState<string | null>(null);
@@ -185,6 +197,18 @@ export const DocumentPreview = ({
                 onEdit={onEdit}
                 onDownload={onDownload}
                 onShare={onShare}
+              />
+            )}
+
+            {/* Document Lifecycle Timeline */}
+            {isPdf(selectedDoc.mimeType) && (
+              <DocumentLifecycleTimeline
+                doc={selectedDoc}
+                status={documentStatus || "draft"}
+                signatureProgress={signatureProgress}
+                versionCount={versionCount}
+                isExpanded={showLifecycle}
+                onToggle={() => setShowLifecycle(!showLifecycle)}
               />
             )}
             
@@ -366,6 +390,176 @@ function QuickActionsBar({
           <span className="uppercase">{doc.mimeType?.split("/").pop() || "file"}</span>
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Document Lifecycle Timeline
+ * 
+ * Shows the document's journey through the workflow stages.
+ */
+type DocumentLifecycleTimelineProps = {
+  doc: StoredDocument;
+  status: DocumentStatus;
+  signatureProgress?: { signed: number; total: number };
+  versionCount?: number;
+  isExpanded: boolean;
+  onToggle: () => void;
+};
+
+function DocumentLifecycleTimeline({
+  doc,
+  status,
+  signatureProgress,
+  versionCount,
+  isExpanded,
+  onToggle,
+}: DocumentLifecycleTimelineProps) {
+  // Determine which stages are complete
+  const stages = [
+    {
+      id: "uploaded",
+      label: "Uploaded",
+      icon: <Upload className="w-3.5 h-3.5" />,
+      completed: true,
+      current: status === "draft",
+      date: doc.createdAt,
+    },
+    {
+      id: "edited",
+      label: "Edited",
+      icon: <Edit3 className="w-3.5 h-3.5" />,
+      completed: status !== "draft" || (versionCount && versionCount > 1),
+      current: status === "edited",
+      date: versionCount && versionCount > 1 ? "Modified" : undefined,
+    },
+    {
+      id: "sent",
+      label: "Sent for Signature",
+      icon: <PenTool className="w-3.5 h-3.5" />,
+      completed: ["pending_signature", "partially_signed", "signed", "declined"].includes(status),
+      current: status === "pending_signature" || status === "partially_signed",
+      date: status !== "draft" && status !== "edited" ? "In progress" : undefined,
+    },
+    {
+      id: "completed",
+      label: "Completed",
+      icon: status === "declined" ? <AlertCircle className="w-3.5 h-3.5" /> : <CheckCircle2 className="w-3.5 h-3.5" />,
+      completed: status === "signed" || status === "declined",
+      current: status === "signed" || status === "declined",
+      date: status === "signed" ? "All signed" : status === "declined" ? "Declined" : undefined,
+    },
+  ];
+
+  // Get current stage index
+  const currentStageIndex = stages.findIndex(s => s.current);
+
+  return (
+    <div className="border-b border-gray-100">
+      {/* Collapsible Header */}
+      <button
+        onClick={onToggle}
+        className="w-full px-4 py-2 flex items-center justify-between hover:bg-gray-50 transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          <Clock className="w-3.5 h-3.5 text-gray-500" />
+          <span className="text-xs font-medium text-gray-600">Document Lifecycle</span>
+          <DocumentStatusBadge status={status} size="sm" signersProgress={signatureProgress} />
+        </div>
+        {isExpanded ? (
+          <ChevronUp className="w-4 h-4 text-gray-400" />
+        ) : (
+          <ChevronDown className="w-4 h-4 text-gray-400" />
+        )}
+      </button>
+
+      {/* Timeline Content */}
+      {isExpanded && (
+        <div className="px-4 pb-3">
+          <div className="relative">
+            {/* Progress Line */}
+            <div className="absolute left-[11px] top-3 bottom-3 w-0.5 bg-gray-200" />
+            <div 
+              className="absolute left-[11px] top-3 w-0.5 bg-gradient-to-b from-emerald-500 to-blue-500 transition-all duration-300"
+              style={{ 
+                height: currentStageIndex >= 0 
+                  ? `${((currentStageIndex + 1) / stages.length) * 100}%` 
+                  : "0%" 
+              }}
+            />
+
+            {/* Stages */}
+            <div className="space-y-3 relative">
+              {stages.map((stage, index) => (
+                <div key={stage.id} className="flex items-start gap-3">
+                  {/* Stage Indicator */}
+                  <div className={`
+                    w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 z-10
+                    transition-all duration-300
+                    ${stage.completed 
+                      ? stage.current
+                        ? "bg-blue-500 text-white ring-2 ring-blue-200"
+                        : "bg-emerald-500 text-white"
+                      : "bg-gray-100 text-gray-400 border border-gray-200"
+                    }
+                  `}>
+                    {stage.icon}
+                  </div>
+
+                  {/* Stage Content */}
+                  <div className="flex-1 pt-0.5">
+                    <div className="flex items-center gap-2">
+                      <span className={`text-xs font-medium ${
+                        stage.completed ? "text-gray-900" : "text-gray-400"
+                      }`}>
+                        {stage.label}
+                      </span>
+                      {stage.current && (
+                        <span className="text-[10px] font-medium text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">
+                          Current
+                        </span>
+                      )}
+                    </div>
+                    {stage.date && (
+                      <p className="text-[10px] text-gray-500 mt-0.5">
+                        {typeof stage.date === "string" 
+                          ? stage.date 
+                          : new Date(stage.date).toLocaleDateString("en-US", {
+                              month: "short",
+                              day: "numeric",
+                              hour: "numeric",
+                              minute: "2-digit",
+                            })
+                        }
+                      </p>
+                    )}
+                    
+                    {/* Signature Progress */}
+                    {stage.id === "sent" && signatureProgress && stage.current && (
+                      <div className="mt-1.5">
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                            <div 
+                              className="h-full bg-gradient-to-r from-purple-500 to-blue-500 rounded-full transition-all duration-500"
+                              style={{ 
+                                width: `${(signatureProgress.signed / signatureProgress.total) * 100}%` 
+                              }}
+                            />
+                          </div>
+                          <span className="text-[10px] text-gray-500">
+                            {signatureProgress.signed}/{signatureProgress.total}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

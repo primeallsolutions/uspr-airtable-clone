@@ -1,5 +1,5 @@
-import { useState, useMemo, useCallback, useEffect } from "react";
-import { FileText, Image as ImageIcon, File, Loader2, Trash2, Search, X, LayoutGrid, List, ArrowUpDown, Clock, Files, FilePen, Copy, FolderOutput, CalendarPlus, Calendar } from "lucide-react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
+import { FileText, Image as ImageIcon, File, Loader2, Trash2, Search, X, LayoutGrid, List, ArrowUpDown, Clock, Files, FilePen, Copy, FolderOutput, CalendarPlus, Calendar, PenTool, Eye, MoreVertical, Download } from "lucide-react";
 import type { StoredDocument } from "@/lib/services/documents-service";
 import { DocumentsService } from "@/lib/services/documents-service";
 import { formatSize, isImage, isPdf, isFolder } from "./utils";
@@ -7,6 +7,7 @@ import { DocumentSkeleton } from "./DocumentsSkeleton";
 import { DocumentThumbnail } from "./DocumentThumbnail";
 import type { DocumentView } from "./DocumentsSidebar";
 import { CopyMoveModal } from "./CopyMoveModal";
+import { DocumentStatusBadge, DocumentStatusDot, type DocumentStatus } from "./DocumentStatusBadge";
 
 type SortOption = 'date-desc' | 'date-asc' | 'name-asc' | 'name-desc' | 'size-desc' | 'size-asc';
 
@@ -65,11 +66,15 @@ type DocumentsListProps = {
   checkedDocuments: string[];
   onDocumentSelect: (path: string) => void;
   onDocumentEdit?: (doc: StoredDocument & { relative: string }) => void;
+  onDocumentSign?: (doc: StoredDocument & { relative: string }) => void;
+  onDocumentDownload?: (doc: StoredDocument & { relative: string }) => void;
+  onDocumentDelete?: (doc: StoredDocument & { relative: string }) => void;
   baseId: string;
   tableId?: string | null;
   recordId?: string | null;
   currentView?: DocumentView;  // Current view type
   viewTitle?: string;          // Custom title for the view
+  documentStatuses?: Map<string, { status: DocumentStatus; signersProgress?: { signed: number; total: number } }>; // Document path -> status
 };
 
 const renderDocIcon = (mimeType: string) => {
@@ -88,12 +93,20 @@ export const DocumentsList = ({
   checkedDocuments,
   onDocumentSelect,
   onDocumentEdit,
+  onDocumentSign,
+  onDocumentDownload,
+  onDocumentDelete,
   baseId,
   tableId,
   recordId,
   currentView = 'folder',
   viewTitle,
+  documentStatuses,
 }: DocumentsListProps) => {
+  // Keyboard navigation state
+  const [focusedIndex, setFocusedIndex] = useState<number>(-1);
+  const listContainerRef = useRef<HTMLDivElement>(null);
+  const itemRefs = useRef<Map<number, HTMLButtonElement>>(new Map());
   const [searchQuery, setSearchQuery] = useState("");
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
@@ -241,6 +254,92 @@ export const DocumentsList = ({
     loadFolders();
   }, [baseId, tableId, recordId]);
 
+  // Keyboard navigation handler
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't handle if user is typing in search
+      const target = e.target as HTMLElement;
+      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") {
+        return;
+      }
+
+      // Only handle if this list has focus (or a child has focus)
+      if (!listContainerRef.current?.contains(document.activeElement) && document.activeElement !== document.body) {
+        return;
+      }
+
+      const docs = sortedDocuments.filter(d => !isFolder(d));
+      if (docs.length === 0) return;
+
+      switch (e.key) {
+        case "ArrowDown":
+        case "j": // Vim-style navigation
+          e.preventDefault();
+          setFocusedIndex(prev => {
+            const next = prev < docs.length - 1 ? prev + 1 : 0;
+            itemRefs.current.get(next)?.focus();
+            return next;
+          });
+          break;
+        case "ArrowUp":
+        case "k": // Vim-style navigation
+          e.preventDefault();
+          setFocusedIndex(prev => {
+            const next = prev > 0 ? prev - 1 : docs.length - 1;
+            itemRefs.current.get(next)?.focus();
+            return next;
+          });
+          break;
+        case "Enter":
+          e.preventDefault();
+          if (focusedIndex >= 0 && focusedIndex < docs.length) {
+            onDocumentSelect(docs[focusedIndex].path);
+          }
+          break;
+        case "e":
+          e.preventDefault();
+          if (focusedIndex >= 0 && focusedIndex < docs.length) {
+            const doc = docs[focusedIndex];
+            if (isPdf(doc.mimeType) && onDocumentEdit) {
+              onDocumentEdit(doc);
+            }
+          }
+          break;
+        case "s":
+          e.preventDefault();
+          if (focusedIndex >= 0 && focusedIndex < docs.length) {
+            const doc = docs[focusedIndex];
+            if (isPdf(doc.mimeType) && onDocumentSign) {
+              onDocumentSign(doc);
+            }
+          }
+          break;
+        case "d":
+          e.preventDefault();
+          if (focusedIndex >= 0 && focusedIndex < docs.length) {
+            const doc = docs[focusedIndex];
+            if (onDocumentDownload) {
+              onDocumentDownload(doc);
+            }
+          }
+          break;
+        case "Delete":
+        case "Backspace":
+          if (focusedIndex >= 0 && focusedIndex < docs.length) {
+            const doc = docs[focusedIndex];
+            if (onDocumentDelete) {
+              e.preventDefault();
+              onDocumentDelete(doc);
+            }
+          }
+          break;
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [sortedDocuments, focusedIndex, onDocumentSelect, onDocumentEdit, onDocumentSign, onDocumentDownload, onDocumentDelete]);
+
   const openCopyMoveModal = useCallback((doc: StoredDocument & { relative: string }) => {
     setSelectedDocForCopyMove(doc);
     setCopyMoveModalOpen(true);
@@ -251,8 +350,14 @@ export const DocumentsList = ({
     setSelectedDocForCopyMove(null);
   }, []);
 
+  // Get document index for keyboard nav
+  const getDocIndex = useCallback((doc: StoredDocument & { relative: string }) => {
+    const docs = sortedDocuments.filter(d => !isFolder(d));
+    return docs.findIndex(d => d.path === doc.path);
+  }, [sortedDocuments]);
+
   return (
-    <div className="border-r border-gray-200 min-h-0 overflow-y-auto flex flex-col">
+    <div ref={listContainerRef} className="border-r border-gray-200 min-h-0 overflow-y-auto flex flex-col" tabIndex={0}>
       <div className="px-4 py-3 flex items-center justify-between border-b border-gray-200">
         <div className="text-sm font-semibold text-gray-800 flex items-center gap-2">
           <ViewIcon className="w-4 h-4" />
@@ -374,17 +479,10 @@ export const DocumentsList = ({
           ) : error ? (
             <div className="p-6 text-sm text-red-600">{error}</div>
           ) : sortedDocuments.length === 0 ? (
-            <div className="p-6 text-sm text-gray-500">
-              {searchQuery ? (
-                <>No documents found matching &quot;{searchQuery}&quot;.</>
-              ) : currentView === 'today' ? (
-                <>No documents uploaded today.</>
-              ) : currentView === 'recent' ? (
-                <>No documents uploaded in the last 7 days.</>
-              ) : (
-                <>No documents yet. Upload files to get started.</>
-              )}
-            </div>
+            <EmptyState 
+              searchQuery={searchQuery}
+              currentView={currentView}
+            />
           ) : (
             viewMode === "list" ? (
               // List View with optional date grouping
@@ -401,13 +499,20 @@ export const DocumentsList = ({
                       <span className="text-xs text-gray-400">({groupDocs.length})</span>
                     </div>
                     {/* Group Documents */}
-                    {groupDocs.map((doc) => {
+                    {groupDocs.map((doc, idx) => {
                       if (isFolder(doc)) return null;
+                      const docStatus = documentStatuses?.get(doc.path);
+                      const docIndex = getDocIndex(doc);
+                      const isFocused = focusedIndex === docIndex;
                       return (
                         <button
                           key={doc.path}
+                          ref={(el) => {
+                            if (el) itemRefs.current.set(docIndex, el);
+                          }}
                           onClick={() => {
                             if (!isFolder(doc)) {
+                              setFocusedIndex(docIndex);
                               onDocumentSelect(doc.path);
                             }
                           }}
@@ -416,15 +521,37 @@ export const DocumentsList = ({
                               onDocumentEdit(doc);
                             }
                           }}
-                          className={`w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-gray-50 transition-colors ${
-                            selectedDocPath === doc.path ? "bg-blue-50 border-l-4 border-blue-500" : ""
+                          onFocus={() => setFocusedIndex(docIndex)}
+                          className={`group w-full text-left px-4 py-3 flex items-center gap-3 transition-colors ${
+                            selectedDocPath === doc.path 
+                              ? "bg-blue-50 border-l-4 border-blue-500" 
+                              : isFocused 
+                                ? "bg-gray-100 ring-2 ring-inset ring-blue-300" 
+                                : "hover:bg-gray-50"
                           }`}
-                          title={isPdf(doc.mimeType) ? "Double-click to edit" : ""}
+                          title={isPdf(doc.mimeType) ? "Double-click to edit • Press E to edit, S to sign" : ""}
                         >
-                          <div className="shrink-0">{renderDocIcon(doc.mimeType)}</div>
+                          <div className="shrink-0 relative">
+                            {renderDocIcon(doc.mimeType)}
+                            {docStatus && docStatus.status !== "draft" && (
+                              <DocumentStatusDot 
+                                status={docStatus.status} 
+                                className="absolute -top-0.5 -right-0.5"
+                              />
+                            )}
+                          </div>
                           <div className="flex-1 min-w-0">
-                            <div className="text-sm font-semibold text-gray-900 truncate">
-                              {doc.relative}
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-semibold text-gray-900 truncate">
+                                {doc.relative}
+                              </span>
+                              {docStatus && docStatus.status !== "draft" && (
+                                <DocumentStatusBadge 
+                                  status={docStatus.status} 
+                                  size="sm"
+                                  signersProgress={docStatus.signersProgress}
+                                />
+                              )}
                             </div>
                             <div className="text-xs text-gray-500 flex items-center gap-2">
                               <span>{formatSize(doc.size)}</span>
@@ -432,26 +559,55 @@ export const DocumentsList = ({
                               <span>{new Date(doc.createdAt).toLocaleTimeString()}</span>
                             </div>
                           </div>
-                          <div className="shrink-0 flex items-center gap-1">
+                          {/* Hover Actions - always visible on hover */}
+                          <div className="shrink-0 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                            {/* Sign Button - Primary for PDFs */}
+                            {onDocumentSign && isPdf(doc.mimeType) && (
+                              <span
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onDocumentSign(doc);
+                                }}
+                                className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors"
+                                title="Request signature (S)"
+                              >
+                                <PenTool className="w-4 h-4" />
+                              </span>
+                            )}
+                            {/* Edit Button */}
                             {onDocumentEdit && isPdf(doc.mimeType) && (
                               <span
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   onDocumentEdit(doc);
                                 }}
-                                className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                title="Edit document"
+                                className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                                title="Edit document (E)"
                               >
                                 <FilePen className="w-4 h-4" />
                               </span>
                             )}
+                            {/* Download Button */}
+                            {onDocumentDownload && (
+                              <span
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onDocumentDownload(doc);
+                                }}
+                                className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-md transition-colors"
+                                title="Download (D)"
+                              >
+                                <Download className="w-4 h-4" />
+                              </span>
+                            )}
+                            {/* Move/Copy Button */}
                             <span
                               onClick={(e) => {
                                 e.stopPropagation();
                                 openCopyMoveModal(doc);
                               }}
-                              className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                              title="Copy or move document"
+                              className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-md transition-colors"
+                              title="Move or copy"
                             >
                               <FolderOutput className="w-4 h-4" />
                             </span>
@@ -463,13 +619,20 @@ export const DocumentsList = ({
                 ))
               ) : (
                 // Flat list (no grouping)
-                sortedDocuments.map((doc) => {
+                sortedDocuments.map((doc, idx) => {
                   if (isFolder(doc)) return null;
+                  const docStatus = documentStatuses?.get(doc.path);
+                  const docIndex = getDocIndex(doc);
+                  const isFocused = focusedIndex === docIndex;
                   return (
                     <button
                       key={doc.path}
+                      ref={(el) => {
+                        if (el) itemRefs.current.set(docIndex, el);
+                      }}
                       onClick={() => {
                         if (!isFolder(doc)) {
+                          setFocusedIndex(docIndex);
                           onDocumentSelect(doc.path);
                         }
                       }}
@@ -478,15 +641,37 @@ export const DocumentsList = ({
                           onDocumentEdit(doc);
                         }
                       }}
-                      className={`w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-gray-50 transition-colors ${
-                        selectedDocPath === doc.path ? "bg-blue-50 border-l-4 border-blue-500" : ""
+                      onFocus={() => setFocusedIndex(docIndex)}
+                      className={`group w-full text-left px-4 py-3 flex items-center gap-3 transition-colors ${
+                        selectedDocPath === doc.path 
+                          ? "bg-blue-50 border-l-4 border-blue-500" 
+                          : isFocused 
+                            ? "bg-gray-100 ring-2 ring-inset ring-blue-300" 
+                            : "hover:bg-gray-50"
                       }`}
-                      title={isPdf(doc.mimeType) ? "Double-click to edit" : ""}
+                      title={isPdf(doc.mimeType) ? "Double-click to edit • Press E to edit, S to sign" : ""}
                     >
-                      <div className="shrink-0">{renderDocIcon(doc.mimeType)}</div>
+                      <div className="shrink-0 relative">
+                        {renderDocIcon(doc.mimeType)}
+                        {docStatus && docStatus.status !== "draft" && (
+                          <DocumentStatusDot 
+                            status={docStatus.status} 
+                            className="absolute -top-0.5 -right-0.5"
+                          />
+                        )}
+                      </div>
                       <div className="flex-1 min-w-0">
-                        <div className="text-sm font-semibold text-gray-900 truncate">
-                          {doc.relative}
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-semibold text-gray-900 truncate">
+                            {doc.relative}
+                          </span>
+                          {docStatus && docStatus.status !== "draft" && (
+                            <DocumentStatusBadge 
+                              status={docStatus.status} 
+                              size="sm"
+                              signersProgress={docStatus.signersProgress}
+                            />
+                          )}
                         </div>
                         <div className="text-xs text-gray-500 flex items-center gap-2">
                           <span>{formatSize(doc.size)}</span>
@@ -494,26 +679,55 @@ export const DocumentsList = ({
                           <span>{new Date(doc.createdAt).toLocaleString()}</span>
                         </div>
                       </div>
-                      <div className="shrink-0 flex items-center gap-1">
+                      {/* Hover Actions - always visible on hover */}
+                      <div className="shrink-0 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {/* Sign Button - Primary for PDFs */}
+                        {onDocumentSign && isPdf(doc.mimeType) && (
+                          <span
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onDocumentSign(doc);
+                            }}
+                            className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors"
+                            title="Request signature (S)"
+                          >
+                            <PenTool className="w-4 h-4" />
+                          </span>
+                        )}
+                        {/* Edit Button */}
                         {onDocumentEdit && isPdf(doc.mimeType) && (
                           <span
                             onClick={(e) => {
                               e.stopPropagation();
                               onDocumentEdit(doc);
                             }}
-                            className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                            title="Edit document"
+                            className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                            title="Edit document (E)"
                           >
                             <FilePen className="w-4 h-4" />
                           </span>
                         )}
+                        {/* Download Button */}
+                        {onDocumentDownload && (
+                          <span
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onDocumentDownload(doc);
+                            }}
+                            className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-md transition-colors"
+                            title="Download (D)"
+                          >
+                            <Download className="w-4 h-4" />
+                          </span>
+                        )}
+                        {/* Move/Copy Button */}
                         <span
                           onClick={(e) => {
                             e.stopPropagation();
                             openCopyMoveModal(doc);
                           }}
-                          className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                          title="Copy or move document"
+                          className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-md transition-colors"
+                          title="Move or copy"
                         >
                           <FolderOutput className="w-4 h-4" />
                         </span>
@@ -527,6 +741,7 @@ export const DocumentsList = ({
               <div className="grid grid-cols-2 gap-2 p-2">
                 {sortedDocuments.map((doc) => {
                   if (isFolder(doc)) return null;
+                  const docStatus = documentStatuses?.get(doc.path);
                   return (
                     <button
                       key={doc.path}
@@ -547,6 +762,17 @@ export const DocumentsList = ({
                       }`}
                       title={isPdf(doc.mimeType) ? "Double-click to edit" : ""}
                     >
+                      {/* Status Badge - top left */}
+                      {docStatus && docStatus.status !== "draft" && (
+                        <div className="absolute top-1 left-1 z-10">
+                          <DocumentStatusBadge 
+                            status={docStatus.status} 
+                            size="sm"
+                            showIcon={true}
+                            showLabel={false}
+                          />
+                        </div>
+                      )}
                       {/* Action Buttons - appear on hover */}
                       <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
                         {onDocumentEdit && isPdf(doc.mimeType) && (
@@ -584,9 +810,14 @@ export const DocumentsList = ({
                       />
                       {/* File Info */}
                       <div className="text-left">
-                        <p className="text-xs font-medium text-gray-900 truncate" title={doc.relative}>
-                          {doc.relative}
-                        </p>
+                        <div className="flex items-center gap-1">
+                          <p className="text-xs font-medium text-gray-900 truncate flex-1" title={doc.relative}>
+                            {doc.relative}
+                          </p>
+                          {docStatus && docStatus.status !== "draft" && (
+                            <DocumentStatusDot status={docStatus.status} />
+                          )}
+                        </div>
                         <p className="text-[10px] text-gray-500">
                           {formatSize(doc.size)}
                         </p>
@@ -617,3 +848,127 @@ export const DocumentsList = ({
     </div>
   );
 };
+
+/**
+ * Enhanced Empty State Component
+ * Shows engaging illustrations and CTAs when there are no documents
+ */
+function EmptyState({
+  searchQuery,
+  currentView,
+}: {
+  searchQuery: string;
+  currentView: DocumentView;
+}) {
+  // Different illustrations and messages based on context
+  if (searchQuery) {
+    return (
+      <div className="flex flex-col items-center justify-center p-8 text-center">
+        <div className="w-16 h-16 mb-4 rounded-full bg-gray-100 flex items-center justify-center">
+          <Search className="w-7 h-7 text-gray-400" />
+        </div>
+        <h3 className="text-sm font-semibold text-gray-900 mb-1">
+          No results found
+        </h3>
+        <p className="text-xs text-gray-500 max-w-xs mb-4">
+          We couldn&apos;t find any documents matching &quot;{searchQuery}&quot;. 
+          Try a different search term or clear the search.
+        </p>
+        <div className="flex items-center gap-2 text-xs text-gray-400">
+          <span>Tip: Search by file name or type</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (currentView === 'today') {
+    return (
+      <div className="flex flex-col items-center justify-center p-8 text-center">
+        <div className="w-16 h-16 mb-4 rounded-full bg-gradient-to-br from-green-100 to-emerald-100 flex items-center justify-center">
+          <CalendarPlus className="w-7 h-7 text-green-500" />
+        </div>
+        <h3 className="text-sm font-semibold text-gray-900 mb-1">
+          No uploads today
+        </h3>
+        <p className="text-xs text-gray-500 max-w-xs mb-4">
+          You haven&apos;t uploaded any documents today. 
+          Start by uploading a file or creating from a template.
+        </p>
+        <div className="flex flex-col items-center gap-2 text-xs">
+          <div className="flex items-center gap-1.5 text-gray-400">
+            <Clock className="w-3.5 h-3.5" />
+            <span>Recent uploads appear here automatically</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (currentView === 'recent') {
+    return (
+      <div className="flex flex-col items-center justify-center p-8 text-center">
+        <div className="w-16 h-16 mb-4 rounded-full bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center">
+          <Clock className="w-7 h-7 text-blue-500" />
+        </div>
+        <h3 className="text-sm font-semibold text-gray-900 mb-1">
+          No recent documents
+        </h3>
+        <p className="text-xs text-gray-500 max-w-xs mb-4">
+          Documents uploaded in the last 7 days will appear here.
+        </p>
+      </div>
+    );
+  }
+
+  // Default empty state for folder view
+  return (
+    <div className="flex flex-col items-center justify-center p-8 text-center">
+      <div className="w-20 h-20 mb-4 relative">
+        {/* Stacked document illustration */}
+        <div className="absolute inset-0 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-lg transform rotate-3" />
+        <div className="absolute inset-0 bg-gradient-to-br from-purple-100 to-pink-100 rounded-lg transform -rotate-3" />
+        <div className="absolute inset-0 bg-white rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center">
+          <FileText className="w-8 h-8 text-gray-400" />
+        </div>
+      </div>
+      <h3 className="text-sm font-semibold text-gray-900 mb-1">
+        No documents yet
+      </h3>
+      <p className="text-xs text-gray-500 max-w-xs mb-6">
+        Upload your first document to get started. You can drag and drop files 
+        or click the Upload button above.
+      </p>
+      
+      {/* Quick tips */}
+      <div className="w-full max-w-sm space-y-2">
+        <div className="flex items-start gap-3 p-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg text-left">
+          <div className="p-1.5 bg-blue-100 rounded-md">
+            <FileUp className="w-4 h-4 text-blue-600" />
+          </div>
+          <div>
+            <p className="text-xs font-medium text-gray-900">Drag & Drop</p>
+            <p className="text-[10px] text-gray-500">Drop files anywhere to upload instantly</p>
+          </div>
+        </div>
+        <div className="flex items-start gap-3 p-3 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg text-left">
+          <div className="p-1.5 bg-purple-100 rounded-md">
+            <PenTool className="w-4 h-4 text-purple-600" />
+          </div>
+          <div>
+            <p className="text-xs font-medium text-gray-900">E-Signatures</p>
+            <p className="text-[10px] text-gray-500">Upload PDFs and send for signature</p>
+          </div>
+        </div>
+        <div className="flex items-start gap-3 p-3 bg-gradient-to-r from-amber-50 to-orange-50 rounded-lg text-left">
+          <div className="p-1.5 bg-amber-100 rounded-md">
+            <FilePen className="w-4 h-4 text-amber-600" />
+          </div>
+          <div>
+            <p className="text-xs font-medium text-gray-900">Edit Documents</p>
+            <p className="text-[10px] text-gray-500">Double-click PDFs to add annotations</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

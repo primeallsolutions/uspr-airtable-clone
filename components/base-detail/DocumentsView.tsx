@@ -29,6 +29,8 @@ import { PhotoGallery } from "./documents/PhotoGallery";
 import { isFolder, isPdf } from "./documents/utils";
 import { BaseDetailService } from "@/lib/services/base-detail-service";
 import type { DocumentTemplate } from "@/lib/services/template-service";
+import { PostActionPrompt, createUploadSuggestions } from "./documents/PostActionPrompt";
+import { KeyboardShortcutsPanel, useKeyboardShortcutsPanel } from "./documents/KeyboardShortcutsPanel";
 
 // Type for folder tree nodes
 type FolderNode = {
@@ -96,6 +98,13 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
   const [showFolderSetup, setShowFolderSetup] = useState<boolean>(false);
   const [checkedDocuments, setCheckedDocuments] = useState<string[]>([]);
   const [currentView, setCurrentView] = useState<DocumentView>('folder');
+  
+  // Post-upload prompt state
+  const [showUploadPrompt, setShowUploadPrompt] = useState(false);
+  const [lastUploadedDoc, setLastUploadedDoc] = useState<StoredDocument | null>(null);
+
+  // Keyboard shortcuts panel
+  const keyboardShortcuts = useKeyboardShortcutsPanel();
 
   const currentPrefix = useMemo(
     () => (folderPath && !folderPath.endsWith("/") ? `${folderPath}/` : folderPath),
@@ -311,6 +320,17 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
         toast.success(`Successfully uploaded ${results.success} file${results.success > 1 ? "s" : ""}`, {
           id: toastId,
         });
+        
+        // Show post-upload prompt for single PDF uploads
+        if (results.success === 1 && validFiles[0].type === "application/pdf") {
+          const uploadedFileName = validFiles[0].name;
+          // Find the uploaded document in the refreshed list
+          const uploadedDoc = allDocs.find(d => d.path.endsWith(uploadedFileName));
+          if (uploadedDoc) {
+            setLastUploadedDoc(uploadedDoc);
+            setShowUploadPrompt(true);
+          }
+        }
       } else {
         const errorMessages = results.errors.slice(0, 3).map(e => `${e.file}: ${e.error}`).join("; ");
         toast.warning(`Uploaded ${results.success} file${results.success > 1 ? "s" : ""}, ${results.failed} failed`, {
@@ -1148,6 +1168,19 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
                   onSplit={selectedDoc && isPdf(selectedDoc.mimeType) ? () => handleDocumentSplit(selectedDoc) : undefined}
                   loading={loading && isInitialLoad && !selectedDoc}
                   onRequestSignature={handleRequestSignatureForDocument}
+                  onEdit={selectedDoc && isPdf(selectedDoc.mimeType) 
+                    ? (doc) => handleDocumentEdit({ ...doc, relative: doc.path }) 
+                    : undefined
+                  }
+                  onDownload={selectedDoc && signedUrl ? (doc) => {
+                    // Create a download link
+                    const link = document.createElement('a');
+                    link.href = signedUrl;
+                    link.download = doc.path.split('/').pop() || 'document';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                  } : undefined}
                 />
               
                 {/* Activity Feed Sidebar */}
@@ -1385,6 +1418,46 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
         onComplete={() => {
           refresh();
         }}
+      />
+
+      {/* Post-Upload Prompt */}
+      <PostActionPrompt
+        type="document-uploaded"
+        documentName={lastUploadedDoc?.path.split("/").pop()}
+        isOpen={showUploadPrompt}
+        onClose={() => {
+          setShowUploadPrompt(false);
+          setLastUploadedDoc(null);
+        }}
+        suggestions={createUploadSuggestions({
+          onEditDocument: lastUploadedDoc ? () => {
+            setShowUploadPrompt(false);
+            handleDocumentEdit({ ...lastUploadedDoc, relative: lastUploadedDoc.path });
+          } : undefined,
+          onRequestSignature: lastUploadedDoc ? () => {
+            setShowUploadPrompt(false);
+            setSignatureRequestDoc(lastUploadedDoc);
+            setShowSignatureRequestModal(true);
+          } : undefined,
+          onOrganize: () => {
+            setShowUploadPrompt(false);
+            // Focus on the folder selector - user can then move the document
+            if (lastUploadedDoc) {
+              setSelectedDocPath(lastUploadedDoc.path);
+            }
+          },
+          onUploadMore: () => {
+            setShowUploadPrompt(false);
+            setLastUploadedDoc(null);
+            // Trigger file input click - would need a ref, so just close for now
+          },
+        })}
+      />
+
+      {/* Keyboard Shortcuts Panel */}
+      <KeyboardShortcutsPanel
+        isOpen={keyboardShortcuts.isOpen}
+        onClose={keyboardShortcuts.close}
       />
     </div>
   );

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { ChevronRight, ChevronDown, Folder, FolderOpen, MoreVertical, Pencil, Trash2, Inbox, Clock, Files, CalendarPlus, Home, ChevronsRight } from "lucide-react";
+import { ChevronRight, ChevronDown, Folder, FolderOpen, MoreVertical, Pencil, Trash2, Inbox, Clock, Files, CalendarPlus, Home, ChevronsRight, AlertCircle, PenTool, Bell } from "lucide-react";
 import { FolderSkeleton } from "./DocumentsSkeleton";
+import type { DocumentStatus } from "./DocumentStatusBadge";
 
 type FolderNode = {
   name: string;
@@ -14,6 +15,16 @@ export type DocumentView = 'recent' | 'all' | 'folder' | 'today';
 type BreadcrumbItem = {
   name: string;
   path: string;
+};
+
+// Pending action item type
+type PendingActionItem = {
+  id: string;
+  type: "pending_signature" | "awaiting_review" | "incomplete_request";
+  label: string;
+  documentPath: string;
+  documentName: string;
+  count?: number;
 };
 
 type DocumentsSidebarProps = {
@@ -31,6 +42,10 @@ type DocumentsSidebarProps = {
   onViewChange?: (view: DocumentView) => void;  // Handler for view changes
   // Recent folders for quick navigation
   recentFolders?: string[];
+  // Pending actions
+  pendingSignatures?: number;  // Count of documents awaiting signature
+  pendingReviews?: number;     // Count of documents needing review
+  onPendingClick?: (type: "signatures" | "reviews") => void;
 };
 
 const FolderItem = ({
@@ -187,6 +202,9 @@ export const DocumentsSidebar = ({
   currentView = 'folder',
   onViewChange,
   recentFolders = [],
+  pendingSignatures = 0,
+  pendingReviews = 0,
+  onPendingClick,
 }: DocumentsSidebarProps) => {
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [showBreadcrumbDropdown, setShowBreadcrumbDropdown] = useState(false);
@@ -353,6 +371,45 @@ export const DocumentsSidebar = ({
       )}
       
       <div className="p-3 space-y-4 flex-1 overflow-y-auto">
+        {/* Needs Attention Section */}
+        {(pendingSignatures > 0 || pendingReviews > 0) && (
+          <div className="space-y-2">
+            <div className="text-xs font-semibold text-amber-700 uppercase flex items-center gap-1.5">
+              <Bell className="w-3 h-3" />
+              Needs Attention
+            </div>
+            <div className="space-y-1">
+              {/* Pending Signatures */}
+              {pendingSignatures > 0 && (
+                <button
+                  onClick={() => onPendingClick?.("signatures")}
+                  className="w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 bg-gradient-to-r from-purple-50 to-violet-50 text-purple-700 hover:from-purple-100 hover:to-violet-100 border border-purple-200"
+                >
+                  <PenTool className="w-4 h-4 flex-shrink-0 text-purple-600" />
+                  <span className="truncate">Awaiting Signature</span>
+                  <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-purple-500 text-white font-semibold">
+                    {pendingSignatures}
+                  </span>
+                </button>
+              )}
+              
+              {/* Pending Reviews (recently uploaded, not categorized) */}
+              {pendingReviews > 0 && (
+                <button
+                  onClick={() => onPendingClick?.("reviews")}
+                  className="w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 bg-gradient-to-r from-amber-50 to-orange-50 text-amber-700 hover:from-amber-100 hover:to-orange-100 border border-amber-200"
+                >
+                  <AlertCircle className="w-4 h-4 flex-shrink-0 text-amber-600" />
+                  <span className="truncate">Needs Review</span>
+                  <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-amber-500 text-white font-semibold">
+                    {pendingReviews}
+                  </span>
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Recent Folders Section (if any) */}
         {recentFolders.length > 0 && (
           <div className="space-y-2">
@@ -360,7 +417,7 @@ export const DocumentsSidebar = ({
             <div className="space-y-1">
               {recentFolders.slice(0, 3).map((folder) => {
                 const folderName = folder.split("/").filter(Boolean).pop() || "Root";
-                return (
+  return (
                   <button
                     key={folder}
                     onClick={() => handleFolderSelect(folder)}

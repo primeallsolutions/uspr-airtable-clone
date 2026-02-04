@@ -1,5 +1,24 @@
 import { useState, useRef, useEffect } from "react";
-import { FolderPlus, FileUp, Hash, Loader2, FileText, PenTool, CheckCircle2, Layers, FileTemplate, ChevronDown, Star, Clock, Search, X } from "lucide-react";
+import { 
+  FolderPlus, 
+  FileUp, 
+  Hash, 
+  Loader2, 
+  FileText, 
+  PenTool, 
+  CheckCircle2, 
+  Layers, 
+  FileTemplate, 
+  ChevronDown, 
+  Star, 
+  Clock, 
+  Search, 
+  X,
+  MoreHorizontal,
+  Scissors,
+  Copy,
+  Trash2,
+} from "lucide-react";
 
 type Template = {
   id: string;
@@ -18,12 +37,17 @@ type DocumentsHeaderProps = {
   onRequestSignature?: () => void;
   onViewSignatures?: () => void;
   onMergeDocuments?: () => void;
+  onSplitDocument?: () => void;
+  onBulkDelete?: () => void;
+  onBulkMove?: () => void;
   // Template quick access
   templates?: Template[];
   recentTemplates?: Template[];
   favoriteTemplates?: Template[];
   onSelectTemplate?: (templateId: string) => void;
   onToggleFavorite?: (templateId: string) => void;
+  // Selection state for bulk actions
+  selectedCount?: number;
 };
 
 export const DocumentsHeader = ({
@@ -35,30 +59,44 @@ export const DocumentsHeader = ({
   onRequestSignature,
   onViewSignatures,
   onMergeDocuments,
+  onSplitDocument,
+  onBulkDelete,
+  onBulkMove,
   templates = [],
   recentTemplates = [],
   favoriteTemplates = [],
   onSelectTemplate,
   onToggleFavorite,
+  selectedCount = 0,
 }: DocumentsHeaderProps) => {
   const [showTemplateDropdown, setShowTemplateDropdown] = useState(false);
+  const [showESignDropdown, setShowESignDropdown] = useState(false);
+  const [showMoreDropdown, setShowMoreDropdown] = useState(false);
   const [templateSearch, setTemplateSearch] = useState("");
-  const dropdownRef = useRef<HTMLDivElement>(null);
+  
+  const templateDropdownRef = useRef<HTMLDivElement>(null);
+  const eSignDropdownRef = useRef<HTMLDivElement>(null);
+  const moreDropdownRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Close dropdown when clicking outside
+  // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+      if (templateDropdownRef.current && !templateDropdownRef.current.contains(event.target as Node)) {
         setShowTemplateDropdown(false);
         setTemplateSearch("");
       }
+      if (eSignDropdownRef.current && !eSignDropdownRef.current.contains(event.target as Node)) {
+        setShowESignDropdown(false);
+      }
+      if (moreDropdownRef.current && !moreDropdownRef.current.contains(event.target as Node)) {
+        setShowMoreDropdown(false);
+      }
     };
 
-    if (showTemplateDropdown) {
-      document.addEventListener("mousedown", handleClickOutside);
-      return () => document.removeEventListener("mousedown", handleClickOutside);
-    }
-  }, [showTemplateDropdown]);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   // Filter templates by search
   const filteredTemplates = templates.filter(t =>
@@ -66,21 +104,70 @@ export const DocumentsHeader = ({
     t.description?.toLowerCase().includes(templateSearch.toLowerCase())
   );
 
-  const hasTemplates = templates.length > 0 || recentTemplates.length > 0 || favoriteTemplates.length > 0;
+  const hasESignActions = onRequestSignature || onViewSignatures;
+  const hasMoreActions = onMergeDocuments || onSplitDocument || onBulkDelete || onBulkMove;
 
   return (
-    <div className="flex flex-wrap items-center gap-2 border-b border-gray-200 px-4 py-3 bg-gray-50">
+    <div className="flex flex-wrap items-center gap-2 border-b border-gray-200 px-4 py-3 bg-gradient-to-r from-gray-50 to-white">
+      {/* Path Label */}
       <div className="flex items-center gap-2 text-sm text-gray-700">
         <Hash className="w-4 h-4 text-gray-500" />
-        <span className="font-semibold truncate">{prefixLabel}</span>
+        <span className="font-semibold truncate max-w-[200px]" title={prefixLabel}>
+          {prefixLabel}
+        </span>
       </div>
+      
+      {/* Selection Count Badge */}
+      {selectedCount > 0 && (
+        <span className="ml-2 px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-700 rounded-full">
+          {selectedCount} selected
+        </span>
+      )}
+      
       <div className="flex items-center gap-2 ml-auto">
-        {/* Template Quick Access */}
+        {/* === Primary Actions Group === */}
+        
+        {/* Upload Button - Primary CTA */}
+        <label className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-blue-600 to-blue-700 rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all cursor-pointer shadow-sm hover:shadow">
+          {uploading ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <FileUp className="w-4 h-4" />
+          )}
+          {uploading ? `${uploadProgress.current}/${uploadProgress.total}` : "Upload"}
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            className="hidden"
+            onChange={(e) => onUpload(e.target.files)}
+            disabled={uploading}
+          />
+        </label>
+
+        {/* New Folder Button */}
+        <button
+          onClick={onAddFolder}
+          className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:border-blue-400 hover:text-blue-700 hover:bg-blue-50 transition-colors"
+          title="Create new folder"
+        >
+          <FolderPlus className="w-4 h-4" />
+          <span className="hidden sm:inline">New Folder</span>
+        </button>
+
+        {/* Divider */}
+        <div className="w-px h-6 bg-gray-200 mx-1" />
+
+        {/* === Template Dropdown === */}
         {onSelectTemplate && (
-          <div className="relative" ref={dropdownRef}>
+          <div className="relative" ref={templateDropdownRef}>
             <button
-              onClick={() => setShowTemplateDropdown(!showTemplateDropdown)}
-              className={`inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+              onClick={() => {
+                setShowTemplateDropdown(!showTemplateDropdown);
+                setShowESignDropdown(false);
+                setShowMoreDropdown(false);
+              }}
+              className={`inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
                 showTemplateDropdown
                   ? "text-purple-700 bg-purple-100 border border-purple-300"
                   : "text-gray-700 bg-white border border-gray-200 hover:border-purple-400 hover:text-purple-700"
@@ -88,15 +175,15 @@ export const DocumentsHeader = ({
               title="Create from template"
             >
               <FileTemplate className="w-4 h-4" />
-              New from Template
-              <ChevronDown className={`w-4 h-4 transition-transform ${showTemplateDropdown ? "rotate-180" : ""}`} />
+              <span className="hidden sm:inline">Template</span>
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showTemplateDropdown ? "rotate-180" : ""}`} />
             </button>
             
-            {/* Template Dropdown */}
+            {/* Template Dropdown Panel */}
             {showTemplateDropdown && (
-              <div className="absolute right-0 top-full mt-2 w-80 bg-white border border-gray-200 rounded-lg shadow-xl z-50 overflow-hidden">
+              <div className="absolute right-0 top-full mt-2 w-80 bg-white border border-gray-200 rounded-xl shadow-xl z-50 overflow-hidden">
                 {/* Search */}
-                <div className="p-2 border-b border-gray-100">
+                <div className="p-3 border-b border-gray-100 bg-gray-50">
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                     <input
@@ -200,59 +287,149 @@ export const DocumentsHeader = ({
             )}
           </div>
         )}
-        
-        {onRequestSignature && (
-          <button
-            onClick={onRequestSignature}
-            className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-white bg-green-600 border border-green-600 rounded-lg hover:bg-green-700 transition-colors"
-            title="Request e-signature"
-          >
-            <PenTool className="w-4 h-4" />
-            Request Signature
-          </button>
+
+        {/* === E-Sign Dropdown === */}
+        {hasESignActions && (
+          <div className="relative" ref={eSignDropdownRef}>
+            <button
+              onClick={() => {
+                setShowESignDropdown(!showESignDropdown);
+                setShowTemplateDropdown(false);
+                setShowMoreDropdown(false);
+              }}
+              className={`inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                showESignDropdown
+                  ? "text-emerald-700 bg-emerald-100 border border-emerald-300"
+                  : "text-white bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700"
+              }`}
+              title="E-Signature actions"
+            >
+              <PenTool className="w-4 h-4" />
+              <span className="hidden sm:inline">E-Sign</span>
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showESignDropdown ? "rotate-180" : ""}`} />
+            </button>
+            
+            {/* E-Sign Dropdown Panel */}
+            {showESignDropdown && (
+              <div className="absolute right-0 top-full mt-2 w-56 bg-white border border-gray-200 rounded-xl shadow-xl z-50 overflow-hidden py-1">
+                {onRequestSignature && (
+                  <button
+                    onClick={() => {
+                      onRequestSignature();
+                      setShowESignDropdown(false);
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-emerald-50 hover:text-emerald-700 transition-colors"
+                  >
+                    <PenTool className="w-4 h-4" />
+                    <div className="text-left">
+                      <div className="font-medium">Request Signature</div>
+                      <div className="text-xs text-gray-500">Send for e-signature</div>
+                    </div>
+                  </button>
+                )}
+                {onViewSignatures && (
+                  <button
+                    onClick={() => {
+                      onViewSignatures();
+                      setShowESignDropdown(false);
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    <div className="text-left">
+                      <div className="font-medium">View Requests</div>
+                      <div className="text-xs text-gray-500">Track signature status</div>
+                    </div>
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         )}
-        {onViewSignatures && (
-          <button
-            onClick={onViewSignatures}
-            className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:border-green-400 hover:text-green-700 transition-colors"
-            title="View signature requests status"
-          >
-            <CheckCircle2 className="w-4 h-4" />
-            View Signatures
-          </button>
-        )}
-        {onMergeDocuments && (
-          <button
-            onClick={onMergeDocuments}
-            className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:border-indigo-400 hover:text-indigo-700 transition-colors"
-            title="Merge PDFs with page reordering"
-          >
-            <Layers className="w-4 h-4" />
-            Merge PDFs
-          </button>
-        )}
-        <button
-          onClick={onAddFolder}
-          className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:border-blue-400 hover:text-blue-700 transition-colors"
-        >
-          <FolderPlus className="w-4 h-4" />
-          New Folder
-        </button>
-        <label className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-white bg-blue-600 border border-blue-600 rounded-lg hover:bg-blue-700 transition-colors cursor-pointer">
-          <FileUp className="w-4 h-4" />
-          Upload
-          <input
-            type="file"
-            multiple
-            className="hidden"
-            onChange={(e) => onUpload(e.target.files)}
-          />
-        </label>
-        {uploading && <Loader2 className="w-4 h-4 text-blue-600 animate-spin" />}
-        {uploading && (
-          <span className="text-xs text-gray-600">
-            {uploadProgress.current}/{uploadProgress.total}
-          </span>
+
+        {/* === More Actions Dropdown === */}
+        {hasMoreActions && (
+          <div className="relative" ref={moreDropdownRef}>
+            <button
+              onClick={() => {
+                setShowMoreDropdown(!showMoreDropdown);
+                setShowTemplateDropdown(false);
+                setShowESignDropdown(false);
+              }}
+              className={`inline-flex items-center gap-1 p-2 text-sm font-medium rounded-lg transition-colors ${
+                showMoreDropdown
+                  ? "text-gray-700 bg-gray-200"
+                  : "text-gray-600 bg-white border border-gray-200 hover:bg-gray-100"
+              }`}
+              title="More actions"
+            >
+              <MoreHorizontal className="w-4 h-4" />
+            </button>
+            
+            {/* More Actions Dropdown Panel */}
+            {showMoreDropdown && (
+              <div className="absolute right-0 top-full mt-2 w-48 bg-white border border-gray-200 rounded-xl shadow-xl z-50 overflow-hidden py-1">
+                {onMergeDocuments && (
+                  <button
+                    onClick={() => {
+                      onMergeDocuments();
+                      setShowMoreDropdown(false);
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors"
+                  >
+                    <Layers className="w-4 h-4" />
+                    Merge PDFs
+                  </button>
+                )}
+                {onSplitDocument && (
+                  <button
+                    onClick={() => {
+                      onSplitDocument();
+                      setShowMoreDropdown(false);
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors"
+                  >
+                    <Scissors className="w-4 h-4" />
+                    Split PDF
+                  </button>
+                )}
+                
+                {/* Bulk Actions (shown when items are selected) */}
+                {selectedCount > 0 && (
+                  <>
+                    <div className="border-t border-gray-100 my-1" />
+                    <div className="px-4 py-1 text-xs font-semibold text-gray-500 uppercase">
+                      Bulk Actions
+                    </div>
+                    {onBulkMove && (
+                      <button
+                        onClick={() => {
+                          onBulkMove();
+                          setShowMoreDropdown(false);
+                        }}
+                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-amber-50 hover:text-amber-700 transition-colors"
+                      >
+                        <Copy className="w-4 h-4" />
+                        Move {selectedCount} items
+                      </button>
+                    )}
+                    {onBulkDelete && (
+                      <button
+                        onClick={() => {
+                          onBulkDelete();
+                          setShowMoreDropdown(false);
+                        }}
+                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        Delete {selectedCount} items
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+          </div>
         )}
       </div>
     </div>
@@ -271,7 +448,7 @@ function TemplateItem({
 }) {
   return (
     <div
-      className="flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-gray-100 cursor-pointer group"
+      className="flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-purple-50 cursor-pointer group transition-colors"
       onClick={onSelect}
     >
       <FileText className="w-4 h-4 text-purple-500 flex-shrink-0" />
@@ -304,4 +481,3 @@ function TemplateItem({
     </div>
   );
 }
-

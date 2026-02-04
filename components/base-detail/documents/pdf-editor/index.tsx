@@ -12,7 +12,7 @@
 "use client";
 
 import React, { useState, useCallback, useEffect, useRef } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, PenTool, Share2, Edit3 } from "lucide-react";
 
 import type { PdfEditorProps, Tool, TextItem, Point } from "./types";
 import { ZOOM_LEVELS, DEFAULT_ZOOM_INDEX } from "./types";
@@ -26,6 +26,7 @@ import { PageCanvas } from "./components/PageCanvas";
 import { TextEditOverlay } from "./components/TextEditOverlay";
 import { StatusBar } from "./components/StatusBar";
 import { SignatureCapture } from "../SignatureCapture";
+import { PostActionPrompt, type ActionSuggestion } from "../PostActionPrompt";
 
 // Text box editor for adding new text annotations
 function TextBoxEditor({
@@ -142,6 +143,10 @@ export function PdfEditor({
   // Tool state
   const [activeTool, setActiveTool] = useState<Tool>("select");
   const [showSignatureCapture, setShowSignatureCapture] = useState(false);
+  
+  // Post-save prompt state
+  const [showPostSavePrompt, setShowPostSavePrompt] = useState(false);
+  const [savedDocumentName, setSavedDocumentName] = useState<string | null>(null);
 
   // Text editing state
   const [editingText, setEditingText] = useState<{
@@ -511,15 +516,16 @@ export function PdfEditor({
       // Call parent save handler
       await onSave(file);
 
-      // Close editor on success
-      onClose();
+      // Show post-save prompt instead of closing immediately
+      setSavedDocumentName(documentName);
+      setShowPostSavePrompt(true);
     } catch (err) {
       console.error("Failed to save PDF:", err);
       alert("Failed to save document. Please try again.");
     } finally {
       setIsSaving(false);
     }
-  }, [bytes, docInfo, annotations, documentName, onSave, onClose]);
+  }, [bytes, docInfo, annotations, documentName, onSave]);
 
   const handleClose = useCallback(() => {
     if (hasChanges()) {
@@ -537,6 +543,48 @@ export function PdfEditor({
       onRequestSignature(signatureFields);
     }
   }, [getSignatureFields, onRequestSignature]);
+
+  // Handle post-save prompt close
+  const handlePostSaveClose = useCallback(() => {
+    setShowPostSavePrompt(false);
+    setSavedDocumentName(null);
+    onClose();
+  }, [onClose]);
+
+  // Build post-save suggestions
+  const postSaveSuggestions = useCallback((): ActionSuggestion[] => {
+    const suggestions: ActionSuggestion[] = [];
+    
+    if (onRequestSignature) {
+      suggestions.push({
+        id: "request-signature",
+        label: "Request Signature",
+        description: "Send this document for e-signature",
+        icon: <PenTool className="w-4 h-4 text-purple-600" />,
+        variant: "primary",
+        onClick: () => {
+          setShowPostSavePrompt(false);
+          handleRequestSignature();
+        },
+      });
+    }
+    
+    suggestions.push({
+      id: "continue-editing",
+      label: "Continue Editing",
+      description: "Make more changes to this document",
+      icon: <Edit3 className="w-4 h-4 text-blue-600" />,
+      variant: "secondary",
+      onClick: () => {
+        setShowPostSavePrompt(false);
+        setSavedDocumentName(null);
+        // Stay in the editor, clear annotations since they've been saved
+        clearAnnotations();
+      },
+    });
+    
+    return suggestions;
+  }, [onRequestSignature, handleRequestSignature, clearAnnotations]);
 
   // Don't render if not open
   if (!isOpen || !docInfo) return null;
@@ -676,6 +724,15 @@ export function PdfEditor({
           setActiveTool("select");
         }}
         onSave={handleSignatureSave}
+      />
+
+      {/* Post-Save Prompt */}
+      <PostActionPrompt
+        type="document-saved"
+        documentName={savedDocumentName || undefined}
+        isOpen={showPostSavePrompt}
+        onClose={handlePostSaveClose}
+        suggestions={postSaveSuggestions()}
       />
     </div>
   );
