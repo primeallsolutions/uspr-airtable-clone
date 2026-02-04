@@ -176,3 +176,42 @@ export interface Rect {
   width: number;
   height: number;
 }
+
+// Text formatting options
+export interface TextFormatting {
+  fontFamily: string;
+  fontSize: number;
+  fontWeight: "normal" | "bold";
+  fontStyle: "normal" | "italic";
+  textDecoration: "none" | "underline" | "line-through";
+  color: string;
+  backgroundColor: string;
+}
+
+// Default text formatting
+export const DEFAULT_TEXT_FORMATTING: TextFormatting = {
+  fontFamily: "Arial",
+  fontSize: 14,
+  fontWeight: "normal",
+  fontStyle: "normal",
+  textDecoration: "none",
+  color: "#000000",
+  backgroundColor: "transparent",
+};
+
+// Available font families
+export const FONT_FAMILIES = [
+  "Arial",
+  "Helvetica",
+  "Times New Roman",
+  "Georgia",
+  "Courier New",
+  "Verdana",
+  "Trebuchet MS",
+  "Comic Sans MS",
+  "Impact",
+  "Palatino Linotype",
+] as const;
+
+// Available font sizes
+export const FONT_SIZES = [8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 32, 36, 48, 72] as const;

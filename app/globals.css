@@ -272,3 +272,24 @@
 .animate-progress-indeterminate {
   animation: progress-indeterminate 1.5s ease-in-out infinite;
 }
+
+/* Slide down animation for toolbars */
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-slideDown {
+  animation: slideDown 0.2s ease-out forwards;
+}
+
+/* Custom color for gray-750 (between gray-700 and gray-800) */
+.bg-gray-750 {
+  background-color: rgb(55, 65, 81);
+}

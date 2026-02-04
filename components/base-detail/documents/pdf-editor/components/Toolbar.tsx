@@ -30,8 +30,9 @@ import {
   Pen,
   CalendarCheck,
 } from "lucide-react";
-import type { Tool } from "../types";
+import type { Tool, TextFormatting } from "../types";
 import { ZOOM_LEVELS } from "../types";
+import { TextFormattingToolbar } from "./TextFormattingToolbar";
 
 interface ToolbarProps {
   documentName: string;
@@ -54,6 +55,9 @@ interface ToolbarProps {
   onClose: () => void;
   onUndo: () => void;
   onRedo: () => void;
+  // Text formatting props
+  textFormatting?: TextFormatting;
+  onTextFormattingChange?: (formatting: Partial<TextFormatting>) => void;
 }
 
 export function Toolbar({
@@ -77,12 +81,19 @@ export function Toolbar({
   onClose,
   onUndo,
   onRedo,
+  textFormatting,
+  onTextFormattingChange,
 }: ToolbarProps) {
   const zoom = ZOOM_LEVELS[zoomIndex];
   const [showShortcuts, setShowShortcuts] = useState(false);
 
+  // Check if text formatting toolbar should be shown
+  const showTextFormatting = (activeTool === "edit" || activeTool === "text") && textFormatting && onTextFormattingChange;
+
   return (
-    <div className="bg-gray-800 px-4 py-2 flex items-center justify-between border-b border-gray-700">
+    <div className="flex flex-col relative z-[100]">
+      {/* Main Toolbar */}
+      <div className="bg-gray-800 px-4 py-2 flex items-center justify-between border-b border-gray-700">
       {/* Document Info */}
       <div className="flex items-center gap-4">
         <FileText className="w-5 h-5 text-gray-400" />
@@ -103,7 +114,7 @@ export function Toolbar({
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
-            <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 hidden group-hover:flex flex-col items-center z-50 pointer-events-none">
+            <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 hidden group-hover:flex flex-col items-center z-[200] pointer-events-none">
               <div className="w-0 h-0 border-l-[6px] border-r-[6px] border-b-[6px] border-transparent border-b-gray-900" />
               <div className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 shadow-xl whitespace-nowrap">
                 <div className="text-white text-sm font-medium">Previous Page</div>
@@ -125,7 +136,7 @@ export function Toolbar({
             >
               <ChevronRight className="w-4 h-4" />
             </button>
-            <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 hidden group-hover:flex flex-col items-center z-50 pointer-events-none">
+            <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 hidden group-hover:flex flex-col items-center z-[200] pointer-events-none">
               <div className="w-0 h-0 border-l-[6px] border-r-[6px] border-b-[6px] border-transparent border-b-gray-900" />
               <div className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 shadow-xl whitespace-nowrap">
                 <div className="text-white text-sm font-medium">Next Page</div>
@@ -150,7 +161,7 @@ export function Toolbar({
             >
               <ZoomOut className="w-4 h-4" />
             </button>
-            <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 hidden group-hover:flex flex-col items-center z-50 pointer-events-none">
+            <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 hidden group-hover:flex flex-col items-center z-[200] pointer-events-none">
               <div className="w-0 h-0 border-l-[6px] border-r-[6px] border-b-[6px] border-transparent border-b-gray-900" />
               <div className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 shadow-xl whitespace-nowrap">
                 <div className="text-white text-sm font-medium">Zoom Out</div>
@@ -168,7 +179,7 @@ export function Toolbar({
             >
               {Math.round(zoom * 100)}%
             </button>
-            <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 hidden group-hover:flex flex-col items-center z-50 pointer-events-none">
+            <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 hidden group-hover:flex flex-col items-center z-[200] pointer-events-none">
               <div className="w-0 h-0 border-l-[6px] border-r-[6px] border-b-[6px] border-transparent border-b-gray-900" />
               <div className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 shadow-xl whitespace-nowrap">
                 <div className="text-white text-sm font-medium">Reset Zoom</div>
@@ -187,7 +198,7 @@ export function Toolbar({
             >
               <ZoomIn className="w-4 h-4" />
             </button>
-            <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 hidden group-hover:flex flex-col items-center z-50 pointer-events-none">
+            <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 hidden group-hover:flex flex-col items-center z-[200] pointer-events-none">
               <div className="w-0 h-0 border-l-[6px] border-r-[6px] border-b-[6px] border-transparent border-b-gray-900" />
               <div className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 shadow-xl whitespace-nowrap">
                 <div className="text-white text-sm font-medium">Zoom In</div>
@@ -345,7 +356,7 @@ export function Toolbar({
           </button>
           {/* Enhanced tooltip on hover */}
           {!showShortcuts && (
-            <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 hidden group-hover:flex flex-col items-center z-50 pointer-events-none">
+            <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 hidden group-hover:flex flex-col items-center z-[200] pointer-events-none">
               <div className="w-0 h-0 border-l-[6px] border-r-[6px] border-b-[6px] border-transparent border-b-gray-900" />
               <div className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 shadow-xl whitespace-nowrap">
                 <div className="text-white text-sm font-medium">Keyboard Shortcuts</div>
@@ -434,6 +445,15 @@ export function Toolbar({
         />
       </div>
     </div>
+
+      {/* Text Formatting Toolbar - Shows when edit or text tool is active */}
+      {showTextFormatting && (
+        <TextFormattingToolbar
+          formatting={textFormatting}
+          onFormattingChange={onTextFormattingChange}
+        />
+      )}
+    </div>
   );
 }
 
@@ -483,7 +503,7 @@ function IconButton({
         {icon}
       </button>
       {/* Enhanced tooltip on hover */}
-      <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 hidden group-hover:flex flex-col items-center z-50 pointer-events-none">
+      <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 hidden group-hover:flex flex-col items-center z-[200] pointer-events-none">
         <div className="w-0 h-0 border-l-[6px] border-r-[6px] border-b-[6px] border-transparent border-b-gray-900" />
         <div className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 shadow-xl whitespace-nowrap">
           <div className="text-white text-sm font-medium">{label}</div>
@@ -528,7 +548,7 @@ function ToolButton({
         {icon}
       </button>
       {/* Enhanced tooltip on hover */}
-      <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 hidden group-hover:flex flex-col items-center z-50 pointer-events-none">
+      <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 hidden group-hover:flex flex-col items-center z-[200] pointer-events-none">
         <div className="w-0 h-0 border-l-[6px] border-r-[6px] border-b-[6px] border-transparent border-b-gray-900" />
         <div className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 shadow-xl whitespace-nowrap">
           <div className="text-white text-sm font-medium">{label}</div>

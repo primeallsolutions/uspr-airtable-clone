@@ -14,8 +14,8 @@
 import React, { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { Loader2, PenTool, Share2, Edit3 } from "lucide-react";
 
-import type { PdfEditorProps, Tool, TextItem, Point, RequestMetadata, StatusConfig } from "./types";
-import { ZOOM_LEVELS, DEFAULT_ZOOM_INDEX } from "./types";
+import type { PdfEditorProps, Tool, TextItem, Point, RequestMetadata, StatusConfig, TextFormatting } from "./types";
+import { ZOOM_LEVELS, DEFAULT_ZOOM_INDEX, DEFAULT_TEXT_FORMATTING } from "./types";
 import { usePdfLoader } from "./hooks/usePdfLoader";
 import { useAnnotationStore } from "./hooks/useAnnotationStore";
 import { savePdfWithAnnotations, downloadPdf } from "./utils/pdf-save";
@@ -146,6 +146,9 @@ export function PdfEditor({
   // Tool state
   const [activeTool, setActiveTool] = useState<Tool>("select");
   const [showSignatureCapture, setShowSignatureCapture] = useState(false);
+  
+  // Text formatting state
+  const [textFormatting, setTextFormatting] = useState<TextFormatting>(DEFAULT_TEXT_FORMATTING);
   
   // Post-save prompt state
   const [showPostSavePrompt, setShowPostSavePrompt] = useState(false);
@@ -462,10 +465,18 @@ export function PdfEditor({
     setActiveTool(tool);
     setEditingText(null);
     setTextBoxPosition(null);
+    
+    // Clear any selected annotation when switching tools
+    // This prevents the previous selection from interfering with the new tool
+    selectAnnotation(null);
 
     if (tool === "signature") {
       setShowSignatureCapture(true);
     }
+  }, [selectAnnotation]);
+
+  const handleTextFormattingChange = useCallback((updates: Partial<TextFormatting>) => {
+    setTextFormatting(prev => ({ ...prev, ...updates }));
   }, []);
 
   const handleTextClick = useCallback((item: TextItem, index: number) => {
@@ -746,6 +757,8 @@ export function PdfEditor({
           onClose={handleClose}
           onUndo={undo}
           onRedo={redo}
+          textFormatting={textFormatting}
+          onTextFormattingChange={handleTextFormattingChange}
         />
 
         {/* Main Content */}
