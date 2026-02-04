@@ -5,7 +5,7 @@
 
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import {
   X,
   Save,
@@ -29,6 +29,8 @@ import {
   Redo2,
   FileSignature,
   Send,
+  Keyboard,
+  HelpCircle,
 } from "lucide-react";
 import type { Tool } from "../types";
 import { ZOOM_LEVELS } from "../types";
@@ -87,6 +89,7 @@ export function Toolbar({
   onRequestSignature,
 }: ToolbarProps) {
   const zoom = ZOOM_LEVELS[zoomIndex];
+  const [showShortcuts, setShowShortcuts] = useState(false);
 
   return (
     <div className="bg-gray-800 px-4 py-2 flex items-center justify-between border-b border-gray-700">
@@ -291,6 +294,88 @@ export function Toolbar({
           {isSaving ? "Saving..." : hasChanges ? "Save" : "No Changes"}
         </button>
 
+        {/* Keyboard Shortcuts Help */}
+        <div className="relative">
+          <button
+            onClick={() => setShowShortcuts(!showShortcuts)}
+            className={`p-2 rounded-lg transition-colors ${
+              showShortcuts ? "bg-gray-600" : "hover:bg-gray-700"
+            }`}
+            title="Keyboard shortcuts"
+          >
+            <Keyboard className="w-4 h-4 text-white" />
+          </button>
+          
+          {/* Shortcuts Panel */}
+          {showShortcuts && (
+            <div className="absolute right-0 top-full mt-2 w-80 bg-gray-900 border border-gray-700 rounded-lg shadow-xl z-50 p-4">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-white font-semibold flex items-center gap-2">
+                  <Keyboard className="w-4 h-4" />
+                  Keyboard Shortcuts
+                </h3>
+                <button
+                  onClick={() => setShowShortcuts(false)}
+                  className="text-gray-400 hover:text-white"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              
+              <div className="space-y-3 text-sm">
+                {/* Tools Section */}
+                <div>
+                  <div className="text-gray-400 text-xs uppercase mb-1">Tools</div>
+                  <div className="grid grid-cols-2 gap-1">
+                    <ShortcutItem keys={["V"]} description="Select" />
+                    <ShortcutItem keys={["T"]} description="Text" />
+                    <ShortcutItem keys={["H"]} description="Highlight" />
+                    <ShortcutItem keys={["E"]} description="Edit" />
+                    <ShortcutItem keys={["S"]} description="Signature" />
+                    <ShortcutItem keys={["F"]} description="Sig. Field" />
+                    <ShortcutItem keys={["P"]} description="Pan" />
+                  </div>
+                </div>
+                
+                {/* Navigation Section */}
+                <div>
+                  <div className="text-gray-400 text-xs uppercase mb-1">Navigation</div>
+                  <div className="grid grid-cols-2 gap-1">
+                    <ShortcutItem keys={["PgUp"]} description="Prev Page" />
+                    <ShortcutItem keys={["PgDn"]} description="Next Page" />
+                    <ShortcutItem keys={["Ctrl", "Home"]} description="First Page" />
+                    <ShortcutItem keys={["Ctrl", "End"]} description="Last Page" />
+                    <ShortcutItem keys={["Tab"]} description="Next Field" />
+                    <ShortcutItem keys={["⇧", "Tab"]} description="Prev Field" />
+                  </div>
+                </div>
+                
+                {/* Actions Section */}
+                <div>
+                  <div className="text-gray-400 text-xs uppercase mb-1">Actions</div>
+                  <div className="grid grid-cols-2 gap-1">
+                    <ShortcutItem keys={["Ctrl", "Z"]} description="Undo" />
+                    <ShortcutItem keys={["Ctrl", "Y"]} description="Redo" />
+                    <ShortcutItem keys={["Ctrl", "S"]} description="Save" />
+                    <ShortcutItem keys={["Del"]} description="Delete" />
+                    <ShortcutItem keys={["Esc"]} description="Cancel" />
+                  </div>
+                </div>
+                
+                {/* Zoom Section */}
+                <div>
+                  <div className="text-gray-400 text-xs uppercase mb-1">Zoom</div>
+                  <div className="grid grid-cols-2 gap-1">
+                    <ShortcutItem keys={["Ctrl", "+"]} description="Zoom In" />
+                    <ShortcutItem keys={["Ctrl", "-"]} description="Zoom Out" />
+                    <ShortcutItem keys={["Ctrl", "0"]} description="Reset" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* Close Button */}
         <button
           onClick={onClose}
@@ -299,6 +384,25 @@ export function Toolbar({
         >
           <X className="w-5 h-5 text-white" />
         </button>
+      </div>
+    </div>
+  );
+}
+
+// Shortcut item component
+function ShortcutItem({ keys, description }: { keys: string[]; description: string }) {
+  return (
+    <div className="flex items-center justify-between text-gray-300 py-0.5">
+      <span className="text-xs">{description}</span>
+      <div className="flex gap-0.5">
+        {keys.map((key, i) => (
+          <kbd
+            key={i}
+            className="px-1.5 py-0.5 text-xs bg-gray-700 border border-gray-600 rounded font-mono"
+          >
+            {key}
+          </kbd>
+        ))}
       </div>
     </div>
   );

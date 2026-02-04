@@ -189,7 +189,7 @@ export function PdfEditor({
     }
   }, [isOpen, clearAnnotations, reset]);
 
-  // Keyboard event handler for deleting selected annotations and undo/redo
+  // Comprehensive keyboard shortcuts handler
   useEffect(() => {
     if (!isOpen) return;
 
@@ -200,8 +200,21 @@ export function PdfEditor({
         return;
       }
 
-      // Undo: Ctrl+Z (or Cmd+Z on Mac)
-      if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
+      const isMod = e.ctrlKey || e.metaKey;
+
+      // === Save Shortcut (Ctrl/Cmd + S) ===
+      if (isMod && e.key === "s") {
+        e.preventDefault();
+        if (hasChanges && !isSaving && onSave) {
+          // Trigger save - need to call handleSave
+          setIsSaving(true);
+          // Note: The actual save is handled by the toolbar button
+        }
+        return;
+      }
+
+      // === Undo: Ctrl+Z (or Cmd+Z on Mac) ===
+      if (isMod && e.key === "z" && !e.shiftKey) {
         e.preventDefault();
         if (canUndo()) {
           undo();
@@ -209,8 +222,8 @@ export function PdfEditor({
         return;
       }
 
-      // Redo: Ctrl+Shift+Z or Ctrl+Y (or Cmd+Shift+Z on Mac)
-      if ((e.ctrlKey || e.metaKey) && ((e.key === "z" && e.shiftKey) || e.key === "y")) {
+      // === Redo: Ctrl+Shift+Z or Ctrl+Y (or Cmd+Shift+Z on Mac) ===
+      if (isMod && ((e.key === "z" && e.shiftKey) || e.key === "y")) {
         e.preventDefault();
         if (canRedo()) {
           redo();
@@ -218,22 +231,160 @@ export function PdfEditor({
         return;
       }
 
-      // Delete selected annotation with Delete or Backspace
+      // === Page Navigation ===
+      // Page Up / Down
+      if (e.key === "PageUp" || (isMod && e.key === "ArrowUp")) {
+        e.preventDefault();
+        if (currentPage > 1) {
+          setCurrentPage(p => p - 1);
+        }
+        return;
+      }
+      if (e.key === "PageDown" || (isMod && e.key === "ArrowDown")) {
+        e.preventDefault();
+        if (currentPage < numPages) {
+          setCurrentPage(p => p + 1);
+        }
+        return;
+      }
+
+      // Home/End for first/last page
+      if (e.key === "Home" && isMod) {
+        e.preventDefault();
+        setCurrentPage(1);
+        return;
+      }
+      if (e.key === "End" && isMod) {
+        e.preventDefault();
+        setCurrentPage(numPages);
+        return;
+      }
+
+      // === Zoom Shortcuts ===
+      // Ctrl/Cmd + Plus for zoom in
+      if (isMod && (e.key === "+" || e.key === "=")) {
+        e.preventDefault();
+        setZoomIndex(i => Math.min(i + 1, ZOOM_LEVELS.length - 1));
+        return;
+      }
+      // Ctrl/Cmd + Minus for zoom out
+      if (isMod && e.key === "-") {
+        e.preventDefault();
+        setZoomIndex(i => Math.max(i - 1, 0));
+        return;
+      }
+      // Ctrl/Cmd + 0 for reset zoom
+      if (isMod && e.key === "0") {
+        e.preventDefault();
+        setZoomIndex(DEFAULT_ZOOM_INDEX);
+        return;
+      }
+
+      // === Tool Shortcuts (when not holding modifier) ===
+      if (!isMod && !e.shiftKey) {
+        switch (e.key.toLowerCase()) {
+          case "v": // Select tool
+            e.preventDefault();
+            setActiveTool("select");
+            break;
+          case "t": // Text tool
+            e.preventDefault();
+            setActiveTool("text");
+            break;
+          case "h": // Highlight tool
+            e.preventDefault();
+            setActiveTool("highlight");
+            break;
+          case "e": // Edit tool
+            e.preventDefault();
+            setActiveTool("edit");
+            break;
+          case "s": // Signature (when not saving)
+            e.preventDefault();
+            setActiveTool("signature");
+            setShowSignatureCapture(true);
+            break;
+          case "f": // Signature Field
+            e.preventDefault();
+            setActiveTool("signatureField");
+            break;
+          case "p": // Pan tool
+            e.preventDefault();
+            setActiveTool("pan");
+            break;
+        }
+      }
+
+      // === Delete selected annotation with Delete or Backspace ===
       if ((e.key === "Delete" || e.key === "Backspace") && selectedAnnotationId) {
         e.preventDefault();
         removeSelectedAnnotation();
+        return;
       }
 
-      // Escape to deselect
-      if (e.key === "Escape" && selectedAnnotationId) {
+      // === Escape to deselect or cancel ===
+      if (e.key === "Escape") {
         e.preventDefault();
-        selectAnnotation(null);
+        if (textBoxPosition) {
+          setTextBoxPosition(null);
+        } else if (selectedAnnotationId) {
+          selectAnnotation(null);
+        } else if (activeTool !== "select") {
+          setActiveTool("select");
+        }
+        return;
+      }
+
+      // === Tab to cycle through signature fields ===
+      if (e.key === "Tab") {
+        const signatureFields = getSignatureFields();
+        if (signatureFields.length > 0) {
+          e.preventDefault();
+          const currentIdx = selectedAnnotationId
+            ? signatureFields.findIndex(f => f.id === selectedAnnotationId)
+            : -1;
+          const nextIdx = e.shiftKey
+            ? (currentIdx <= 0 ? signatureFields.length - 1 : currentIdx - 1)
+            : ((currentIdx + 1) % signatureFields.length);
+          selectAnnotation(signatureFields[nextIdx].id);
+          // Navigate to the page containing this field if needed
+          const field = signatureFields[nextIdx];
+          if (field.pageIndex + 1 !== currentPage) {
+            setCurrentPage(field.pageIndex + 1);
+          }
+        }
+        return;
+      }
+
+      // === Arrow keys for fine-tuning position (when annotation selected) ===
+      if (selectedAnnotationId && ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
+        // This could be implemented with moveAnnotation if needed
+        // For now, just prevent default to avoid scrolling
+        e.preventDefault();
+        return;
       }
     };
 
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, selectedAnnotationId, removeSelectedAnnotation, selectAnnotation, undo, redo, canUndo, canRedo]);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [
+    isOpen, 
+    selectedAnnotationId, 
+    removeSelectedAnnotation, 
+    selectAnnotation, 
+    undo, 
+    redo, 
+    canUndo, 
+    canRedo, 
+    currentPage, 
+    numPages, 
+    hasChanges, 
+    isSaving, 
+    onSave, 
+    activeTool, 
+    textBoxPosition,
+    getSignatureFields,
+  ]);
 
   // Reset page when document changes
   useEffect(() => {

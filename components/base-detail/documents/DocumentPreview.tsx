@@ -1,6 +1,20 @@
 "use client";
 
-import { Eye, Hash, CalendarClock, Pencil, Trash2, Scissors, History, PenTool } from "lucide-react";
+import { 
+  Eye, 
+  Hash, 
+  CalendarClock, 
+  Pencil, 
+  Trash2, 
+  Scissors, 
+  History, 
+  PenTool, 
+  Edit3, 
+  Download, 
+  Share2,
+  FileText,
+  Clock,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import type { StoredDocument } from "@/lib/services/documents-service";
 import { PdfViewer } from "../PdfViewer";
@@ -23,6 +37,14 @@ type DocumentPreviewProps = {
   recordId?: string | null;
   // Signature request support
   onRequestSignature?: (doc: StoredDocument) => void;
+  // Edit support
+  onEdit?: (doc: StoredDocument) => void;
+  // Download support
+  onDownload?: (doc: StoredDocument) => void;
+  // Share support
+  onShare?: (doc: StoredDocument) => void;
+  // Version count for badge
+  versionCount?: number;
 };
 
 export const DocumentPreview = ({
@@ -37,8 +59,13 @@ export const DocumentPreview = ({
   loading = false,
   recordId,
   onRequestSignature,
+  onEdit,
+  onDownload,
+  onShare,
+  versionCount,
 }: DocumentPreviewProps) => {
   const [showVersionHistory, setShowVersionHistory] = useState(false);
+  const [showQuickActions, setShowQuickActions] = useState(true);
 
   const [textContent, setTextContent] = useState<string | null>(null);
   const [currentDoc, setCurrentDoc] = useState<string | null>(null);
@@ -140,9 +167,26 @@ export const DocumentPreview = ({
                 <div className="text-xs text-gray-500 flex items-center gap-2 mt-1">
                   <CalendarClock className="w-4 h-4" />
                   <span>{new Date(selectedDoc.createdAt).toLocaleString()}</span>
+                  {versionCount && versionCount > 1 && (
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded text-xs">
+                      <Clock className="w-3 h-3" />
+                      {versionCount} versions
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
+            
+            {/* Quick Actions Bar */}
+            {showQuickActions && (
+              <QuickActionsBar
+                doc={selectedDoc}
+                onRequestSignature={onRequestSignature}
+                onEdit={onEdit}
+                onDownload={onDownload}
+                onShare={onShare}
+              />
+            )}
             
             {/* Transaction Metadata - Show linked record data */}
             {baseId && (
@@ -238,3 +282,90 @@ export const DocumentPreview = ({
     </div>
   );
 };
+
+/**
+ * Quick Actions Bar Component
+ * 
+ * Provides one-click access to common document operations.
+ */
+type QuickActionsBarProps = {
+  doc: StoredDocument;
+  onRequestSignature?: (doc: StoredDocument) => void;
+  onEdit?: (doc: StoredDocument) => void;
+  onDownload?: (doc: StoredDocument) => void;
+  onShare?: (doc: StoredDocument) => void;
+};
+
+function QuickActionsBar({ 
+  doc, 
+  onRequestSignature, 
+  onEdit, 
+  onDownload,
+  onShare,
+}: QuickActionsBarProps) {
+  const isPdfDoc = isPdf(doc.mimeType);
+  const hasAnyAction = onRequestSignature || onEdit || onDownload || onShare;
+  
+  if (!hasAnyAction) return null;
+
+  return (
+    <div className="px-4 py-2 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white">
+      <div className="flex items-center gap-2 flex-wrap">
+        {/* Quick action label */}
+        <span className="text-xs font-medium text-gray-500 mr-2">Quick Actions:</span>
+        
+        {/* Request Signature - Primary action for PDFs */}
+        {isPdfDoc && onRequestSignature && (
+          <button
+            onClick={() => onRequestSignature(doc)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-gradient-to-r from-green-500 to-green-600 rounded-lg hover:from-green-600 hover:to-green-700 transition-all shadow-sm hover:shadow"
+          >
+            <PenTool className="w-3.5 h-3.5" />
+            Request Signature
+          </button>
+        )}
+        
+        {/* Edit Document */}
+        {isPdfDoc && onEdit && (
+          <button
+            onClick={() => onEdit(doc)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
+          >
+            <Edit3 className="w-3.5 h-3.5" />
+            Edit
+          </button>
+        )}
+        
+        {/* Download */}
+        {onDownload && (
+          <button
+            onClick={() => onDownload(doc)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors"
+          >
+            <Download className="w-3.5 h-3.5" />
+            Download
+          </button>
+        )}
+        
+        {/* Share */}
+        {onShare && (
+          <button
+            onClick={() => onShare(doc)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors"
+          >
+            <Share2 className="w-3.5 h-3.5" />
+            Share
+          </button>
+        )}
+        
+        {/* Document Info Badge */}
+        <div className="ml-auto flex items-center gap-2 text-xs text-gray-500">
+          <FileText className="w-3.5 h-3.5" />
+          <span>{(doc.size / 1024).toFixed(1)} KB</span>
+          <span className="text-gray-300">|</span>
+          <span className="uppercase">{doc.mimeType?.split("/").pop() || "file"}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
