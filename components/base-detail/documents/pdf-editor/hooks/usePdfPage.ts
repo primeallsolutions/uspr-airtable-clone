@@ -183,18 +183,20 @@ export function usePdfPage(
     if (document && pageNumber > 0) {
       renderPage();
     }
+    const generationAtMount = renderGenerationRef.current;
 
     return () => {
       // Increment generation to invalidate in-progress renders
-      renderGenerationRef.current++;
+      renderGenerationRef.current = generationAtMount + 1;
       cancelRender();
     };
   }, [document, pageNumber, zoom, rotation, renderPage, cancelRender]);
 
   // Cleanup on unmount
   useEffect(() => {
+    const generationAtMount = renderGenerationRef.current;
     return () => {
-      renderGenerationRef.current++;
+      renderGenerationRef.current = generationAtMount + 1;
       cancelRender();
       pageRef.current = null;
     };
