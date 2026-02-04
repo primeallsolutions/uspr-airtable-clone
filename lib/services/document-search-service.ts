@@ -74,7 +74,7 @@ export class DocumentSearchService {
           mimeType: row.mime_type,
           highlightedPreview: row.highlighted_preview,
           rank: row.rank,
-          indexedAt: new Date(),
+          indexedAt: row.indexed_at ? new Date(row.indexed_at) : new Date(),
         }));
       } else {
         const { data, error } = await supabase.rpc("search_documents", {
@@ -285,19 +285,21 @@ export class DocumentSearchService {
 
     for (let i = 0; i < documents.length; i++) {
       const doc = documents[i];
-      try {
-        await this.indexDocument({
-          documentPath: doc.documentPath,
-          baseId,
-          fileName: doc.fileName,
-          mimeType: doc.mimeType,
-          fileSize: doc.fileSize,
-          tableId: doc.tableId,
-          recordId: doc.recordId,
-        });
+      const result = await this.indexDocument({
+        documentPath: doc.documentPath,
+        baseId,
+        fileName: doc.fileName,
+        mimeType: doc.mimeType,
+        fileSize: doc.fileSize,
+        tableId: doc.tableId,
+        recordId: doc.recordId,
+      });
+      
+      // indexDocument returns null on failure
+      if (result) {
         success++;
-      } catch (e) {
-        console.error(`Failed to index ${doc.documentPath}:`, e);
+      } else {
+        console.error(`Failed to index ${doc.documentPath}: indexDocument returned null`);
         failed++;
       }
       onProgress?.(i + 1, total);
@@ -343,30 +345,36 @@ export class DocumentSearchService {
     byMimeType: Record<string, number>;
   }> {
     try {
-      const { data, error } = await supabase
+      // Query 1: Get only mime_type for aggregation (lightweight)
+      const { data: mimeData, error: mimeError } = await supabase
         .from("document_search_index")
-        .select("mime_type, content_text")
+        .select("mime_type")
         .eq("base_id", baseId);
 
-      if (error) throw error;
+      if (mimeError) throw mimeError;
 
-      const documents = data || [];
+      // Query 2: Count documents with non-null content_text (lightweight count query)
+      const { count: contentCount, error: countError } = await supabase
+        .from("document_search_index")
+        .select("id", { count: "exact", head: true })
+        .eq("base_id", baseId)
+        .not("content_text", "is", null);
+
+      if (countError) throw countError;
+
+      const documents = mimeData || [];
       const byMimeType: Record<string, number> = {};
-      let withContent = 0;
 
-      documents.forEach((doc: any) => {
+      documents.forEach((doc: { mime_type: string | null }) => {
         if (doc.mime_type) {
           byMimeType[doc.mime_type] = (byMimeType[doc.mime_type] || 0) + 1;
-        }
-        if (doc.content_text) {
-          withContent++;
         }
       });
 
       return {
         totalDocuments: 0, // Would need separate query to storage
         indexedDocuments: documents.length,
-        withContent,
+        withContent: contentCount || 0,
         byMimeType,
       };
     } catch (e) {

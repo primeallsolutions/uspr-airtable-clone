@@ -3,8 +3,9 @@
  * 
  * Provides client-side compression and optimization for:
  * - Images (JPEG quality reduction, resize)
- * - PDFs (for signed documents)
  * - Thumbnail generation
+ * 
+ * TODO: PDF compression support is planned for future implementation
  * 
  * Uses browser APIs for compression without server overhead.
  */
@@ -188,12 +189,15 @@ export class DocumentCompressionService {
   /**
    * Compress multiple images in parallel
    */
+  /**
+   * Result for batch compression including both successful and failed items
+   */
   static async compressImages(
     files: File[],
     options: CompressionOptions = {},
     onProgress?: (processed: number, total: number) => void
-  ): Promise<CompressionResult[]> {
-    const results: CompressionResult[] = [];
+  ): Promise<Array<CompressionResult | { error: string; fileName: string }>> {
+    const results: Array<CompressionResult | { error: string; fileName: string }> = [];
     const total = files.length;
     let processed = 0;
 
@@ -206,10 +210,22 @@ export class DocumentCompressionService {
     }
 
     for (const chunk of chunks) {
-      const chunkResults = await Promise.all(
+      const settledResults = await Promise.allSettled(
         chunk.map(file => this.compressImage(file, options))
       );
-      results.push(...chunkResults);
+      
+      // Process results - capture both fulfilled and rejected
+      settledResults.forEach((result, index) => {
+        if (result.status === "fulfilled") {
+          results.push(result.value);
+        } else {
+          results.push({
+            error: result.reason instanceof Error ? result.reason.message : "Compression failed",
+            fileName: chunk[index].name,
+          });
+        }
+      });
+      
       processed += chunk.length;
       onProgress?.(processed, total);
     }
@@ -343,11 +359,29 @@ export class DocumentCompressionService {
         return { file, compressed: false, savings: 0 };
       }
 
-      // Create new file from compressed blob
+      // Derive extension and MIME type from the compression format
+      const format = options.format || "jpeg";
+      const formatToExtension: Record<string, string> = {
+        jpeg: ".jpg",
+        jpg: ".jpg",
+        webp: ".webp",
+        png: ".png",
+      };
+      const formatToMime: Record<string, string> = {
+        jpeg: "image/jpeg",
+        jpg: "image/jpeg",
+        webp: "image/webp",
+        png: "image/png",
+      };
+      
+      const extension = formatToExtension[format] || ".jpg";
+      const mimeType = formatToMime[format] || "image/jpeg";
+
+      // Create new file from compressed blob with correct extension and MIME type
       const compressedFile = new File(
         [result.blob],
-        file.name.replace(/\.[^.]+$/, ".jpg"), // Change extension to jpg
-        { type: "image/jpeg" }
+        file.name.replace(/\.[^.]+$/, extension),
+        { type: mimeType }
       );
 
       return {

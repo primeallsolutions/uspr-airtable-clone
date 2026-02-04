@@ -124,8 +124,9 @@ export function StatusColumnConfig({
                     onChange={(e) => onStatusValueOnCompleteChange(e.target.value)}
                     className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                   >
+                    <option value="">Select a value...</option>
                     {fieldOptions.map((opt) => (
-                      <option key={opt.value} value={opt.label}>
+                      <option key={opt.value} value={opt.value}>
                         {opt.label}
                       </option>
                     ))}
@@ -155,8 +156,9 @@ export function StatusColumnConfig({
                     onChange={(e) => onStatusValueOnDeclineChange(e.target.value)}
                     className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
                   >
+                    <option value="">Select a value...</option>
                     {fieldOptions.map((opt) => (
-                      <option key={opt.value} value={opt.label}>
+                      <option key={opt.value} value={opt.value}>
                         {opt.label}
                       </option>
                     ))}

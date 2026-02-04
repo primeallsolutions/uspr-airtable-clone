@@ -149,10 +149,13 @@ export function SignerManager({
     const newAssignments = { ...fieldSignerAssignments };
     if (mode === "template") {
       templateFields.forEach((field) => {
-        newAssignments[field.id || field.field_key || ""] = signerEmail;
+        const key = field.id || field.field_key;
+        if (!key) return; // Skip fields without valid key
+        newAssignments[key] = signerEmail;
       });
     } else {
       documentSignatureFields.forEach((field) => {
+        if (!field.id) return; // Skip fields without valid id
         newAssignments[field.id] = signerEmail;
       });
     }

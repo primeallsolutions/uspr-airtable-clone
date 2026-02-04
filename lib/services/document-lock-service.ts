@@ -38,11 +38,21 @@ export interface LockStatus {
 }
 
 /**
+ * Stored lock info for auto-refresh
+ */
+interface ActiveLockInfo {
+  lockId: string;
+  lockType: LockType;
+  durationMinutes: number;
+  baseId: string;
+}
+
+/**
  * Document Lock Service
  */
 export class DocumentLockService {
   private static refreshInterval: number | null = null;
-  private static activeLocks: Map<string, string> = new Map(); // path -> lockId
+  private static activeLocks: Map<string, ActiveLockInfo> = new Map(); // path -> lock info
 
   /**
    * Acquire a lock on a document
@@ -88,11 +98,16 @@ export class DocumentLockService {
       }
 
       if (result.success) {
-        // Track the lock locally
-        this.activeLocks.set(documentPath, result.lock_id);
+        // Track the lock locally with all parameters needed for refresh
+        this.activeLocks.set(documentPath, {
+          lockId: result.lock_id,
+          lockType,
+          durationMinutes,
+          baseId,
+        });
         
         // Start auto-refresh if not already running
-        this.startAutoRefresh(documentPath, baseId, lockType, durationMinutes);
+        this.startAutoRefresh(durationMinutes);
       }
 
       return {
@@ -273,23 +288,37 @@ export class DocumentLockService {
     baseId: string,
     callback: (status: LockStatus) => void
   ): () => void {
+    // Validate inputs to prevent injection
+    if (!documentPath || typeof documentPath !== "string" || !baseId || typeof baseId !== "string") {
+      console.error("Invalid documentPath or baseId for subscription");
+      return () => {};
+    }
+
     // Initial check
     this.checkLockStatus(documentPath, baseId).then(callback);
 
-    // Set up realtime subscription
+    // Generate a safe channel name using a hash or sanitized identifier
+    const channelId = `document-lock:${baseId}:${encodeURIComponent(documentPath)}`;
+
+    // Set up realtime subscription with both document_path and base_id filters
     const channel = supabase
-      .channel(`document-lock:${documentPath}`)
+      .channel(channelId)
       .on(
         "postgres_changes",
         {
           event: "*",
           schema: "public",
           table: "document_locks",
-          filter: `document_path=eq.${documentPath}`,
+          filter: `base_id=eq.${baseId}`,
         },
-        async () => {
-          const status = await this.checkLockStatus(documentPath, baseId);
-          callback(status);
+        async (payload) => {
+          // Additional client-side check for document_path since Supabase
+          // filter API doesn't support compound filters well
+          const record = payload.new as { document_path?: string } | undefined;
+          if (record?.document_path === documentPath) {
+            const status = await this.checkLockStatus(documentPath, baseId);
+            callback(status);
+          }
         }
       )
       .subscribe();
@@ -303,20 +332,21 @@ export class DocumentLockService {
   /**
    * Start auto-refresh for active locks
    */
-  private static startAutoRefresh(
-    documentPath: string,
-    baseId: string,
-    lockType: LockType,
-    durationMinutes: number
-  ) {
+  private static startAutoRefresh(durationMinutes: number) {
     if (this.refreshInterval) return;
 
     // Refresh locks every 5 minutes (before they expire)
     const refreshMs = Math.min(durationMinutes * 60 * 1000 * 0.5, 5 * 60 * 1000);
     
     this.refreshInterval = window.setInterval(async () => {
-      for (const [path, _lockId] of this.activeLocks) {
-        await this.acquireLock(path, baseId, lockType, durationMinutes);
+      for (const [path, lockInfo] of this.activeLocks) {
+        // Use per-path parameters for correct refresh
+        await this.acquireLock(
+          path,
+          lockInfo.baseId,
+          lockInfo.lockType,
+          lockInfo.durationMinutes
+        );
       }
     }, refreshMs);
   }
@@ -334,10 +364,10 @@ export class DocumentLockService {
   /**
    * Release all locks held by current user (call on page unload)
    */
-  static async releaseAllLocks(baseId: string): Promise<void> {
-    const promises = Array.from(this.activeLocks.keys()).map(path =>
-      this.releaseLock(path, baseId)
-    );
+  static async releaseAllLocks(baseId?: string): Promise<void> {
+    const promises = Array.from(this.activeLocks.entries())
+      .filter(([_, lockInfo]) => !baseId || lockInfo.baseId === baseId)
+      .map(([path, lockInfo]) => this.releaseLock(path, lockInfo.baseId));
     await Promise.all(promises);
     this.stopAutoRefresh();
   }

@@ -155,14 +155,25 @@ export async function POST(request: Request) {
     }
 
     // Verify user has access to the base
-    const { data: baseMembership, error: membershipError } = await supabase
+    const { data: baseRecord, error: baseError } = await supabase
       .from("bases")
       .select("id, owner")
       .eq("id", baseId)
       .single();
 
-    if (membershipError || !baseMembership) {
-      // Check if user is a member
+    // Handle database error
+    if (baseError) {
+      console.error("Failed to fetch base:", baseError);
+      return NextResponse.json({ error: "Failed to verify base access" }, { status: 500 });
+    }
+
+    // Base doesn't exist
+    if (!baseRecord) {
+      return NextResponse.json({ error: "Base not found" }, { status: 404 });
+    }
+
+    // Check authorization: owner has access, otherwise check membership
+    if (baseRecord.owner !== user.id) {
       const { data: membership } = await supabase
         .from("base_memberships")
         .select("id")
@@ -170,7 +181,7 @@ export async function POST(request: Request) {
         .eq("user_id", user.id)
         .single();
 
-      if (!membership && baseMembership?.owner !== user.id) {
+      if (!membership) {
         return NextResponse.json({ error: "Access denied to this base" }, { status: 403 });
       }
     }
@@ -323,9 +334,12 @@ export async function POST(request: Request) {
 
   } catch (error) {
     console.error("Document upload error:", error);
+    
+    // Only include error details in non-production environments
+    const isProduction = process.env.NODE_ENV === "production";
     return NextResponse.json({ 
       error: "Internal server error",
-      details: error instanceof Error ? error.message : "Unknown error"
+      ...(isProduction ? {} : { details: error instanceof Error ? error.message : "Unknown error" })
     }, { status: 500 });
   }
 }

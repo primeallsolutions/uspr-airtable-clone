@@ -33,6 +33,8 @@ export interface PdfContextValue {
   getCachedDocument: (url: string) => PDFDocumentProxy | null;
   clearCache: (url?: string) => void;
   preloadDocument: (url: string) => void;
+  acquireDocument: (url: string) => void;
+  releaseDocument: (url: string) => void;
 }
 
 export interface PdfLoadOptions {
@@ -58,6 +60,7 @@ interface CachedDocument {
   document: PDFDocumentProxy;
   loadedAt: number;
   url: string;
+  refCount: number; // Track active usage
 }
 
 // Context
@@ -131,17 +134,40 @@ export function PdfProvider({
   }, []);
 
   /**
-   * Manage cache size - remove oldest entries
+   * Acquire a document - increment ref count to prevent eviction
+   */
+  const acquireDocument = useCallback((url: string) => {
+    const cached = cacheRef.current.get(url);
+    if (cached) {
+      cached.refCount = (cached.refCount || 0) + 1;
+    }
+  }, []);
+
+  /**
+   * Release a document - decrement ref count
+   */
+  const releaseDocument = useCallback((url: string) => {
+    const cached = cacheRef.current.get(url);
+    if (cached && cached.refCount > 0) {
+      cached.refCount--;
+    }
+  }, []);
+
+  /**
+   * Manage cache size - remove oldest entries that are not in use
    */
   const trimCache = useCallback(() => {
     const cache = cacheRef.current;
     if (cache.size <= maxCacheSize) return;
 
-    // Sort by loadedAt and remove oldest
+    // Sort by loadedAt and remove oldest, but skip entries still in use
     const entries = Array.from(cache.entries());
     entries.sort((a, b) => a[1].loadedAt - b[1].loadedAt);
     
-    const toRemove = entries.slice(0, entries.length - maxCacheSize);
+    // Filter out entries that are actively in use (refCount > 0)
+    const evictable = entries.filter(([_, value]) => !value.refCount || value.refCount === 0);
+    const toRemove = evictable.slice(0, Math.max(0, cache.size - maxCacheSize));
+    
     toRemove.forEach(([key, value]) => {
       // Destroy the document to free memory
       value.document.destroy().catch(() => {});
@@ -190,12 +216,16 @@ export function PdfProvider({
           document,
           loadedAt: Date.now(),
           url,
+          refCount: 0,
         });
         trimCache();
       }
 
-      // Remove from loading map
-      loadingRef.current.delete(url);
+      // Only remove from loading map if this is still the current load for this URL
+      // This prevents a race condition when forceReload starts a new load before this one completes
+      if (loadingRef.current.get(url) === loadPromise) {
+        loadingRef.current.delete(url);
+      }
 
       return document;
     })();
@@ -244,6 +274,8 @@ export function PdfProvider({
     getCachedDocument,
     clearCache,
     preloadDocument,
+    acquireDocument,
+    releaseDocument,
   };
 
   return (
@@ -268,11 +300,17 @@ export function usePdf(): PdfContextValue {
  * Hook to load and manage a PDF document
  */
 export function usePdfDocument(url: string | null, options?: PdfLoadOptions) {
-  const { loadDocument, getCachedDocument, clearCache } = usePdf();
+  const { loadDocument, getCachedDocument, clearCache, acquireDocument, releaseDocument } = usePdf();
   const [document, setDocument] = useState<PDFDocumentProxy | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [numPages, setNumPages] = useState(0);
+  
+  // Extract stable option values to avoid infinite re-renders from inline objects
+  const cacheOption = options?.cache;
+  const forceReloadOption = options?.forceReload;
+  const withCredentialsOption = options?.withCredentials;
+  const disableAutoFetchOption = options?.disableAutoFetch;
 
   useEffect(() => {
     if (!url) {
@@ -289,17 +327,28 @@ export function usePdfDocument(url: string | null, options?: PdfLoadOptions) {
       setNumPages(cached.numPages);
       setLoading(false);
       setError(null);
-      return;
+      acquireDocument(url);
+      return () => {
+        releaseDocument(url);
+      };
     }
 
     setLoading(true);
     setError(null);
 
-    loadDocument(url, options)
+    const stableOptions: PdfLoadOptions = {
+      cache: cacheOption,
+      forceReload: forceReloadOption,
+      withCredentials: withCredentialsOption,
+      disableAutoFetch: disableAutoFetchOption,
+    };
+
+    loadDocument(url, stableOptions)
       .then((doc) => {
         setDocument(doc);
         setNumPages(doc.numPages);
         setError(null);
+        acquireDocument(url);
       })
       .catch((err) => {
         console.error("Failed to load PDF:", err);
@@ -310,7 +359,13 @@ export function usePdfDocument(url: string | null, options?: PdfLoadOptions) {
       .finally(() => {
         setLoading(false);
       });
-  }, [url, loadDocument, getCachedDocument, options]);
+
+    return () => {
+      if (url) {
+        releaseDocument(url);
+      }
+    };
+  }, [url, loadDocument, getCachedDocument, acquireDocument, releaseDocument, cacheOption, forceReloadOption, withCredentialsOption, disableAutoFetchOption]);
 
   const reload = useCallback(() => {
     if (url) {
