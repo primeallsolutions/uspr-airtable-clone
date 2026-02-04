@@ -25,6 +25,22 @@ type SignatureRequestModalProps = {
   recordValues?: Record<string, any>;
   // Available records for selection (for base-level templates)
   records?: RecordRow[];
+  // Pre-populated signers from PDF Editor SignerPanel
+  initialSigners?: Array<{ id?: string; email: string; name: string; role: "signer" | "viewer" | "approver"; signOrder?: number }>;
+  // Pre-populated signature fields from PDF Editor
+  initialSignatureFields?: Array<{
+    id: string;
+    pageIndex: number;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    label: string;
+    fieldType?: string;
+    assignedTo?: string;
+  }>;
+  // Field assignments from PDF Editor
+  initialFieldAssignments?: Record<string, string>;
 };
 
 export const SignatureRequestModal = ({
@@ -39,6 +55,9 @@ export const SignatureRequestModal = ({
   availableFields = [],
   recordValues,
   records = [],
+  initialSigners,
+  initialSignatureFields,
+  initialFieldAssignments,
 }: SignatureRequestModalProps) => {
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
@@ -219,10 +238,46 @@ export const SignatureRequestModal = ({
       // Set default title from document name
       const docName = selectedDocument.path.split('/').pop() || 'Document';
       setTitle(`Signature Request - ${docName}`);
+      
+      // If initialSignatureFields are provided from PDF Editor, use them
+      if (initialSignatureFields && initialSignatureFields.length > 0) {
+        setDocumentSignatureFields(initialSignatureFields.map(f => ({
+          id: f.id,
+          pageIndex: f.pageIndex,
+          x: f.x,
+          y: f.y,
+          width: f.width,
+          height: f.height,
+          label: f.label,
+        })));
+        
+        // Also set field assignments from PDF Editor
+        if (initialFieldAssignments && initialSigners) {
+          // Map signer IDs to emails for the field assignments
+          const signerIdToEmail: Record<string, string> = {};
+          initialSigners.forEach(s => {
+            // Map signer.id -> signer.email (if id is available)
+            if (s.id) {
+              signerIdToEmail[s.id] = s.email;
+            }
+          });
+          
+          // Convert field assignments (which may use signer IDs) to use emails
+          const emailAssignments: Record<string, string> = {};
+          Object.entries(initialFieldAssignments).forEach(([fieldId, signerIdOrEmail]) => {
+            // First try to look up by ID, then fall back to using the value directly (it might already be an email)
+            const email = signerIdToEmail[signerIdOrEmail] || signerIdOrEmail;
+            if (email) {
+              emailAssignments[fieldId] = email;
+            }
+          });
+          setFieldSignerAssignments(emailAssignments);
+        }
+      }
     } else if (isOpen && !selectedDocument) {
       setMode('template');
     }
-  }, [isOpen, selectedDocument]);
+  }, [isOpen, selectedDocument, initialSignatureFields, initialFieldAssignments, initialSigners]);
 
   // Load document PDF when in document mode
   const loadDocumentPDF = useCallback(async () => {
@@ -249,7 +304,13 @@ export const SignatureRequestModal = ({
       
       const urlResponse = await fetch(`/api/documents/signed-url?${urlParams}`, { headers });
       if (!urlResponse.ok) {
-        throw new Error("Failed to get document URL");
+        const errorData = await urlResponse.json().catch(() => ({ error: "Unknown error" }));
+        console.error("Signed URL API error:", { 
+          status: urlResponse.status, 
+          error: errorData,
+          params: Object.fromEntries(urlParams.entries())
+        });
+        throw new Error(errorData.error || `Failed to get document URL (${urlResponse.status})`);
       }
       const urlData = await urlResponse.json();
       setPdfUrl(urlData.url);
@@ -303,39 +364,53 @@ export const SignatureRequestModal = ({
     }
   }, [isOpen, mode, loadTemplates]);
   
-  // Auto-populate signer from record data (only once when modal opens)
+  // Auto-populate signer from PDF Editor (initialSigners) or record data
   useEffect(() => {
-    if (isOpen && !signerAutoPopulatedRef.current && recordValues && availableFields.length > 0) {
+    if (isOpen && !signerAutoPopulatedRef.current) {
       signerAutoPopulatedRef.current = true;
       
-      // Find email field (common patterns)
-      const emailField = availableFields.find(f => 
-        f.name.toLowerCase().includes('email') ||
-        f.name.toLowerCase().includes('e-mail') ||
-        f.name.toLowerCase().includes('contact')
-      );
+      // Priority 1: Use initialSigners from PDF Editor SignerPanel if provided
+      if (initialSigners && initialSigners.length > 0) {
+        setSigners(initialSigners.map((s, index) => ({
+          email: s.email,
+          name: s.name,
+          role: s.role,
+          sign_order: s.signOrder ?? index,
+        })));
+        return;
+      }
       
-      // Find name field (common patterns)
-      const nameField = availableFields.find(f => 
-        f.name.toLowerCase().includes('name') ||
-        f.name.toLowerCase().includes('client') ||
-        f.name.toLowerCase().includes('contact')
-      );
-      
-      const autoEmail = emailField && recordValues[emailField.id] ? String(recordValues[emailField.id]) : "";
-      const autoName = nameField && recordValues[nameField.id] ? String(recordValues[nameField.id]) : "";
-      
-      // Only auto-populate if we found at least one value
-      if (autoEmail || autoName) {
-        setSigners([{
-          email: autoEmail,
-          name: autoName,
-          role: "signer",
-          sign_order: 0,
-        }]);
+      // Priority 2: Auto-populate from record values
+      if (recordValues && availableFields.length > 0) {
+        // Find email field (common patterns)
+        const emailField = availableFields.find(f => 
+          f.name.toLowerCase().includes('email') ||
+          f.name.toLowerCase().includes('e-mail') ||
+          f.name.toLowerCase().includes('contact')
+        );
+        
+        // Find name field (common patterns)
+        const nameField = availableFields.find(f => 
+          f.name.toLowerCase().includes('name') ||
+          f.name.toLowerCase().includes('client') ||
+          f.name.toLowerCase().includes('contact')
+        );
+        
+        const autoEmail = emailField && recordValues[emailField.id] ? String(recordValues[emailField.id]) : "";
+        const autoName = nameField && recordValues[nameField.id] ? String(recordValues[nameField.id]) : "";
+        
+        // Only auto-populate if we found at least one value
+        if (autoEmail || autoName) {
+          setSigners([{
+            email: autoEmail,
+            name: autoName,
+            role: "signer",
+            sign_order: 0,
+          }]);
+        }
       }
     }
-  }, [isOpen, recordValues, availableFields]);
+  }, [isOpen, recordValues, availableFields, initialSigners]);
 
   // Cleanup when modal closes
   useEffect(() => {
@@ -459,6 +534,12 @@ export const SignatureRequestModal = ({
     
     if (isRenderingRef.current) {
       console.log('Render skipped - already rendering');
+      return;
+    }
+
+    // CRITICAL: Validate page number is within bounds to prevent "Invalid page request" error
+    if (currentPage < 1 || currentPage > pdfDoc.numPages) {
+      console.warn(`Invalid page number ${currentPage}, valid range is 1-${pdfDoc.numPages}`);
       return;
     }
 

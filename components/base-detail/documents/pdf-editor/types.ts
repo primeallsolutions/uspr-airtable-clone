@@ -6,10 +6,10 @@
 import type { PDFDocumentProxy, PDFPageProxy } from "pdfjs-dist";
 
 // Tool types available in the editor
-export type Tool = "select" | "pan" | "highlight" | "text" | "signature" | "edit";
+export type Tool = "select" | "pan" | "highlight" | "text" | "signature" | "edit" | "signatureField" | "initialsField" | "dateField";
 
 // Annotation types
-export type AnnotationType = "highlight" | "textBox" | "textEdit" | "signature";
+export type AnnotationType = "highlight" | "textBox" | "textEdit" | "signature" | "signatureField";
 
 // Base annotation interface
 export interface BaseAnnotation {
@@ -34,6 +34,12 @@ export interface TextBoxAnnotation extends BaseAnnotation {
   content: string;
   fontSize: number;
   color: string;
+  // Extended formatting options
+  fontFamily?: string;
+  fontWeight?: "normal" | "bold";
+  fontStyle?: "normal" | "italic";
+  textDecoration?: "none" | "underline" | "line-through";
+  backgroundColor?: string;
 }
 
 // Text edit annotation (modification of existing PDF text)
@@ -45,6 +51,12 @@ export interface TextEditAnnotation extends BaseAnnotation {
   originalY: number;
   fontSize: number;
   color: string;
+  // Extended formatting options
+  fontFamily?: string;
+  fontWeight?: "normal" | "bold";
+  fontStyle?: "normal" | "italic";
+  textDecoration?: "none" | "underline" | "line-through";
+  backgroundColor?: string;
 }
 
 // Signature annotation (embedded image)
@@ -53,12 +65,22 @@ export interface SignatureAnnotation extends BaseAnnotation {
   imageData: string; // Base64 PNG data URL
 }
 
+// Signature field marker (for signature requests)
+export interface SignatureFieldAnnotation extends BaseAnnotation {
+  type: "signatureField";
+  label: string;
+  fieldType: "signature" | "initial" | "date" | "text";
+  isRequired: boolean;
+  assignedTo?: string; // Signer identifier
+}
+
 // Union type for all annotations
 export type Annotation =
   | HighlightAnnotation
   | TextBoxAnnotation
   | TextEditAnnotation
-  | SignatureAnnotation;
+  | SignatureAnnotation
+  | SignatureFieldAnnotation;
 
 // Text item extracted from PDF
 export interface TextItem {
@@ -89,6 +111,49 @@ export interface PdfPageState {
   textItems: TextItem[];
 }
 
+// Signer data type for signature requests
+export interface SignerData {
+  id: string;
+  email: string;
+  name: string;
+  role: "signer" | "viewer" | "approver";
+  signOrder: number;
+}
+
+// Request metadata for signature requests
+export interface RequestMetadata {
+  title: string;
+  message: string;
+  expiresAt: string;
+}
+
+// Status column configuration for auto-updating records
+export interface StatusConfig {
+  fieldId: string;
+  valueOnComplete: string;
+  valueOnDecline: string;
+}
+
+// Signature request data passed from PDF Editor
+export interface SignatureRequestData {
+  signatureFields: SignatureFieldAnnotation[];
+  signers: SignerData[];
+  fieldAssignments: Record<string, string>; // fieldId -> signerId
+  // Enhanced metadata
+  title: string;
+  message?: string;
+  expiresAt?: string;
+  statusConfig?: StatusConfig;
+}
+
+// Field definition for record context
+export interface FieldDefinition {
+  id: string;
+  name: string;
+  type: string;
+  options?: Record<string, { name?: string; label?: string }>;
+}
+
 // Editor props (same interface as old PdfEditor for compatibility)
 export interface PdfEditorProps {
   document: {
@@ -99,6 +164,11 @@ export interface PdfEditorProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (file: File) => Promise<void>;
+  onRequestSignature?: (data: SignatureRequestData) => void;
+  // Record context for enhanced features
+  recordId?: string | null;
+  availableFields?: FieldDefinition[];
+  recordValues?: Record<string, unknown>;
 }
 
 // Zoom configuration
@@ -118,3 +188,42 @@ export interface Rect {
   width: number;
   height: number;
 }
+
+// Text formatting options
+export interface TextFormatting {
+  fontFamily: string;
+  fontSize: number;
+  fontWeight: "normal" | "bold";
+  fontStyle: "normal" | "italic";
+  textDecoration: "none" | "underline" | "line-through";
+  color: string;
+  backgroundColor: string;
+}
+
+// Default text formatting
+export const DEFAULT_TEXT_FORMATTING: TextFormatting = {
+  fontFamily: "Arial",
+  fontSize: 14,
+  fontWeight: "normal",
+  fontStyle: "normal",
+  textDecoration: "none",
+  color: "#000000",
+  backgroundColor: "transparent",
+};
+
+// Available font families
+export const FONT_FAMILIES = [
+  "Arial",
+  "Helvetica",
+  "Times New Roman",
+  "Georgia",
+  "Courier New",
+  "Verdana",
+  "Trebuchet MS",
+  "Comic Sans MS",
+  "Impact",
+  "Palatino Linotype",
+] as const;
+
+// Available font sizes
+export const FONT_SIZES = [8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 32, 36, 48, 72] as const;

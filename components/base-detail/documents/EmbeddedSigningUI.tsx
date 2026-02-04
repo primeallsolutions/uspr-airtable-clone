@@ -48,14 +48,19 @@ export const EmbeddedSigningUI = ({
   const [alreadySigned, setAlreadySigned] = useState(false);
   const [pdfDoc, setPdfDoc] = useState<any>(null);
   const [fieldBounds, setFieldBounds] = useState<Map<string, { x: number; y: number; width: number; height: number }>>(new Map());
+  const [pdfLoadError, setPdfLoadError] = useState<string | null>(null);
+  const [pdfRetryCount, setPdfRetryCount] = useState(0);
+  const maxRetries = 3;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const renderTaskRef = useRef<any>(null);
 
-  const loadSigningData = useCallback(async () => {
+  const loadSigningData = useCallback(async (retryAttempt = 0) => {
     try {
       setLoading(true);
+      setPdfLoadError(null);
+      
       const response = await fetch(`/api/esignature/sign/${token}`);
       
       if (!response.ok) {
@@ -76,17 +81,40 @@ export const EmbeddedSigningUI = ({
         return;
       }
 
-      // Load PDF document - follow TemplateFieldEditor pattern exactly
+      // Load PDF document with retry logic
       if (data.documentUrl) {
-        const pdfjs = await import("pdfjs-dist");
-        if (typeof window !== "undefined") {
-          pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
-        }
+        try {
+          const pdfjs = await import("pdfjs-dist");
+          if (typeof window !== "undefined") {
+            pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
+          }
 
-        const loadingTask = pdfjs.getDocument({ url: data.documentUrl });
-        const pdf = await loadingTask.promise;
-        setPdfDoc(pdf);
-        setNumPages(pdf.numPages);
+          const loadingTask = pdfjs.getDocument({ 
+            url: data.documentUrl,
+            // Add fetch options for better reliability
+            withCredentials: false,
+            disableAutoFetch: false,
+          });
+          
+          const pdf = await loadingTask.promise;
+          setPdfDoc(pdf);
+          setNumPages(pdf.numPages);
+          setPdfRetryCount(0); // Reset retry count on success
+        } catch (pdfErr: any) {
+          console.error("Failed to load PDF:", pdfErr);
+          setPdfLoadError(pdfErr.message || "Failed to load PDF document");
+          
+          // Retry if not exceeded max retries
+          if (retryAttempt < maxRetries) {
+            setPdfRetryCount(retryAttempt + 1);
+            toast.info(`Retrying PDF load... (${retryAttempt + 1}/${maxRetries})`);
+            // Exponential backoff: 1s, 2s, 4s
+            await new Promise(resolve => setTimeout(resolve, Math.pow(2, retryAttempt) * 1000));
+            return loadSigningData(retryAttempt + 1);
+          } else {
+            throw new Error("Failed to load PDF after multiple attempts. Please refresh the page.");
+          }
+        }
       }
     } catch (err: any) {
       console.error("Failed to load signing data:", err);
@@ -190,12 +218,22 @@ export const EmbeddedSigningUI = ({
     }
 
     try {
-      // Use currentPage directly (1-based) like TemplateFieldEditor does
-      const page = await pdfDoc.getPage(currentPage);
+      // CRITICAL: Validate page number is within bounds to prevent "Invalid page request" error
+      const pageNum = Math.max(1, Math.min(currentPage, pdfDoc.numPages));
+      if (pageNum !== currentPage) {
+        console.warn(`Invalid page number ${currentPage}, clamping to ${pageNum}`);
+        setCurrentPage(pageNum);
+        return; // Exit and let the effect re-run with corrected page
+      }
+      
+      const page = await pdfDoc.getPage(pageNum);
       const viewport = page.getViewport({ scale: 1.5 });
       const canvas = canvasRef.current;
+      
+      // Double-check canvas exists after async operation
+      if (!canvas) return;
+      
       const context = canvas.getContext("2d");
-
       if (!context) return;
 
       canvas.height = viewport.height;
@@ -231,7 +269,8 @@ export const EmbeddedSigningUI = ({
 
   // Render page when PDF doc, current page, or field values change
   useEffect(() => {
-    if (pdfDoc && canvasRef.current) {
+    // Ensure we have a valid PDF doc with pages before attempting to render
+    if (pdfDoc && canvasRef.current && pdfDoc.numPages > 0 && currentPage >= 1) {
       renderPage();
     }
     
@@ -247,6 +286,13 @@ export const EmbeddedSigningUI = ({
       }
     };
   }, [pdfDoc, currentPage, fieldValues, renderPage]);
+
+  // Ensure currentPage is valid when numPages changes
+  useEffect(() => {
+    if (numPages > 0 && (currentPage < 1 || currentPage > numPages)) {
+      setCurrentPage(1);
+    }
+  }, [numPages, currentPage]);
 
   const handleFieldClick = (field: SignatureField) => {
     if (field.field_type === "signature") {
@@ -360,16 +406,36 @@ export const EmbeddedSigningUI = ({
   if (error) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-50">
-        <div className="text-center max-w-md">
-          <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">Error</h2>
-          <p className="text-gray-600 mb-4">{error}</p>
-          <button
-            onClick={() => window.location.reload()}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-          >
-            Retry
-          </button>
+        <div className="text-center max-w-md p-6 bg-white rounded-xl shadow-lg">
+          <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Unable to Load Document</h2>
+          <p className="text-gray-600 mb-2">{error}</p>
+          {pdfRetryCount > 0 && (
+            <p className="text-sm text-gray-500 mb-4">
+              Attempted {pdfRetryCount} automatic {pdfRetryCount === 1 ? "retry" : "retries"}
+            </p>
+          )}
+          <div className="flex flex-col gap-2">
+            <button
+              onClick={() => {
+                setError(null);
+                setPdfRetryCount(0);
+                loadSigningData(0);
+              }}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Try Again
+            </button>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+            >
+              Refresh Page
+            </button>
+          </div>
+          <p className="text-xs text-gray-500 mt-4">
+            If the problem persists, please contact the document sender.
+          </p>
         </div>
       </div>
     );

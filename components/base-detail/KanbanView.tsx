@@ -14,6 +14,9 @@ interface KanbanViewProps {
   onAddRow: (values?: Record<string, unknown>) => void | Promise<void>;
   savingCell: SavingCell;
   canDeleteRow?: boolean;
+  // For opening a specific record's detail modal (e.g., when returning from documents page)
+  initialOpenRecordId?: string | null;
+  onInitialRecordOpened?: () => void;
 }
 
 interface KanbanColumn {
@@ -119,7 +122,9 @@ export const KanbanView = ({
   onDeleteRow,
   onAddRow,
   savingCell,
-  canDeleteRow = true
+  canDeleteRow = true,
+  initialOpenRecordId,
+  onInitialRecordOpened
 }: KanbanViewProps) => {
   console.log("🎬 KanbanView render:", {
     recordsCount: records.length,
@@ -139,6 +144,19 @@ export const KanbanView = ({
   );
   
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Handle initial record opening (e.g., when returning from documents page)
+  useEffect(() => {
+    if (initialOpenRecordId && records.length > 0) {
+      // Check if the record exists in the current records
+      const recordExists = records.some(r => r.id === initialOpenRecordId);
+      if (recordExists) {
+        setExpandedRecordId(initialOpenRecordId);
+        // Notify parent that the initial record has been opened
+        onInitialRecordOpened?.();
+      }
+    }
+  }, [initialOpenRecordId, records, onInitialRecordOpened]);
 
   // Step 1: Get all columns with dropdown/options (single_select, multi_select & radio_select fields)
   const dropdownFields = useMemo(

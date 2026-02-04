@@ -613,6 +613,195 @@ export const DocumentsService = {
     }
     
     return `${targetFolder}${fileName}`;
+  },
+
+  /**
+   * Move a folder (and all its contents) to a different parent folder or to root
+   * @param targetParentPath - The target parent folder path, or empty string/"" for root level
+   */
+  async moveFolder(params: {
+    baseId: string;
+    tableId?: string | null;
+    recordId?: string | null;
+    sourceFolderPath: string; // e.g., "Parent/Child/" or "Child/"
+    targetParentPath: string; // e.g., "NewParent/" or "" for root
+  }): Promise<string> {
+    const { baseId, tableId, recordId, sourceFolderPath, targetParentPath } = params;
+    const prefix = recordId ? recordPrefix(baseId, recordId) : basePrefix(baseId, tableId);
+    
+    // Extract the folder name from the source path
+    const sourcePathNormalized = sourceFolderPath.endsWith("/") ? sourceFolderPath.slice(0, -1) : sourceFolderPath;
+    const folderName = sourcePathNormalized.split("/").pop() || "";
+    if (!folderName) {
+      throw new Error("Invalid source folder path");
+    }
+    
+    // Calculate the new path
+    const targetParentNormalized = targetParentPath ? (targetParentPath.endsWith("/") ? targetParentPath : `${targetParentPath}/`) : "";
+    const newFolderPath = `${targetParentNormalized}${folderName}/`;
+    
+    // Check if we're trying to move a folder into itself or its children
+    if (newFolderPath.startsWith(sourceFolderPath)) {
+      throw new Error("Cannot move a folder into itself or its subfolders");
+    }
+    
+    // Check if target folder already exists (would cause conflict)
+    let existingQuery = supabase
+      .from("document_folders")
+      .select("id")
+      .eq("base_id", baseId)
+      .eq("path", newFolderPath);
+    
+    if (recordId) {
+      existingQuery = existingQuery.eq("record_id", recordId);
+    } else if (tableId) {
+      existingQuery = existingQuery.eq("table_id", tableId).is("record_id", null);
+    } else {
+      existingQuery = existingQuery.is("table_id", null).is("record_id", null);
+    }
+    
+    const { data: existing } = await existingQuery.single();
+    if (existing) {
+      throw new Error(`A folder with name "${folderName}" already exists in the target location`);
+    }
+    
+    // Move the .keep file in storage
+    const sourceKeepPath = `${prefix}${sourceFolderPath}.keep`;
+    const targetKeepPath = `${prefix}${newFolderPath}.keep`;
+    
+    const { error: moveError } = await supabase.storage
+      .from(BUCKET)
+      .move(sourceKeepPath, targetKeepPath);
+    
+    if (moveError) {
+      throw new Error(`Failed to move folder: ${moveError.message}`);
+    }
+    
+    // Update the folder's path and parent_path in the database
+    let updateQuery = supabase
+      .from("document_folders")
+      .update({
+        path: newFolderPath,
+        parent_path: targetParentNormalized || null,
+      })
+      .eq("base_id", baseId)
+      .eq("path", sourceFolderPath);
+    
+    if (recordId) {
+      updateQuery = updateQuery.eq("record_id", recordId);
+    } else if (tableId) {
+      updateQuery = updateQuery.eq("table_id", tableId).is("record_id", null);
+    } else {
+      updateQuery = updateQuery.is("table_id", null).is("record_id", null);
+    }
+    
+    const { error: updateError } = await updateQuery;
+    if (updateError) {
+      throw new Error(`Failed to update folder metadata: ${updateError.message}`);
+    }
+    
+    // Update all child folders to have new paths
+    let childQuery = supabase
+      .from("document_folders")
+      .select("id, path, parent_path")
+      .eq("base_id", baseId)
+      .like("path", `${sourceFolderPath}%`)
+      .neq("path", sourceFolderPath);
+    
+    if (recordId) {
+      childQuery = childQuery.eq("record_id", recordId);
+    } else if (tableId) {
+      childQuery = childQuery.eq("table_id", tableId).is("record_id", null);
+    } else {
+      childQuery = childQuery.is("table_id", null).is("record_id", null);
+    }
+    
+    const { data: childFolders } = await childQuery;
+    
+    if (childFolders && childFolders.length > 0) {
+      for (const child of childFolders) {
+        // Calculate new child path by replacing the old root with new root
+        const newChildPath = child.path.replace(sourceFolderPath, newFolderPath);
+        const newChildParentPath = child.parent_path?.replace(sourceFolderPath, newFolderPath) || newFolderPath;
+        
+        // Move the .keep file for child folders
+        const childSourceKeepPath = `${prefix}${child.path}.keep`;
+        const childTargetKeepPath = `${prefix}${newChildPath}.keep`;
+        
+        await supabase.storage
+          .from(BUCKET)
+          .move(childSourceKeepPath, childTargetKeepPath);
+        
+        // Update the child folder metadata
+        await supabase
+          .from("document_folders")
+          .update({
+            path: newChildPath,
+            parent_path: newChildParentPath === "" ? null : newChildParentPath,
+          })
+          .eq("id", child.id);
+      }
+    }
+    
+    // Move all documents within the folder to the new path
+    // List all files in the source folder and subfolders recursively
+    const listRecursive = async (currentPath: string): Promise<Array<{ oldPath: string; fileName: string; subPath: string }>> => {
+      const files: Array<{ oldPath: string; fileName: string; subPath: string }> = [];
+      const fullCurrentPath = `${prefix}${currentPath}`;
+      
+      try {
+        const { data, error } = await supabase.storage.from(BUCKET).list(fullCurrentPath, {
+          limit: 1000,
+          sortBy: { column: "name", order: "asc" }
+        });
+        
+        if (error || !data) return files;
+        
+        for (const item of data) {
+          if (!item.name || item.name === ".keep") continue;
+          
+          const isFolder = item.id === null || item.metadata === null;
+          
+          if (isFolder) {
+            // Recursively get files from subfolders
+            const subFiles = await listRecursive(`${currentPath}${item.name}/`);
+            files.push(...subFiles);
+          } else {
+            files.push({
+              oldPath: `${currentPath}${item.name}`,
+              fileName: item.name,
+              subPath: currentPath.replace(sourceFolderPath, ""),
+            });
+          }
+        }
+      } catch (err) {
+        console.warn(`Failed to list directory ${currentPath}:`, err);
+      }
+      
+      return files;
+    };
+    
+    const filesToMove = await listRecursive(sourceFolderPath);
+    
+    for (const file of filesToMove) {
+      const sourceFilePath = `${prefix}${file.oldPath}`;
+      const targetFilePath = `${prefix}${newFolderPath}${file.subPath}${file.fileName}`;
+      
+      await supabase.storage
+        .from(BUCKET)
+        .move(sourceFilePath, targetFilePath);
+      
+      // If recordId is provided, update the path in record_documents
+      if (recordId) {
+        await supabase
+          .from("record_documents")
+          .update({ document_path: targetFilePath })
+          .eq("record_id", recordId)
+          .eq("document_path", sourceFilePath);
+      }
+    }
+    
+    return newFolderPath;
   }
 };
 

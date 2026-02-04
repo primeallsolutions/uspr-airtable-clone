@@ -7,7 +7,7 @@
 
 import React, { useRef, useEffect, useCallback, useState } from "react";
 import type { PDFDocumentProxy } from "pdfjs-dist";
-import { Loader2 } from "lucide-react";
+import { Loader2, Trash2 } from "lucide-react";
 import { usePdfPage } from "../hooks/usePdfPage";
 import { useAnnotationStore } from "../hooks/useAnnotationStore";
 import type { Tool, Annotation, TextItem, Rect, Point } from "../types";
@@ -20,6 +20,7 @@ interface PageCanvasProps {
   rotation: number;
   activeTool: Tool;
   onTextClick?: (textItem: TextItem, index: number) => void;
+  onTextBoxClick?: (annotationId: string) => void;
   onCanvasClick?: (pdfPoint: Point, screenPoint: Point) => void;
   onPanStart?: () => void;
   onPanMove?: (deltaX: number, deltaY: number) => void;
@@ -33,6 +34,7 @@ export function PageCanvas({
   rotation,
   activeTool,
   onTextClick,
+  onTextBoxClick,
   onCanvasClick,
   onPanStart,
   onPanMove,
@@ -50,9 +52,10 @@ export function PageCanvas({
     canvasRef
   );
   
-  // Subscribe to annotations directly for reactivity
+  // Subscribe to annotations and selection directly for reactivity
   const annotations = useAnnotationStore((state) => state.annotations);
-  const { getAnnotationsForPage, addHighlight, moveAnnotation, addTextEdit, findTextEdit } = useAnnotationStore();
+  const selectedAnnotationId = useAnnotationStore((state) => state.selectedAnnotationId);
+  const { getAnnotationsForPage, addHighlight, moveAnnotation, addTextEdit, findTextEdit, selectAnnotation, removeAnnotation } = useAnnotationStore();
   
   // Drawing state for highlight tool
   const [isDrawing, setIsDrawing] = useState(false);
@@ -116,18 +119,55 @@ export function PageCanvas({
           ctx.fillRect(screenPos.x, screenPos.y, screenWidth, screenHeight);
           break;
 
-        case "textBox":
-          ctx.font = `${ann.fontSize * zoom}px Arial`;
+        case "textBox": {
+          // Build font string with formatting
+          const textBoxFontStyle = ann.fontStyle === "italic" ? "italic " : "";
+          const textBoxFontWeight = ann.fontWeight === "bold" ? "bold " : "";
+          const textBoxFontFamily = ann.fontFamily || "Arial";
+          ctx.font = `${textBoxFontStyle}${textBoxFontWeight}${ann.fontSize * zoom}px ${textBoxFontFamily}`;
+          
+          // Draw background if set
+          if (ann.backgroundColor && ann.backgroundColor !== "transparent") {
+            const textMetrics = ctx.measureText(ann.content);
+            ctx.fillStyle = ann.backgroundColor;
+            ctx.fillRect(
+              screenPos.x - 2, 
+              screenPos.y, 
+              textMetrics.width + 4, 
+              ann.fontSize * zoom + 4
+            );
+          }
+          
           ctx.fillStyle = ann.color;
           ctx.fillText(ann.content, screenPos.x, screenPos.y + ann.fontSize * zoom);
+          
+          // Draw underline or strikethrough
+          if (ann.textDecoration === "underline" || ann.textDecoration === "line-through") {
+            const textMetrics = ctx.measureText(ann.content);
+            ctx.strokeStyle = ann.color;
+            ctx.lineWidth = 1;
+            const yOffset = ann.textDecoration === "underline" 
+              ? ann.fontSize * zoom + 2 
+              : ann.fontSize * zoom * 0.6;
+            ctx.beginPath();
+            ctx.moveTo(screenPos.x, screenPos.y + yOffset);
+            ctx.lineTo(screenPos.x + textMetrics.width, screenPos.y + yOffset);
+            ctx.stroke();
+          }
           break;
+        }
 
-        case "textEdit":
+        case "textEdit": {
           // TextEdit uses screen-like coordinates directly (from textItem extraction)
           const textEditX = ann.x * zoom;
           const textEditY = ann.y * zoom;
           const textEditWidth = ann.width * zoom;
           const textEditHeight = ann.height * zoom;
+          
+          // Build font string with formatting
+          const editFontStyle = ann.fontStyle === "italic" ? "italic " : "";
+          const editFontWeight = ann.fontWeight === "bold" ? "bold " : "";
+          const editFontFamily = ann.fontFamily || "Arial";
           
           // IMPORTANT: First cover the ORIGINAL position (where the text was in the PDF)
           // This prevents the "copy" effect when moving text
@@ -142,11 +182,32 @@ export function PageCanvas({
             ctx.fillRect(textEditX - 2, textEditY - 2, textEditWidth + 4, textEditHeight + 4);
           }
           
+          // Draw background color if set
+          if (ann.backgroundColor && ann.backgroundColor !== "transparent") {
+            ctx.fillStyle = ann.backgroundColor;
+            ctx.fillRect(textEditX - 2, textEditY - 2, textEditWidth + 4, textEditHeight + 4);
+          }
+          
           // Draw the text at the current position
-          ctx.font = `${ann.fontSize * zoom}px Arial`;
+          ctx.font = `${editFontStyle}${editFontWeight}${ann.fontSize * zoom}px ${editFontFamily}`;
           ctx.fillStyle = ann.color;
           ctx.fillText(ann.content, textEditX, textEditY + ann.fontSize * zoom);
+          
+          // Draw underline or strikethrough
+          if (ann.textDecoration === "underline" || ann.textDecoration === "line-through") {
+            const textMetrics = ctx.measureText(ann.content);
+            ctx.strokeStyle = ann.color;
+            ctx.lineWidth = 1;
+            const yOffset = ann.textDecoration === "underline" 
+              ? ann.fontSize * zoom + 2 
+              : ann.fontSize * zoom * 0.6;
+            ctx.beginPath();
+            ctx.moveTo(textEditX, textEditY + yOffset);
+            ctx.lineTo(textEditX + textMetrics.width, textEditY + yOffset);
+            ctx.stroke();
+          }
           break;
+        }
 
         case "signature":
           // Use cached image for immediate drawing (no async delay)
@@ -161,6 +222,81 @@ export function PageCanvas({
               ctx.drawImage(img, screenPos.x, screenPos.y, screenWidth, screenHeight);
             };
             img.src = ann.imageData;
+          }
+          break;
+
+        case "signatureField":
+          // Draw signature field marker with color coding by field type
+          let fieldColor: string;
+          let fieldBgColor: string;
+          let fieldTextColor: string;
+          
+          switch (ann.fieldType) {
+            case "signature":
+              fieldColor = "#9333ea"; // Purple for signature
+              fieldBgColor = "rgba(147, 51, 234, 0.15)";
+              fieldTextColor = "#7c3aed";
+              break;
+            case "initial":
+              fieldColor = "#0891b2"; // Cyan for initials
+              fieldBgColor = "rgba(8, 145, 178, 0.15)";
+              fieldTextColor = "#0e7490";
+              break;
+            case "date":
+              fieldColor = "#059669"; // Green for date
+              fieldBgColor = "rgba(5, 150, 105, 0.15)";
+              fieldTextColor = "#047857";
+              break;
+            default:
+              fieldColor = "#6b7280"; // Gray for text/other
+              fieldBgColor = "rgba(107, 114, 128, 0.15)";
+              fieldTextColor = "#4b5563";
+          }
+          
+          ctx.strokeStyle = fieldColor;
+          ctx.lineWidth = 2;
+          ctx.setLineDash([5, 3]);
+          ctx.strokeRect(screenPos.x, screenPos.y, screenWidth, screenHeight);
+          ctx.setLineDash([]);
+          
+          // Fill with translucent background
+          ctx.fillStyle = fieldBgColor;
+          ctx.fillRect(screenPos.x, screenPos.y, screenWidth, screenHeight);
+          
+          // Draw label with field type badge
+          ctx.font = `bold ${Math.max(10 * zoom, 10)}px Arial`;
+          ctx.fillStyle = fieldTextColor;
+          const label = ann.label || ann.fieldType;
+          const fieldTypeLabel = ann.fieldType === "initial" ? "✍️" : ann.fieldType === "date" ? "📅" : "🖊️";
+          ctx.fillText(
+            fieldTypeLabel + " " + label + (ann.isRequired ? " *" : ""),
+            screenPos.x + 4,
+            screenPos.y + 14 * zoom
+          );
+          
+          // Draw icon based on field type
+          ctx.strokeStyle = fieldColor;
+          ctx.fillStyle = fieldColor;
+          const iconSize = 12 * zoom;
+          const iconX = screenPos.x + screenWidth - iconSize - 4;
+          const iconY = screenPos.y + 4;
+          
+          if (ann.fieldType === "signature") {
+            // Draw pen icon
+            ctx.beginPath();
+            ctx.moveTo(iconX, iconY + iconSize);
+            ctx.lineTo(iconX + iconSize * 0.7, iconY);
+            ctx.stroke();
+          } else if (ann.fieldType === "initial") {
+            // Draw initials "IN" text
+            ctx.font = `bold ${iconSize * 0.8}px Arial`;
+            ctx.fillText("IN", iconX, iconY + iconSize * 0.8);
+          } else if (ann.fieldType === "date") {
+            // Draw calendar icon
+            ctx.strokeRect(iconX, iconY, iconSize, iconSize);
+            ctx.moveTo(iconX, iconY + iconSize * 0.3);
+            ctx.lineTo(iconX + iconSize, iconY + iconSize * 0.3);
+            ctx.stroke();
           }
           break;
       }
@@ -237,10 +373,14 @@ export function PageCanvas({
         setIsDrawing(true);
         setDrawStart({ x: screenX / zoom, y: screenY / zoom });
         setCurrentRect({ x: screenX / zoom, y: screenY / zoom, width: 0, height: 0 });
+        selectAnnotation(null); // Deselect when starting new highlight
       } else if (activeTool === "select") {
         // First check if clicking on an existing annotation to drag it
         const annotation = findAnnotationAtPosition(screenX, screenY);
         if (annotation) {
+          // Select the annotation
+          selectAnnotation(annotation.id);
+          
           // For textEdit annotations, use screen coordinates directly
           if (annotation.type === "textEdit") {
             setIsDragging(true);
@@ -286,7 +426,8 @@ export function PageCanvas({
             );
             
             if (existingEdit) {
-              // Use the existing edit
+              // Select and use the existing edit
+              selectAnnotation(existingEdit.id);
               setIsDragging(true);
               setDraggedAnnotation({
                 id: existingEdit.id,
@@ -308,7 +449,8 @@ export function PageCanvas({
                 item.fontSize
               );
               
-              // Start dragging the newly created annotation
+              // Select and start dragging the newly created annotation
+              selectAnnotation(newId);
               setIsDragging(true);
               setDraggedAnnotation({
                 id: newId,
@@ -322,13 +464,24 @@ export function PageCanvas({
             return;
           }
         }
+        
+        // Clicked on empty space - deselect
+        selectAnnotation(null);
       } else if (activeTool === "pan") {
         setIsPanning(true);
         setPanStart({ x: e.clientX, y: e.clientY });
         onPanStart?.();
         e.preventDefault();
       } else if (activeTool === "edit") {
-        // Find clicked text item
+        // First check if clicking on a textBox annotation
+        const clickedAnnotation = findAnnotationAtPosition(screenX, screenY);
+        if (clickedAnnotation && clickedAnnotation.type === "textBox") {
+          onTextBoxClick?.(clickedAnnotation.id);
+          e.preventDefault();
+          return;
+        }
+        
+        // Then check for original PDF text items
         for (let i = 0; i < textItems.length; i++) {
           const item = textItems[i];
           const margin = 5;
@@ -344,7 +497,7 @@ export function PageCanvas({
         }
       }
     },
-    [activeTool, viewport, pageHeight, zoom, textItems, onTextClick, findAnnotationAtPosition, onPanStart, pageNumber, findTextEdit, addTextEdit]
+    [activeTool, viewport, pageHeight, zoom, textItems, onTextClick, onTextBoxClick, findAnnotationAtPosition, onPanStart, pageNumber, findTextEdit, addTextEdit, selectAnnotation]
   );
 
   const handleMouseMove = useCallback(
@@ -442,7 +595,7 @@ export function PageCanvas({
       const screenY = e.clientY - rect.top;
       const pdfPoint = screenToPdf(screenX, screenY, pageHeight, zoom);
 
-      if (activeTool === "text" || activeTool === "signature") {
+      if (activeTool === "text" || activeTool === "signature" || activeTool === "signatureField" || activeTool === "initialsField" || activeTool === "dateField") {
         onCanvasClick?.(pdfPoint, { x: screenX, y: screenY });
       }
     },
@@ -465,6 +618,10 @@ export function PageCanvas({
         return "text";
       case "signature":
         return "pointer";
+      case "signatureField":
+      case "initialsField":
+      case "dateField":
+        return "crosshair";
       case "pan":
         return "grab";
       default:
@@ -546,6 +703,40 @@ export function PageCanvas({
         </div>
       )}
 
+      {/* TextBox Annotation Layer for Edit Mode - allow editing added text annotations */}
+      {activeTool === "edit" && (
+        <div
+          className="absolute top-0 left-0 w-full h-full pointer-events-none"
+          style={{ zIndex: 6 }}
+        >
+          {pageAnnotations
+            .filter((ann) => ann.type === "textBox")
+            .map((ann) => {
+              const screenPos = pdfToScreen(ann.x, ann.y + ann.height, pageHeight, zoom);
+              const screenWidth = ann.width * zoom;
+              const screenHeight = ann.height * zoom;
+              
+              return (
+                <div
+                  key={ann.id}
+                  className="absolute pointer-events-auto cursor-text hover:bg-green-100/50 hover:outline hover:outline-2 hover:outline-green-500 transition-all rounded-sm"
+                  style={{
+                    left: screenPos.x,
+                    top: screenPos.y,
+                    width: screenWidth,
+                    height: screenHeight,
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onTextBoxClick?.(ann.id);
+                  }}
+                  title="Click to edit this text"
+                />
+              );
+            })}
+        </div>
+      )}
+
       {/* Text Layer for Select/Move Mode - only show text items that haven't been moved */}
       {activeTool === "select" && textItems.length > 0 && (
         <div
@@ -560,7 +751,7 @@ export function PageCanvas({
             return (
               <div
                 key={idx}
-                className="absolute pointer-events-auto cursor-move hover:bg-yellow-100/30 hover:outline hover:outline-1 hover:outline-yellow-500 hover:outline-dashed transition-all"
+                className="absolute pointer-events-auto cursor-grab hover:cursor-grabbing group"
                 style={{
                   left: item.x * zoom,
                   top: item.y * zoom,
@@ -580,6 +771,7 @@ export function PageCanvas({
                     item.str,
                     item.fontSize
                   );
+                  selectAnnotation(newId);
                   setIsDragging(true);
                   setDraggedAnnotation({
                     id: newId,
@@ -589,10 +781,105 @@ export function PageCanvas({
                     offsetY: e.nativeEvent.offsetY,
                   });
                 }}
-                title="Drag to move"
-              />
+                title="Click and drag to move this text"
+              >
+                {/* Hover overlay with visual indicator */}
+                <div className="absolute inset-0 bg-yellow-400/0 group-hover:bg-yellow-400/20 border border-transparent group-hover:border-yellow-500 group-hover:border-dashed rounded-sm transition-all duration-150" />
+                {/* Move indicator badge */}
+                <div className="absolute -top-5 left-0 opacity-0 group-hover:opacity-100 transition-opacity bg-yellow-500 text-white text-[10px] px-1.5 py-0.5 rounded shadow-sm whitespace-nowrap pointer-events-none">
+                  ✋ Drag to move
+                </div>
+              </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Selection Overlay with Delete Button */}
+      {selectedAnnotationId && pageAnnotations.some(ann => ann.id === selectedAnnotationId) && !isDragging && (
+        <div
+          className="absolute top-0 left-0 w-full h-full pointer-events-none"
+          style={{ zIndex: 10 }}
+        >
+          {pageAnnotations.filter(ann => ann.id === selectedAnnotationId).map((ann) => {
+            let screenPosX: number;
+            let screenPosY: number;
+            let screenWidth: number;
+            let screenHeight: number;
+            
+            if (ann.type === "textEdit") {
+              // TextEdit uses screen coordinates directly
+              screenPosX = ann.x * zoom;
+              screenPosY = ann.y * zoom;
+              screenWidth = ann.width * zoom;
+              screenHeight = ann.height * zoom;
+            } else {
+              // Other annotations use PDF coordinates
+              const screenPos = pdfToScreen(ann.x, ann.y + ann.height, pageHeight, zoom);
+              screenPosX = screenPos.x;
+              screenPosY = screenPos.y;
+              screenWidth = ann.width * zoom;
+              screenHeight = ann.height * zoom;
+            }
+
+            return (
+              <div key={ann.id}>
+                {/* Selection border */}
+                <div
+                  className="absolute border-2 border-blue-500 rounded-sm bg-blue-500/10 shadow-sm"
+                  style={{
+                    left: screenPosX - 2,
+                    top: screenPosY - 2,
+                    width: screenWidth + 4,
+                    height: screenHeight + 4,
+                    pointerEvents: "none",
+                  }}
+                />
+                
+                {/* Action toolbar */}
+                <div
+                  className="absolute pointer-events-auto flex items-center gap-1 bg-gray-800 rounded-lg shadow-lg px-1 py-0.5"
+                  style={{
+                    left: screenPosX,
+                    top: screenPosY - 28,
+                  }}
+                >
+                  {/* Drag handle indicator */}
+                  <span className="text-[10px] text-gray-300 px-1.5 select-none">
+                    ✋ Drag to move
+                  </span>
+                  
+                  {/* Delete button */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removeAnnotation(ann.id);
+                    }}
+                    className="flex items-center justify-center w-5 h-5 bg-red-500 hover:bg-red-600 text-white rounded transition-colors"
+                    title="Delete (Del/Backspace)"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Dragging indicator */}
+      {isDragging && draggedAnnotation && (
+        <div
+          className="absolute pointer-events-none"
+          style={{
+            left: 10,
+            top: 10,
+            zIndex: 100,
+          }}
+        >
+          <div className="bg-blue-600 text-white text-xs px-2 py-1 rounded shadow-lg animate-pulse">
+            Moving annotation...
+          </div>
         </div>
       )}
     </div>

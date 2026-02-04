@@ -141,8 +141,13 @@ export default function RecordDocumentsPage() {
           <File className="w-16 h-16 text-gray-300 mx-auto mb-4" />
           <h2 className="text-xl font-semibold text-gray-900 mb-2">Record Not Found</h2>
           <p className="text-gray-600 mb-4">The record you&apos;re looking for doesn&apos;t exist.</p>
-          <button
-            onClick={() => router.push(`/bases/${baseId}`)}
+            <button
+            onClick={() => {
+              const params = new URLSearchParams();
+              params.set("openRecord", recordId);
+              if (tableId) params.set("tableId", tableId);
+              router.push(`/bases/${baseId}?${params.toString()}`);
+            }}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
             Back to Base
@@ -160,7 +165,12 @@ export default function RecordDocumentsPage() {
           <div className="flex items-center gap-4">
             {/* Back button */}
             <button
-              onClick={() => router.push(`/bases/${baseId}`)}
+              onClick={() => {
+                const params = new URLSearchParams();
+                params.set("openRecord", recordId);
+                if (tableId) params.set("tableId", tableId);
+                router.push(`/bases/${baseId}?${params.toString()}`);
+              }}
               className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
               title="Back to base"
             >
