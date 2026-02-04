@@ -248,5 +248,92 @@ export class BaseExportService {
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
   }
+
+  /**
+   * Download exported base as CSV files (one per table).
+   * Returns the number of files downloaded.
+   */
+  static downloadAsCsv(exported: ExportedBase, baseName: string): number {
+    if (!exported.records || exported.records.length === 0) {
+      throw new Error("CSV export requires records. Enable \"Include records\" before exporting.");
+    }
+
+    // Group records by table
+    const recordsByTable = new Map<string, Array<Record<string, unknown>>>();
+    for (const record of exported.records) {
+      const tableRecords = recordsByTable.get(record.table_name) || [];
+      tableRecords.push(record.values);
+      recordsByTable.set(record.table_name, tableRecords);
+    }
+
+    // Build field order per table using the exported field list
+    const fieldsByTable = new Map<string, string[]>();
+    for (const table of exported.tables) {
+      const fieldNames = exported.fields
+        .filter((f) => f.table_name === table.name)
+        .sort((a, b) => a.order_index - b.order_index)
+        .map((f) => f.name);
+      fieldsByTable.set(table.name, fieldNames);
+    }
+
+    const sanitize = (value: unknown): string => {
+      if (value === null || value === undefined) return "";
+      if (typeof value === "object") {
+        try {
+          return JSON.stringify(value);
+        } catch {
+          return "";
+        }
+      }
+      return String(value);
+    };
+
+    const escapeCsv = (value: string): string => {
+      if (/[",\n]/.test(value)) {
+        return `"${value.replace(/"/g, '""')}"`;
+      }
+      return value;
+    };
+
+    const today = new Date().toISOString().split("T")[0];
+    let fileCount = 0;
+
+    for (const [tableName, tableRecords] of recordsByTable.entries()) {
+      const fieldOrder = fieldsByTable.get(tableName) || [];
+
+      // Ensure we include any ad-hoc fields that aren't in the schema
+      const extraFields = new Set<string>();
+      for (const rec of tableRecords) {
+        Object.keys(rec).forEach((key) => {
+          if (!fieldOrder.includes(key)) extraFields.add(key);
+        });
+      }
+      const header = [...fieldOrder, ...extraFields];
+
+      const rows: string[] = [];
+      rows.push(header.map((h) => escapeCsv(h)).join(","));
+
+      for (const rec of tableRecords) {
+        const row = header.map((field) => escapeCsv(sanitize((rec as any)[field])));
+        rows.push(row.join(","));
+      }
+
+      const csvContent = rows.join("\n");
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      const safeBase = baseName.replace(/[^a-z0-9]/gi, "_");
+      const safeTable = tableName.replace(/[^a-z0-9]/gi, "_");
+      link.download = `${safeBase}_${safeTable}_export_${today}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      fileCount += 1;
+    }
+
+    return fileCount;
+  }
 }
 
