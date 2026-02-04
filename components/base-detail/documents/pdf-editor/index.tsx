@@ -11,7 +11,7 @@
 
 "use client";
 
-import React, { useState, useCallback, useEffect, useRef } from "react";
+import React, { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { Loader2, PenTool, Share2, Edit3 } from "lucide-react";
 
 import type { PdfEditorProps, Tool, TextItem, Point } from "./types";
@@ -25,6 +25,7 @@ import { Thumbnails } from "./components/Thumbnails";
 import { PageCanvas } from "./components/PageCanvas";
 import { TextEditOverlay } from "./components/TextEditOverlay";
 import { StatusBar } from "./components/StatusBar";
+import { SignerPanel, type Signer } from "./components/SignerPanel";
 import { SignatureCapture } from "../SignatureCapture";
 import { PostActionPrompt, type ActionSuggestion } from "../PostActionPrompt";
 
@@ -147,6 +148,12 @@ export function PdfEditor({
   // Post-save prompt state
   const [showPostSavePrompt, setShowPostSavePrompt] = useState(false);
   const [savedDocumentName, setSavedDocumentName] = useState<string | null>(null);
+
+  // Signer panel state
+  const [showSignerPanel, setShowSignerPanel] = useState(false);
+  const [signers, setSigners] = useState<Signer[]>([]);
+  const [fieldAssignments, setFieldAssignments] = useState<Record<string, string>>({});
+  const [isSendingRequest, setIsSendingRequest] = useState(false);
 
   // Text editing state
   const [editingText, setEditingText] = useState<{
@@ -313,6 +320,14 @@ export function PdfEditor({
             e.preventDefault();
             setActiveTool("signatureField");
             break;
+          case "i": // Initials Field
+            e.preventDefault();
+            setActiveTool("initialsField");
+            break;
+          case "d": // Date Field
+            e.preventDefault();
+            setActiveTool("dateField");
+            break;
           case "p": // Pan tool
             e.preventDefault();
             setActiveTool("pan");
@@ -454,6 +469,12 @@ export function PdfEditor({
       } else if (activeTool === "signatureField") {
         // Add signature field marker at clicked position
         addSignatureField(currentPage - 1, pdfPoint, "signature", "Signature", true);
+      } else if (activeTool === "initialsField") {
+        // Add initials field marker at clicked position
+        addSignatureField(currentPage - 1, pdfPoint, "initial", "Initials", true);
+      } else if (activeTool === "dateField") {
+        // Add auto date-signed field at clicked position
+        addSignatureField(currentPage - 1, pdfPoint, "date", "Date Signed", true);
       }
     },
     [activeTool, currentPage, addSignatureField]
@@ -544,6 +565,49 @@ export function PdfEditor({
     }
   }, [getSignatureFields, onRequestSignature]);
 
+  // Handle field assignment changes from signer panel
+  const handleFieldAssignmentChange = useCallback((fieldId: string, signerId: string) => {
+    setFieldAssignments(prev => ({
+      ...prev,
+      [fieldId]: signerId,
+    }));
+  }, []);
+
+  // Handle sending signature request directly from the panel
+  const handleSendSignatureRequest = useCallback(async () => {
+    const signatureFields = getSignatureFields();
+    if (signatureFields.length === 0) return;
+    
+    // If parent has onRequestSignature, use that (for backward compatibility)
+    // Otherwise show the signer panel to collect signers
+    if (signers.length === 0) {
+      setShowSignerPanel(true);
+      return;
+    }
+
+    // Validate signers
+    const validSigners = signers.filter(s => s.email.trim() && s.email.includes('@'));
+    if (validSigners.length === 0) {
+      setShowSignerPanel(true);
+      return;
+    }
+
+    // If onRequestSignature is provided, call it with the collected data
+    if (onRequestSignature) {
+      setIsSendingRequest(true);
+      try {
+        // Pass the signature fields with signer assignments
+        const fieldsWithAssignments = signatureFields.map(field => ({
+          ...field,
+          assignedTo: fieldAssignments[field.id] || undefined,
+        }));
+        onRequestSignature(fieldsWithAssignments);
+      } finally {
+        setIsSendingRequest(false);
+      }
+    }
+  }, [getSignatureFields, signers, fieldAssignments, onRequestSignature]);
+
   // Handle post-save prompt close
   const handlePostSaveClose = useCallback(() => {
     setShowPostSavePrompt(false);
@@ -594,6 +658,16 @@ export function PdfEditor({
     (a) => a.type !== "textEdit"
   ).length;
   const textEditCount = annotations.filter((a) => a.type === "textEdit").length;
+
+  // Count signature field types for status bar
+  const signatureFieldCounts = useMemo(() => {
+    const fields = getSignatureFields();
+    return {
+      signature: fields.filter(f => f.fieldType === "signature").length,
+      initial: fields.filter(f => f.fieldType === "initial").length,
+      date: fields.filter(f => f.fieldType === "date").length,
+    };
+  }, [annotations, getSignatureFields]);
 
   return (
     <div
@@ -653,7 +727,7 @@ export function PdfEditor({
           {/* PDF Viewer */}
           <div 
             ref={viewerContainerRef}
-            className="flex-1 overflow-auto bg-gray-600 flex items-start justify-center p-8"
+            className="flex-1 overflow-auto bg-gray-600 flex items-start justify-center p-8 relative"
             style={{ cursor: activeTool === "pan" ? "grab" : undefined }}
           >
             {status === "loading" && (
@@ -705,6 +779,20 @@ export function PdfEditor({
               </div>
             )}
           </div>
+
+          {/* Signer Panel - Integrated signature request management */}
+          <SignerPanel
+            isOpen={showSignerPanel}
+            onToggle={() => setShowSignerPanel(!showSignerPanel)}
+            signatureFields={getSignatureFields()}
+            signers={signers}
+            onSignersChange={setSigners}
+            fieldAssignments={fieldAssignments}
+            onFieldAssignmentChange={handleFieldAssignmentChange}
+            onSendRequest={handleSendSignatureRequest}
+            isSending={isSendingRequest}
+            documentName={documentName}
+          />
         </div>
 
         {/* Status Bar */}
@@ -713,6 +801,7 @@ export function PdfEditor({
           zoomIndex={zoomIndex}
           annotationCount={annotationCount}
           textEditCount={textEditCount}
+          fieldCounts={signatureFieldCounts}
         />
       </div>
 

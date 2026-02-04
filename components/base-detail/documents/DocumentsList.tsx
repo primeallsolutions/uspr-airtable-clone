@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
-import { FileText, Image as ImageIcon, File, Loader2, Trash2, Search, X, LayoutGrid, List, ArrowUpDown, Clock, Files, FilePen, Copy, FolderOutput, CalendarPlus, Calendar, PenTool, Eye, MoreVertical, Download } from "lucide-react";
+import { FileText, Image as ImageIcon, File, Loader2, Trash2, Search, X, LayoutGrid, List, ArrowUpDown, Clock, Files, FilePen, Copy, FolderOutput, CalendarPlus, Calendar, PenTool, Eye, MoreVertical, Download, FileUp } from "lucide-react";
 import type { StoredDocument } from "@/lib/services/documents-service";
 import { DocumentsService } from "@/lib/services/documents-service";
 import { formatSize, isImage, isPdf, isFolder } from "./utils";

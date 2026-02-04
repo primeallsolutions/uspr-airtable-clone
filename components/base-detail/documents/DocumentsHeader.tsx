@@ -8,7 +8,7 @@ import {
   PenTool, 
   CheckCircle2, 
   Layers, 
-  FileTemplate, 
+  FilePlus2, 
   ChevronDown, 
   Star, 
   Clock, 
@@ -174,7 +174,7 @@ export const DocumentsHeader = ({
               }`}
               title="Create from template"
             >
-              <FileTemplate className="w-4 h-4" />
+              <FilePlus2 className="w-4 h-4" />
               <span className="hidden sm:inline">Template</span>
               <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showTemplateDropdown ? "rotate-180" : ""}`} />
             </button>

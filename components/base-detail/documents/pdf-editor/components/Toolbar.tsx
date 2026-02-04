@@ -31,6 +31,8 @@ import {
   Send,
   Keyboard,
   HelpCircle,
+  Pen,
+  CalendarCheck,
 } from "lucide-react";
 import type { Tool } from "../types";
 import { ZOOM_LEVELS } from "../types";
@@ -230,6 +232,18 @@ export function Toolbar({
             onClick={() => onToolChange("signatureField")}
             title="Add Signature Field (for e-signature requests)"
           />
+          <ToolButton
+            icon={<Pen className="w-4 h-4" />}
+            active={activeTool === "initialsField"}
+            onClick={() => onToolChange("initialsField")}
+            title="Add Initials Field"
+          />
+          <ToolButton
+            icon={<CalendarCheck className="w-4 h-4" />}
+            active={activeTool === "dateField"}
+            onClick={() => onToolChange("dateField")}
+            title="Add Auto Date-Signed Field"
+          />
         </div>
 
         <div className="w-px h-6 bg-gray-600" />
@@ -333,6 +347,8 @@ export function Toolbar({
                     <ShortcutItem keys={["E"]} description="Edit" />
                     <ShortcutItem keys={["S"]} description="Signature" />
                     <ShortcutItem keys={["F"]} description="Sig. Field" />
+                    <ShortcutItem keys={["I"]} description="Initials" />
+                    <ShortcutItem keys={["D"]} description="Date Field" />
                     <ShortcutItem keys={["P"]} description="Pan" />
                   </div>
                 </div>

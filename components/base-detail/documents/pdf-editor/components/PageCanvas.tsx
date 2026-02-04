@@ -166,39 +166,71 @@ export function PageCanvas({
           break;
 
         case "signatureField":
-          // Draw signature field marker (dashed border with label)
-          ctx.strokeStyle = "#9333ea"; // Purple
+          // Draw signature field marker with color coding by field type
+          let fieldColor: string;
+          let fieldBgColor: string;
+          let fieldTextColor: string;
+          
+          switch (ann.fieldType) {
+            case "signature":
+              fieldColor = "#9333ea"; // Purple for signature
+              fieldBgColor = "rgba(147, 51, 234, 0.15)";
+              fieldTextColor = "#7c3aed";
+              break;
+            case "initial":
+              fieldColor = "#0891b2"; // Cyan for initials
+              fieldBgColor = "rgba(8, 145, 178, 0.15)";
+              fieldTextColor = "#0e7490";
+              break;
+            case "date":
+              fieldColor = "#059669"; // Green for date
+              fieldBgColor = "rgba(5, 150, 105, 0.15)";
+              fieldTextColor = "#047857";
+              break;
+            default:
+              fieldColor = "#6b7280"; // Gray for text/other
+              fieldBgColor = "rgba(107, 114, 128, 0.15)";
+              fieldTextColor = "#4b5563";
+          }
+          
+          ctx.strokeStyle = fieldColor;
           ctx.lineWidth = 2;
           ctx.setLineDash([5, 3]);
           ctx.strokeRect(screenPos.x, screenPos.y, screenWidth, screenHeight);
           ctx.setLineDash([]);
           
-          // Fill with translucent purple
-          ctx.fillStyle = "rgba(147, 51, 234, 0.15)";
+          // Fill with translucent background
+          ctx.fillStyle = fieldBgColor;
           ctx.fillRect(screenPos.x, screenPos.y, screenWidth, screenHeight);
           
-          // Draw label
-          ctx.font = `${Math.max(10 * zoom, 10)}px Arial`;
-          ctx.fillStyle = "#7c3aed";
+          // Draw label with field type badge
+          ctx.font = `bold ${Math.max(10 * zoom, 10)}px Arial`;
+          ctx.fillStyle = fieldTextColor;
           const label = ann.label || ann.fieldType;
+          const fieldTypeLabel = ann.fieldType === "initial" ? "✍️" : ann.fieldType === "date" ? "📅" : "🖊️";
           ctx.fillText(
-            label + (ann.isRequired ? " *" : ""),
+            fieldTypeLabel + " " + label + (ann.isRequired ? " *" : ""),
             screenPos.x + 4,
             screenPos.y + 14 * zoom
           );
           
           // Draw icon based on field type
-          ctx.fillStyle = "#9333ea";
+          ctx.strokeStyle = fieldColor;
+          ctx.fillStyle = fieldColor;
           const iconSize = 12 * zoom;
           const iconX = screenPos.x + screenWidth - iconSize - 4;
           const iconY = screenPos.y + 4;
           
-          if (ann.fieldType === "signature" || ann.fieldType === "initial") {
+          if (ann.fieldType === "signature") {
             // Draw pen icon
             ctx.beginPath();
             ctx.moveTo(iconX, iconY + iconSize);
             ctx.lineTo(iconX + iconSize * 0.7, iconY);
             ctx.stroke();
+          } else if (ann.fieldType === "initial") {
+            // Draw initials "IN" text
+            ctx.font = `bold ${iconSize * 0.8}px Arial`;
+            ctx.fillText("IN", iconX, iconY + iconSize * 0.8);
           } else if (ann.fieldType === "date") {
             // Draw calendar icon
             ctx.strokeRect(iconX, iconY, iconSize, iconSize);
@@ -495,7 +527,7 @@ export function PageCanvas({
       const screenY = e.clientY - rect.top;
       const pdfPoint = screenToPdf(screenX, screenY, pageHeight, zoom);
 
-      if (activeTool === "text" || activeTool === "signature") {
+      if (activeTool === "text" || activeTool === "signature" || activeTool === "signatureField" || activeTool === "initialsField" || activeTool === "dateField") {
         onCanvasClick?.(pdfPoint, { x: screenX, y: screenY });
       }
     },
@@ -518,6 +550,10 @@ export function PageCanvas({
         return "text";
       case "signature":
         return "pointer";
+      case "signatureField":
+      case "initialsField":
+      case "dateField":
+        return "crosshair";
       case "pan":
         return "grab";
       default:

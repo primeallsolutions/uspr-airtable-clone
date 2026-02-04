@@ -6,7 +6,7 @@
 import type { PDFDocumentProxy, PDFPageProxy } from "pdfjs-dist";
 
 // Tool types available in the editor
-export type Tool = "select" | "pan" | "highlight" | "text" | "signature" | "edit" | "signatureField";
+export type Tool = "select" | "pan" | "highlight" | "text" | "signature" | "edit" | "signatureField" | "initialsField" | "dateField";
 
 // Annotation types
 export type AnnotationType = "highlight" | "textBox" | "textEdit" | "signature" | "signatureField";
