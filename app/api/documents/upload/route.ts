@@ -18,8 +18,17 @@ const BUCKET = process.env.NEXT_PUBLIC_SUPABASE_DOCUMENTS_BUCKET || "documents";
 
 // Helper to get authenticated Supabase client from cookies
 async function getSupabaseClient(): Promise<SupabaseClient> {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+  // Validate environment variables and throw descriptive errors if missing
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl) {
+    throw new Error("Missing required environment variable: NEXT_PUBLIC_SUPABASE_URL. Please ensure this variable is set in your environment configuration.");
+  }
+
+  if (!supabaseAnonKey) {
+    throw new Error("Missing required environment variable: NEXT_PUBLIC_SUPABASE_ANON_KEY. Please ensure this variable is set in your environment configuration.");
+  }
   
   try {
     const cookieStore = await cookies();
@@ -248,7 +257,18 @@ function buildStoragePath(params: {
 
 export async function POST(request: Request) {
   try {
-    const supabase = await getSupabaseClient();
+    let supabase: SupabaseClient;
+    try {
+      supabase = await getSupabaseClient();
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("Missing required environment variable")) {
+        return NextResponse.json({ 
+          error: "Server configuration error",
+          details: error.message 
+        }, { status: 500 });
+      }
+      throw error;
+    }
     
     // Check authentication
     const { data: { user }, error: authError } = await supabase.auth.getUser();

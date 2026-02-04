@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import { SupabaseClient } from "@supabase/supabase-js";
+import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
 /**
@@ -15,93 +16,54 @@ import { cookies } from "next/headers";
 const BUCKET = process.env.NEXT_PUBLIC_SUPABASE_DOCUMENTS_BUCKET || "documents";
 const MAX_BATCH_SIZE = 100; // Maximum items per batch operation
 
-// Helper to get authenticated Supabase client from cookies
-async function getSupabaseClient(): Promise<SupabaseClient> {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-  
-  try {
-    const cookieStore = await cookies();
-    
-    // Supabase stores access token in cookies with pattern: sb-<project-ref>-auth-token
-    // Extract project ref from URL
-    const projectRef = supabaseUrl.match(/https?:\/\/([^.]+)\.supabase\.co/)?.[1];
-    
-    // Try different cookie name patterns
-    const cookieNames = projectRef 
-      ? [
-          `sb-${projectRef}-auth-token`,
-          `sb-${projectRef}-auth-token.0`,
-          `sb-${projectRef}-auth-token.1`,
-        ]
-      : [];
-    
-    // Also check for any cookie starting with 'sb-'
-    const allCookies = cookieStore.getAll();
-    const authCookies = allCookies.filter(c => c.name.startsWith('sb-') && c.name.includes('auth'));
-    
-    let accessToken: string | null = null;
-    
-    // Try to find access token in cookies
-    for (const cookieName of cookieNames) {
-      const cookie = cookieStore.get(cookieName);
-      if (cookie?.value) {
-        try {
-          const tokenData = JSON.parse(cookie.value);
-          accessToken = tokenData?.access_token || tokenData?.accessToken || tokenData;
-          if (accessToken) break;
-        } catch {
-          // Try as direct token
-          accessToken = cookie.value;
-          if (accessToken && accessToken.length > 50) break; // Likely a token
-        }
-      }
-    }
-    
-    // If not found in named cookies, try auth cookies
-    if (!accessToken && authCookies.length > 0) {
-      for (const cookie of authCookies) {
-        try {
-          const tokenData = JSON.parse(cookie.value);
-          accessToken = tokenData?.access_token || tokenData?.accessToken || tokenData;
-          if (accessToken) break;
-        } catch {
-          if (cookie.value.length > 50) {
-            accessToken = cookie.value;
-            break;
-          }
-        }
-      }
-    }
-    
-    if (accessToken) {
-      return createClient(
-        supabaseUrl,
-        supabaseAnonKey,
-        {
-          global: {
-            headers: {
-              Authorization: `Bearer ${accessToken}`,
-            },
-          },
-          auth: {
-            autoRefreshToken: false,
-            persistSession: false,
-          },
-        }
-      );
-    }
-  } catch (cookieError) {
-    console.warn("Failed to read cookies:", cookieError);
+// Validate environment variables upfront
+function validateEnvVars(): { supabaseUrl: string; supabaseAnonKey: string } {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl) {
+    throw new Error("Missing required environment variable: NEXT_PUBLIC_SUPABASE_URL");
   }
 
-  // Fallback: create client without auth (will fail RLS checks)
-  return createClient(supabaseUrl, supabaseAnonKey, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
+  if (!supabaseAnonKey) {
+    throw new Error("Missing required environment variable: NEXT_PUBLIC_SUPABASE_ANON_KEY");
+  }
+
+  return { supabaseUrl, supabaseAnonKey };
+}
+
+// Helper to get authenticated Supabase client from cookies using official SSR helper
+async function getSupabaseClient(): Promise<SupabaseClient> {
+  const { supabaseUrl, supabaseAnonKey } = validateEnvVars();
+  
+  const cookieStore = await cookies();
+  
+  const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+    cookies: {
+      getAll() {
+        return cookieStore.getAll();
+      },
+      setAll(cookiesToSet) {
+        try {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            cookieStore.set(name, value, options);
+          });
+        } catch (error) {
+          // The `setAll` method was called from a Server Component.
+          // This can be ignored if you have middleware refreshing
+          // user sessions.
+        }
+      },
     },
   });
+
+  // Verify authentication - return 401 if no session
+  const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError || !session) {
+    throw new Error("Unauthorized: No valid session found");
+  }
+
+  return supabase;
 }
 
 interface BatchOperation {
@@ -155,9 +117,23 @@ async function verifyBaseAccess(
  */
 export async function POST(request: Request) {
   try {
-    const supabase = await getSupabaseClient();
+    let supabase: SupabaseClient;
+    try {
+      supabase = await getSupabaseClient();
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("Unauthorized")) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
+      if (error instanceof Error && error.message.includes("Missing required environment variable")) {
+        return NextResponse.json({ 
+          error: "Server configuration error",
+          details: error.message 
+        }, { status: 500 });
+      }
+      throw error;
+    }
     
-    // Check authentication
+    // Verify user (session already verified in getSupabaseClient, but double-check)
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
