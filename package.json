@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@hookform/resolvers": "5.2.2",
-    "@supabase/ssr": "^0.8.0",
+    "@supabase/ssr": "^0.7.0",
     "@supabase/supabase-js": "^2.53.0",
     "@types/nodemailer": "^7.0.4",
     "@udecode/plate-basic-elements": "^48.0.0",

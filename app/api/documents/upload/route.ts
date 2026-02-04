@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
 /**
@@ -33,85 +34,41 @@ async function getSupabaseClient(): Promise<SupabaseClient> {
   try {
     const cookieStore = await cookies();
     
-    // Supabase stores access token in cookies with pattern: sb-<project-ref>-auth-token
-    // Extract project ref from URL
-    const projectRef = supabaseUrl.match(/https?:\/\/([^.]+)\.supabase\.co/)?.[1];
-    
-    // Try different cookie name patterns
-    const cookieNames = projectRef 
-      ? [
-          `sb-${projectRef}-auth-token`,
-          `sb-${projectRef}-auth-token.0`,
-          `sb-${projectRef}-auth-token.1`,
-        ]
-      : [];
-    
-    // Also check for any cookie starting with 'sb-'
-    const allCookies = cookieStore.getAll();
-    const authCookies = allCookies.filter(c => c.name.startsWith('sb-') && c.name.includes('auth'));
-    
-    let accessToken: string | null = null;
-    
-    // Try to find access token in cookies
-    for (const cookieName of cookieNames) {
-      const cookie = cookieStore.get(cookieName);
-      if (cookie?.value) {
-        try {
-          const tokenData = JSON.parse(cookie.value);
-          accessToken = tokenData?.access_token || tokenData?.accessToken || tokenData;
-          if (accessToken) break;
-        } catch {
-          // Try as direct token
-          accessToken = cookie.value;
-          if (accessToken && accessToken.length > 50) break; // Likely a token
-        }
-      }
-    }
-    
-    // If not found in named cookies, try auth cookies
-    if (!accessToken && authCookies.length > 0) {
-      for (const cookie of authCookies) {
-        try {
-          const tokenData = JSON.parse(cookie.value);
-          accessToken = tokenData?.access_token || tokenData?.accessToken || tokenData;
-          if (accessToken) break;
-        } catch {
-          if (cookie.value.length > 50) {
-            accessToken = cookie.value;
-            break;
+    // Use createServerClient from @supabase/ssr for proper cookie handling
+    const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll();
+        },
+        setAll(cookiesToSet) {
+          try {
+            cookiesToSet.forEach(({ name, value, options }) => {
+              cookieStore.set(name, value, options);
+            });
+          } catch (error) {
+            // The `setAll` method was called from a Server Component.
+            // This can be ignored if you have middleware refreshing
+            // user sessions.
           }
-        }
-      }
-    }
-    
-    if (accessToken) {
-      return createClient(
-        supabaseUrl,
-        supabaseAnonKey,
-        {
-          global: {
-            headers: {
-              Authorization: `Bearer ${accessToken}`,
-            },
-          },
-          auth: {
-            autoRefreshToken: false,
-            persistSession: false,
-          },
-        }
-      );
-    }
-  } catch (cookieError) {
-    console.warn("Failed to read cookies:", cookieError);
-  }
+        },
+      },
+    });
 
-  // Fallback: create client without auth (will fail RLS checks)
-  return createClient(supabaseUrl, supabaseAnonKey, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
-  });
+    // Verify authentication - throw error if no user
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
+      throw new Error("Unauthorized: Failed to parse cookies for Supabase auth");
+    }
+
+    return supabase;
+  } catch (error) {
+    // If cookie parsing or auth extraction fails, throw a clear error
+    if (error instanceof Error && error.message.includes("Unauthorized")) {
+      throw error; // Re-throw Unauthorized errors
+    }
+    // For other cookie-related errors, throw a clear error message
+    throw new Error("Failed to parse cookies for Supabase auth");
+  }
 }
 
 // Allowed file types (MIME types)
@@ -261,6 +218,12 @@ export async function POST(request: Request) {
     try {
       supabase = await getSupabaseClient();
     } catch (error) {
+      if (error instanceof Error && error.message.includes("Unauthorized")) {
+        return NextResponse.json({ 
+          error: "Unauthorized", 
+          details: error.message 
+        }, { status: 401 });
+      }
       if (error instanceof Error && error.message.includes("Missing required environment variable")) {
         return NextResponse.json({ 
           error: "Server configuration error",

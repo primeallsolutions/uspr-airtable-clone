@@ -57,10 +57,10 @@ async function getSupabaseClient(): Promise<SupabaseClient> {
     },
   });
 
-  // Verify authentication - return 401 if no session
-  const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-  if (sessionError || !session) {
-    throw new Error("Unauthorized: No valid session found");
+  // Verify authentication - return 401 if no user
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  if (userError || !user) {
+    throw new Error("Unauthorized: No valid user found");
   }
 
   return supabase;
