@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 
 /**
@@ -15,6 +15,95 @@ import { cookies } from "next/headers";
 // Configuration
 const MAX_FILE_SIZE = parseInt(process.env.DOCUMENT_MAX_SIZE_MB || "50") * 1024 * 1024; // 50MB default
 const BUCKET = process.env.NEXT_PUBLIC_SUPABASE_DOCUMENTS_BUCKET || "documents";
+
+// Helper to get authenticated Supabase client from cookies
+async function getSupabaseClient(): Promise<SupabaseClient> {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+  
+  try {
+    const cookieStore = await cookies();
+    
+    // Supabase stores access token in cookies with pattern: sb-<project-ref>-auth-token
+    // Extract project ref from URL
+    const projectRef = supabaseUrl.match(/https?:\/\/([^.]+)\.supabase\.co/)?.[1];
+    
+    // Try different cookie name patterns
+    const cookieNames = projectRef 
+      ? [
+          `sb-${projectRef}-auth-token`,
+          `sb-${projectRef}-auth-token.0`,
+          `sb-${projectRef}-auth-token.1`,
+        ]
+      : [];
+    
+    // Also check for any cookie starting with 'sb-'
+    const allCookies = cookieStore.getAll();
+    const authCookies = allCookies.filter(c => c.name.startsWith('sb-') && c.name.includes('auth'));
+    
+    let accessToken: string | null = null;
+    
+    // Try to find access token in cookies
+    for (const cookieName of cookieNames) {
+      const cookie = cookieStore.get(cookieName);
+      if (cookie?.value) {
+        try {
+          const tokenData = JSON.parse(cookie.value);
+          accessToken = tokenData?.access_token || tokenData?.accessToken || tokenData;
+          if (accessToken) break;
+        } catch {
+          // Try as direct token
+          accessToken = cookie.value;
+          if (accessToken && accessToken.length > 50) break; // Likely a token
+        }
+      }
+    }
+    
+    // If not found in named cookies, try auth cookies
+    if (!accessToken && authCookies.length > 0) {
+      for (const cookie of authCookies) {
+        try {
+          const tokenData = JSON.parse(cookie.value);
+          accessToken = tokenData?.access_token || tokenData?.accessToken || tokenData;
+          if (accessToken) break;
+        } catch {
+          if (cookie.value.length > 50) {
+            accessToken = cookie.value;
+            break;
+          }
+        }
+      }
+    }
+    
+    if (accessToken) {
+      return createClient(
+        supabaseUrl,
+        supabaseAnonKey,
+        {
+          global: {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+            },
+          },
+          auth: {
+            autoRefreshToken: false,
+            persistSession: false,
+          },
+        }
+      );
+    }
+  } catch (cookieError) {
+    console.warn("Failed to read cookies:", cookieError);
+  }
+
+  // Fallback: create client without auth (will fail RLS checks)
+  return createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  });
+}
 
 // Allowed file types (MIME types)
 const ALLOWED_MIME_TYPES = new Set([
@@ -159,7 +248,7 @@ function buildStoragePath(params: {
 
 export async function POST(request: Request) {
   try {
-    const supabase = createRouteHandlerClient({ cookies });
+    const supabase = await getSupabaseClient();
     
     // Check authentication
     const { data: { user }, error: authError } = await supabase.auth.getUser();

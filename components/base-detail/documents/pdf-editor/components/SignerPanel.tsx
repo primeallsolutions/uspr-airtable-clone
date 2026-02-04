@@ -816,7 +816,7 @@ export function SignerPanel({
                     }}
                     className="w-full px-2 py-1.5 text-sm bg-gray-600 border border-gray-500 rounded text-white focus:outline-none focus:border-purple-500"
                   >
-                    <option value="">Don't auto-update</option>
+                    <option value="">Don&apos;t auto-update</option>
                     {availableFields
                       .filter((f) => f.type === "single_select" || f.type === "text")
                       .map((field) => (

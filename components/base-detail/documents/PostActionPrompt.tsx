@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   CheckCircle2,
   PenTool,
@@ -99,6 +99,15 @@ export function PostActionPrompt({
 
   const config = ACTION_CONFIG[type];
 
+  const handleClose = useCallback(() => {
+    setIsClosing(true);
+    setIsVisible(false);
+    setTimeout(() => {
+      setIsClosing(false);
+      onClose();
+    }, 200);
+  }, [onClose]);
+
   // Handle animation states
   useEffect(() => {
     if (isOpen) {
@@ -118,16 +127,7 @@ export function PostActionPrompt({
       }, autoCloseDelay);
       return () => clearTimeout(timer);
     }
-  }, [isOpen, autoCloseDelay]);
-
-  const handleClose = () => {
-    setIsClosing(true);
-    setIsVisible(false);
-    setTimeout(() => {
-      setIsClosing(false);
-      onClose();
-    }, 200);
-  };
+  }, [isOpen, autoCloseDelay, handleClose]);
 
   const handleSuggestionClick = (suggestion: ActionSuggestion) => {
     handleClose();
@@ -399,4 +399,5 @@ export const createSignatureSentSuggestions = ({
   
   return suggestions;
 };
+
 

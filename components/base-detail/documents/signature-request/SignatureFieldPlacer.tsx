@@ -469,7 +469,7 @@ export function SignatureFieldPlacer({
             {documentFields.length} total
             {documentFields.length === 0 && (
               <span className="text-amber-600 ml-2">
-                Click "Add Signature Field" to place fields
+                Click &quot;Add Signature Field&quot; to place fields
               </span>
             )}
           </>

@@ -198,7 +198,9 @@ export function PdfProvider({
       return existingLoad;
     }
 
-    // Start loading
+    // Start loading - create promise and store it immediately
+    // Use a helper to avoid TypeScript self-reference error
+    let promiseRef: Promise<PDFDocumentProxy> | undefined;
     const loadPromise = (async () => {
       const pdfjs = await initPdfJs(workerSrc);
       
@@ -223,13 +225,19 @@ export function PdfProvider({
 
       // Only remove from loading map if this is still the current load for this URL
       // This prevents a race condition when forceReload starts a new load before this one completes
-      if (loadingRef.current.get(url) === loadPromise) {
+      // Use promiseRef to avoid self-reference
+      const currentLoadPromise = loadingRef.current.get(url);
+      if (currentLoadPromise && promiseRef && currentLoadPromise === promiseRef) {
         loadingRef.current.delete(url);
       }
 
       return document;
     })();
+    
+    // Store reference for comparison
+    promiseRef = loadPromise;
 
+    // Store the promise in the map immediately
     loadingRef.current.set(url, loadPromise);
     return loadPromise;
   }, [workerSrc, trimCache]);
