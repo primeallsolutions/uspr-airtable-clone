@@ -443,23 +443,25 @@ export const DocumentsSidebar = ({
             {/* Uploaded Today - highlighted when there are new uploads */}
             <button
               onClick={() => handleViewSelect('today')}
-              className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
+              className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
                 currentView === 'today'
-                  ? "bg-green-100 text-green-800"
+                  ? "bg-gradient-to-r from-green-100 to-emerald-100 text-green-800 ring-2 ring-green-300"
                   : todayCount > 0
-                    ? "bg-green-50 text-green-700 hover:bg-green-100 animate-pulse-subtle"
+                    ? "bg-gradient-to-r from-green-50 to-emerald-50 text-green-700 hover:from-green-100 hover:to-emerald-100 border border-green-200 shadow-sm"
                     : "hover:bg-white text-gray-700"
               }`}
             >
-              <CalendarPlus className={`w-4 h-4 flex-shrink-0 ${todayCount > 0 && currentView !== 'today' ? "text-green-600" : ""}`} />
+              <div className={`p-1 rounded ${todayCount > 0 ? "bg-green-500 text-white" : ""}`}>
+                <CalendarPlus className={`w-4 h-4 flex-shrink-0 ${todayCount > 0 && currentView !== 'today' ? "" : ""}`} />
+              </div>
               <span className="truncate">Uploaded Today</span>
               {todayCount > 0 && (
-                <span className={`ml-auto text-xs px-1.5 py-0.5 rounded-full font-semibold ${
+                <span className={`ml-auto text-xs px-2 py-0.5 rounded-full font-bold ${
                   currentView === 'today'
                     ? "bg-green-200 text-green-900"
-                    : "bg-green-500 text-white"
+                    : "bg-green-500 text-white animate-pulse"
                 }`}>
-                  {todayCount} new
+                  {todayCount} NEW
                 </span>
               )}
             </button>

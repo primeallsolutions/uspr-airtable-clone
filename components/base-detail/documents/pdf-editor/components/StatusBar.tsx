@@ -62,28 +62,43 @@ export function StatusBar({
     }
   };
 
-  const getToolHint = (tool: Tool): string => {
+  const getToolHint = (tool: Tool): { hint: string; tip?: string } => {
     switch (tool) {
       case "select":
-        return "Click to select, drag to move";
+        return { 
+          hint: "Click to select, drag to move any text or annotation",
+          tip: "💡 Want to reposition text? Just drag it!"
+        };
       case "pan":
-        return "Click and drag to pan";
+        return { hint: "Click and drag to scroll around the document" };
       case "highlight":
-        return "Click and drag to highlight";
+        return { hint: "Click and drag to create a highlight" };
       case "text":
-        return "Click to add text";
+        return { hint: "Click anywhere to add new text (Ctrl+Enter to save)" };
       case "edit":
-        return "Click on text to edit";
+        return { 
+          hint: "Click on existing text to modify it",
+          tip: "💡 Use Select tool (V) to move text after editing"
+        };
       case "signature":
-        return "Click to add your signature";
+        return { hint: "Draw or upload your signature to place it" };
       case "signatureField":
-        return "Click to place signature field for signer";
+        return { 
+          hint: "Click to place a signature field",
+          tip: "👆 Others will sign here when you request signatures"
+        };
       case "initialsField":
-        return "Click to place initials field for signer";
+        return { 
+          hint: "Click to place an initials field",
+          tip: "👆 Others will initial here when you request signatures"
+        };
       case "dateField":
-        return "Click to place auto date-signed field";
+        return { 
+          hint: "Click to place a date field",
+          tip: "📅 This will auto-fill with the signing date"
+        };
       default:
-        return "";
+        return { hint: "" };
     }
   };
 
@@ -143,7 +158,10 @@ export function StatusBar({
       <div className="flex items-center gap-4 text-gray-400">
         <span>Tool: <span className="text-white">{getToolName(activeTool)}</span></span>
         <span>Zoom: <span className="text-white">{Math.round(zoom * 100)}%</span></span>
-        <span className="text-blue-400 italic">{getToolHint(activeTool)}</span>
+        <span className="text-blue-400">{getToolHint(activeTool).hint}</span>
+        {getToolHint(activeTool).tip && (
+          <span className="text-amber-400 font-medium animate-pulse">{getToolHint(activeTool).tip}</span>
+        )}
       </div>
     </div>
   );

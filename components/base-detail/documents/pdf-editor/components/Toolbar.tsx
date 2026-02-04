@@ -194,55 +194,64 @@ export function Toolbar({
             icon={<MousePointer className="w-4 h-4" />}
             active={activeTool === "select"}
             onClick={() => onToolChange("select")}
-            title="Select"
+            title="Select & Move (V) - Click and drag text/annotations to reposition"
+            shortcut="V"
           />
           <ToolButton
             icon={<Hand className="w-4 h-4" />}
             active={activeTool === "pan"}
             onClick={() => onToolChange("pan")}
-            title="Pan"
+            title="Pan (P) - Drag to scroll around the document"
+            shortcut="P"
           />
           <ToolButton
             icon={<Highlighter className="w-4 h-4" />}
             active={activeTool === "highlight"}
             onClick={() => onToolChange("highlight")}
-            title="Highlight"
+            title="Highlight (H) - Click and drag to highlight text"
+            shortcut="H"
           />
           <ToolButton
             icon={<Type className="w-4 h-4" />}
             active={activeTool === "text"}
             onClick={() => onToolChange("text")}
-            title="Add Text"
+            title="Add Text (T) - Click to add new text anywhere"
+            shortcut="T"
           />
           <ToolButton
             icon={<Edit3 className="w-4 h-4" />}
             active={activeTool === "edit"}
             onClick={() => onToolChange("edit")}
-            title="Edit Text"
+            title="Edit Text (E) - Click on existing text to modify it"
+            shortcut="E"
           />
           <ToolButton
             icon={<PenTool className="w-4 h-4" />}
             active={activeTool === "signature"}
             onClick={() => onToolChange("signature")}
-            title="Add Signature"
+            title="Add Your Signature (S) - Draw or upload your signature"
+            shortcut="S"
           />
           <ToolButton
             icon={<FileSignature className="w-4 h-4" />}
             active={activeTool === "signatureField"}
             onClick={() => onToolChange("signatureField")}
-            title="Add Signature Field (for e-signature requests)"
+            title="Signature Field (F) - Add a field for others to sign"
+            shortcut="F"
           />
           <ToolButton
             icon={<Pen className="w-4 h-4" />}
             active={activeTool === "initialsField"}
             onClick={() => onToolChange("initialsField")}
-            title="Add Initials Field"
+            title="Initials Field (I) - Add a field for initials"
+            shortcut="I"
           />
           <ToolButton
             icon={<CalendarCheck className="w-4 h-4" />}
             active={activeTool === "dateField"}
             onClick={() => onToolChange("dateField")}
-            title="Add Auto Date-Signed Field"
+            title="Date Field (D) - Auto-fills with signing date"
+            shortcut="D"
           />
         </div>
 
@@ -424,27 +433,35 @@ function ShortcutItem({ keys, description }: { keys: string[]; description: stri
   );
 }
 
-// Tool button component
+// Tool button component with keyboard shortcut indicator
 function ToolButton({
   icon,
   active,
   onClick,
   title,
+  shortcut,
 }: {
   icon: React.ReactNode;
   active: boolean;
   onClick: () => void;
   title: string;
+  shortcut?: string;
 }) {
   return (
     <button
       onClick={onClick}
-      className={`p-1.5 rounded text-white ${
+      className={`relative p-1.5 rounded text-white group ${
         active ? "bg-blue-600" : "hover:bg-gray-600"
       }`}
       title={title}
     >
       {icon}
+      {/* Show shortcut key on hover */}
+      {shortcut && (
+        <span className="absolute -bottom-1 -right-1 hidden group-hover:flex items-center justify-center w-3.5 h-3.5 text-[9px] font-bold bg-gray-900 border border-gray-600 rounded text-gray-300">
+          {shortcut}
+        </span>
+      )}
     </button>
   );
 }
