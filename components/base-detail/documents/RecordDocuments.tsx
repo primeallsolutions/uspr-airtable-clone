@@ -28,6 +28,7 @@ import {
 import { SignatureRequestModal } from "./SignatureRequestModal";
 import { SignatureRequestStatus } from "./SignatureRequestStatus";
 import { PdfEditor } from "./pdf-editor";
+import type { SignatureRequestData } from "./pdf-editor/types";
 import type { FieldRow } from "@/lib/types/base-detail";
 
 type RecordDocumentsProps = {
@@ -91,6 +92,7 @@ export const RecordDocuments = ({
   
   // Signature request state - document to use when opening signature modal from editor
   const [signatureRequestDoc, setSignatureRequestDoc] = useState<RecordDocument | null>(null);
+  const [signatureRequestData, setSignatureRequestData] = useState<SignatureRequestData | null>(null);
   
   // Modal stack management - only one modal visible at a time
   type ModalType = 'none' | 'signature-request' | 'signature-status';
@@ -266,11 +268,16 @@ export const RecordDocuments = ({
   // Handle request signature from PDF Editor
   // Note: signatureFields param is available but we use the SignatureRequestModal's
   // built-in field placement instead for better UX
-  const handleRequestSignatureFromEditor = (_signatureFields?: unknown[]) => {
+  const handleRequestSignatureFromEditor = (data?: SignatureRequestData) => {
     if (!editorDoc) return;
     
     // Save reference to current doc for signature request
     setSignatureRequestDoc(editorDoc);
+    
+    // Save signature request data from PDF Editor (signers, fields, assignments)
+    if (data) {
+      setSignatureRequestData(data);
+    }
     
     // Close editor
     setEditorDoc(null);
@@ -577,6 +584,7 @@ export const RecordDocuments = ({
         onClose={() => {
           setActiveModal('none');
           setSignatureRequestDoc(null);
+          setSignatureRequestData(null);
         }}
         baseId={baseId}
         tableId={tableId}
@@ -598,7 +606,26 @@ export const RecordDocuments = ({
           toast.success("Signature request created successfully");
           setActiveModal('none');
           setSignatureRequestDoc(null);
+          setSignatureRequestData(null);
         }}
+        // Pre-populated data from PDF Editor SignerPanel
+        initialSigners={signatureRequestData?.signers.map(s => ({
+          email: s.email,
+          name: s.name,
+          role: s.role,
+        }))}
+        initialSignatureFields={signatureRequestData?.signatureFields.map(f => ({
+          id: f.id,
+          pageIndex: f.pageIndex,
+          x: f.x,
+          y: f.y,
+          width: f.width,
+          height: f.height,
+          label: f.label,
+          fieldType: f.fieldType,
+          assignedTo: f.assignedTo,
+        }))}
+        initialFieldAssignments={signatureRequestData?.fieldAssignments}
       />
 
       {/* Signature Request Status Modal */}

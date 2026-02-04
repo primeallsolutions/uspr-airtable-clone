@@ -99,6 +99,21 @@ export interface PdfPageState {
   textItems: TextItem[];
 }
 
+// Signer data type for signature requests
+export interface SignerData {
+  id: string;
+  email: string;
+  name: string;
+  role: "signer" | "viewer" | "approver";
+}
+
+// Signature request data passed from PDF Editor
+export interface SignatureRequestData {
+  signatureFields: SignatureFieldAnnotation[];
+  signers: SignerData[];
+  fieldAssignments: Record<string, string>; // fieldId -> signerId
+}
+
 // Editor props (same interface as old PdfEditor for compatibility)
 export interface PdfEditorProps {
   document: {
@@ -109,7 +124,7 @@ export interface PdfEditorProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (file: File) => Promise<void>;
-  onRequestSignature?: (signatureFields: SignatureFieldAnnotation[]) => void;
+  onRequestSignature?: (data: SignatureRequestData) => void;
 }
 
 // Zoom configuration

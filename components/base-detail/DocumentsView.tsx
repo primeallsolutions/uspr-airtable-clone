@@ -11,6 +11,7 @@ import { DocumentsList } from "./documents/DocumentsList";
 import { DocumentPreview } from "./documents/DocumentPreview";
 import { ActivityFeed } from "./documents/ActivityFeed";
 import { PdfEditor } from "./documents/pdf-editor";
+import type { SignatureRequestData } from "./documents/pdf-editor/types";
 import { TemplateManagementModal } from "./documents/TemplateManagementModal";
 import { SignatureRequestModal } from "./documents/SignatureRequestModal";
 import { SignatureRequestStatus } from "./documents/SignatureRequestStatus";
@@ -87,6 +88,7 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
   const [showSignatureRequestModal, setShowSignatureRequestModal] = useState<boolean>(false);
   const [showSignatureStatus, setShowSignatureStatus] = useState<boolean>(false);
   const [signatureRequestDoc, setSignatureRequestDoc] = useState<StoredDocument | null>(null);
+  const [signatureRequestData, setSignatureRequestData] = useState<SignatureRequestData | null>(null);
   const [showMergePackModal, setShowMergePackModal] = useState<boolean>(false);
   const [showMergeWithReorderModal, setShowMergeWithReorderModal] = useState<boolean>(false);
   const [showActivityFeed, setShowActivityFeed] = useState<boolean>(true);
@@ -1340,12 +1342,13 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
           isOpen={Boolean(editorDoc)}
           onClose={handleEditorClose}
           onSave={handleEditorSave}
-          onRequestSignature={(signatureFields) => {
-            // Close the editor and open signature request modal
+          onRequestSignature={(data) => {
+            // Close the editor and open signature request modal with pre-populated data
             const docToSign = editorDoc;
             handleEditorClose();
-            // Set the document for signature request
+            // Set the document and signature request data for the modal
             setSignatureRequestDoc(docToSign);
+            setSignatureRequestData(data);
             setShowSignatureRequestModal(true);
           }}
         />
@@ -1432,6 +1435,7 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
         onClose={() => {
           setShowSignatureRequestModal(false);
           setSignatureRequestDoc(null);
+          setSignatureRequestData(null);
         }}
         baseId={baseId}
         tableId={selectedTable?.id ?? null}
@@ -1444,6 +1448,7 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
         onRequestCreated={() => {
           setShowSignatureRequestModal(false);
           setSignatureRequestDoc(null);
+          setSignatureRequestData(null);
           setShowSignatureStatus(true);
         }}
         recordId={recordId}
@@ -1454,6 +1459,24 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
           type: f.type,
           options: f.options as Record<string, { name?: string; label?: string }> | undefined
         }))}
+        // Pre-populated data from PDF Editor SignerPanel
+        initialSigners={signatureRequestData?.signers.map(s => ({
+          email: s.email,
+          name: s.name,
+          role: s.role,
+        }))}
+        initialSignatureFields={signatureRequestData?.signatureFields.map(f => ({
+          id: f.id,
+          pageIndex: f.pageIndex,
+          x: f.x,
+          y: f.y,
+          width: f.width,
+          height: f.height,
+          label: f.label,
+          fieldType: f.fieldType,
+          assignedTo: f.assignedTo,
+        }))}
+        initialFieldAssignments={signatureRequestData?.fieldAssignments}
       />
 
       {/* Signature Request Status */}

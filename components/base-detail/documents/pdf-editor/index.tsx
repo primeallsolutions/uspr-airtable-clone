@@ -560,9 +560,19 @@ export function PdfEditor({
   const handleRequestSignature = useCallback(() => {
     const signatureFields = getSignatureFields();
     if (onRequestSignature) {
-      onRequestSignature(signatureFields);
+      // Pass full signature request data including signers and field assignments
+      onRequestSignature({
+        signatureFields,
+        signers: signers.map(s => ({
+          id: s.id,
+          email: s.email,
+          name: s.name,
+          role: s.role,
+        })),
+        fieldAssignments,
+      });
     }
-  }, [getSignatureFields, onRequestSignature]);
+  }, [getSignatureFields, onRequestSignature, signers, fieldAssignments]);
 
   // Handle field assignment changes from signer panel
   const handleFieldAssignmentChange = useCallback((fieldId: string, signerId: string) => {
@@ -577,8 +587,7 @@ export function PdfEditor({
     const signatureFields = getSignatureFields();
     if (signatureFields.length === 0) return;
     
-    // If parent has onRequestSignature, use that (for backward compatibility)
-    // Otherwise show the signer panel to collect signers
+    // If no signers configured yet, open the panel
     if (signers.length === 0) {
       setShowSignerPanel(true);
       return;
@@ -591,16 +600,26 @@ export function PdfEditor({
       return;
     }
 
-    // If onRequestSignature is provided, call it with the collected data
+    // If onRequestSignature is provided, call it with the full data including signers
     if (onRequestSignature) {
       setIsSendingRequest(true);
       try {
-        // Pass the signature fields with signer assignments
+        // Pass the signature fields with signer assignments included
         const fieldsWithAssignments = signatureFields.map(field => ({
           ...field,
           assignedTo: fieldAssignments[field.id] || undefined,
         }));
-        onRequestSignature(fieldsWithAssignments);
+        
+        onRequestSignature({
+          signatureFields: fieldsWithAssignments,
+          signers: validSigners.map(s => ({
+            id: s.id,
+            email: s.email,
+            name: s.name,
+            role: s.role,
+          })),
+          fieldAssignments,
+        });
       } finally {
         setIsSendingRequest(false);
       }
