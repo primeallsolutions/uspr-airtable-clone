@@ -14,16 +14,26 @@ export const ExportBaseModal = ({ isOpen, onClose, baseId, baseName }: ExportBas
   const [includeRecords, setIncludeRecords] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportName, setExportName] = useState(baseName);
+  const [exportFormat, setExportFormat] = useState<"json" | "csv">("json");
 
   // Reset export name when modal opens
   useEffect(() => {
     if (isOpen) {
       setExportName(baseName);
+      setExportFormat("json");
+      setIncludeRecords(false);
     }
   }, [isOpen, baseName]);
 
   const handleExport = async () => {
     if (!baseId) return;
+
+    if (exportFormat === "csv" && !includeRecords) {
+      toast.error("CSV export requires records", {
+        description: "Enable \"Include records\" to export CSV files.",
+      });
+      return;
+    }
     
     setExporting(true);
     const toastId = toast.loading("Exporting base...", {
@@ -32,12 +42,21 @@ export const ExportBaseModal = ({ isOpen, onClose, baseId, baseName }: ExportBas
     
     try {
       const exported = await BaseExportService.exportBase(baseId, includeRecords, exportName.trim() || baseName);
-      BaseExportService.downloadAsJson(exported, exportName.trim() || baseName);
-      
-      toast.success("Base exported successfully!", {
-        id: toastId,
-        description: `Downloaded ${exportName.trim() || baseName}_export.json`
-      });
+      const safeName = exportName.trim() || baseName;
+
+      if (exportFormat === "json") {
+        BaseExportService.downloadAsJson(exported, safeName);
+        toast.success("Base exported successfully!", {
+          id: toastId,
+          description: `Downloaded ${safeName}_export.json`
+        });
+      } else {
+        const files = BaseExportService.downloadAsCsv(exported, safeName);
+        toast.success("Base exported successfully!", {
+          id: toastId,
+          description: `Downloaded ${files} CSV file${files === 1 ? "" : "s"}`
+        });
+      }
       
       onClose();
     } catch (error) {
@@ -69,9 +88,42 @@ export const ExportBaseModal = ({ isOpen, onClose, baseId, baseName }: ExportBas
         <div className="px-6 py-4 space-y-4">
           <div>
             <p className="text-sm text-gray-600 mb-4">
-              Export <span className="font-medium">{baseName}</span> as a JSON file. 
-              The export includes all tables, fields, and automations.
+              Export <span className="font-medium">{baseName}</span> to share or back up your data.
+              Choose JSON for full schema exports, or CSV to download table records.
             </p>
+          </div>
+
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-gray-700">Format</label>
+            <div className="flex gap-3">
+              <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+                <input
+                  type="radio"
+                  name="exportFormat"
+                  value="json"
+                  checked={exportFormat === "json"}
+                  onChange={() => setExportFormat("json")}
+                  disabled={exporting}
+                />
+                JSON (schema + optional records)
+              </label>
+              <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+                <input
+                  type="radio"
+                  name="exportFormat"
+                  value="csv"
+                  checked={exportFormat === "csv"}
+                  onChange={() => setExportFormat("csv")}
+                  disabled={exporting}
+                />
+                CSV (records per table)
+              </label>
+            </div>
+            {exportFormat === "csv" && (
+              <p className="text-xs text-blue-600">
+                CSV exports download one file per table and require records to be included.
+              </p>
+            )}
           </div>
 
           <div>
@@ -105,10 +157,10 @@ export const ExportBaseModal = ({ isOpen, onClose, baseId, baseName }: ExportBas
               <label htmlFor="includeRecords" className="text-sm font-medium text-gray-700 cursor-pointer">
                 Include records
               </label>
-              <p className="text-xs text-gray-500 mt-1">
-                Export all data records. This will make the file larger but allows for complete backup/restore.
-              </p>
-            </div>
+            <p className="text-xs text-gray-500 mt-1">
+              Export all data records. This will make the file larger but allows for complete backup/restore.
+            </p>
+          </div>
           </div>
 
           <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
