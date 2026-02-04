@@ -124,6 +124,28 @@ export default function BaseDetailPage() {
     loadRecords,
     loadAllFields
   } = useBaseDetail(baseId);
+
+  // State for opening a record details modal from URL params (e.g., coming back from documents page)
+  const [initialOpenRecordId, setInitialOpenRecordId] = useState<string | null>(null);
+
+  // Check for openRecord param to re-open record details modal
+  useEffect(() => {
+    const openRecordId = searchParams?.get('openRecord');
+    const openTableId = searchParams?.get('tableId');
+    
+    if (openRecordId) {
+      // If a specific table is requested and it's different from current, switch to it first
+      if (openTableId && openTableId !== selectedTableId) {
+        setSelectedTableId(openTableId);
+      }
+      
+      // Set the initial record to open
+      setInitialOpenRecordId(openRecordId);
+      
+      // Remove query params from URL to prevent re-opening on navigation
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, [searchParams, selectedTableId, setSelectedTableId]);
   
   const {
     viewMode,
@@ -1108,6 +1130,8 @@ export default function BaseDetailPage() {
                   colorAssignments={colorAssignments}
                   showCreatedAt={showCreatedAt}
                   scrollContainerRef={gridScrollRef}
+                  initialOpenRecordId={initialOpenRecordId}
+                  onInitialRecordOpened={() => setInitialOpenRecordId(null)}
                 />
               ) : (
                 <KanbanView
@@ -1121,6 +1145,8 @@ export default function BaseDetailPage() {
                   onAddRow={handleAddRow}
                   savingCell={savingCell}
                   canDeleteRow={can.delete ?? true}
+                  initialOpenRecordId={initialOpenRecordId}
+                  onInitialRecordOpened={() => setInitialOpenRecordId(null)}
                 />
               )}
             </div>
