@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { ChevronRight, ChevronDown, Folder, FolderOpen, MoreVertical, Pencil, Trash2, Inbox, Clock, Files, CalendarPlus, Home, ChevronsRight, AlertCircle, PenTool, Bell, GripVertical } from "lucide-react";
 import { FolderSkeleton } from "./DocumentsSkeleton";
 import type { DocumentStatus } from "./DocumentStatusBadge";
@@ -104,26 +104,23 @@ const FolderItem = ({
   const isDragging = draggingItem?.type === "folder" && draggingItem.path === folder.path;
 
   // Check if this folder can accept the drop (not itself or its children for folders)
-  const canAcceptDrop = useMemo(() => {
-    if (!draggingItem) return false;
-    
-    if (draggingItem.type === "folder") {
-      // Can't drop folder on itself
-      if (draggingItem.path === folder.path) return false;
-      // Can't drop folder on a descendant (would create circular reference)
-      if (folder.path.startsWith(draggingItem.path)) return false;
-      // Can't drop on current parent (no change)
-      if (draggingItem.parent_path === folder.path) return false;
-    }
-    
-    if (draggingItem.type === "document") {
-      // Check if document is already in this folder
-      const docFolder = draggingItem.path.substring(0, draggingItem.path.lastIndexOf("/") + 1);
-      if (docFolder === folder.path) return false;
-    }
-    
+  // This is used for known internal drags, but we also accept external drops
+  const canAcceptFolderDrop = useCallback((data: FolderDragData) => {
+    // Can't drop folder on itself
+    if (data.path === folder.path) return false;
+    // Can't drop folder on a descendant (would create circular reference)
+    if (folder.path.startsWith(data.path)) return false;
+    // Can't drop on current parent (no change)
+    if (data.parent_path === folder.path) return false;
     return true;
-  }, [draggingItem, folder.path]);
+  }, [folder.path]);
+  
+  const canAcceptDocumentDrop = useCallback((data: DocumentDragData) => {
+    // Check if document is already in this folder
+    const docFolder = data.path.substring(0, data.path.lastIndexOf("/") + 1);
+    if (docFolder === folder.path) return false;
+    return true;
+  }, [folder.path]);
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -172,22 +169,22 @@ const FolderItem = ({
     e.preventDefault();
     e.stopPropagation();
     
-    // Check if there's drag data
+    // Check if there's drag data - accept any drag with our data format
     const hasData = e.dataTransfer.types.includes("text/plain") || 
                     e.dataTransfer.types.includes("application/json");
     
-    if (hasData && canAcceptDrop) {
+    if (hasData) {
       e.dataTransfer.dropEffect = "move";
       setIsDragOver(true);
-    } else if (hasData) {
-      e.dataTransfer.dropEffect = "none";
     }
   };
 
   const handleDragEnter = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (canAcceptDrop) {
+    const hasData = e.dataTransfer.types.includes("text/plain") || 
+                    e.dataTransfer.types.includes("application/json");
+    if (hasData) {
       setIsDragOver(true);
     }
   };
@@ -215,14 +212,20 @@ const FolderItem = ({
       
       const data = JSON.parse(jsonData) as DragData;
       
-      if (data.type === "folder" && onFolderMove && canAcceptDrop) {
-        setIsMoving(true);
-        // Move the dropped folder into this folder (this folder becomes the parent)
-        await onFolderMove(data.path, folder.path);
-      } else if (data.type === "document" && onDocumentMove && canAcceptDrop) {
-        setIsMoving(true);
-        // Move the document into this folder
-        await onDocumentMove(data.path, folder.path);
+      if (data.type === "folder" && onFolderMove) {
+        // Validate folder drop
+        if (canAcceptFolderDrop(data as FolderDragData)) {
+          setIsMoving(true);
+          // Move the dropped folder into this folder (this folder becomes the parent)
+          await onFolderMove(data.path, folder.path);
+        }
+      } else if (data.type === "document" && onDocumentMove) {
+        // Validate document drop
+        if (canAcceptDocumentDrop(data as DocumentDragData)) {
+          setIsMoving(true);
+          // Move the document into this folder
+          await onDocumentMove(data.path, folder.path);
+        }
       }
     } catch (err) {
       console.error("Failed to process drop:", err);
@@ -237,7 +240,7 @@ const FolderItem = ({
       <div
         ref={dragRef}
         className={`flex items-center transition-all duration-200 rounded-lg ${
-          isDragOver && canAcceptDrop
+          isDragOver
             ? "bg-blue-100 ring-2 ring-blue-400 ring-inset scale-[1.02]"
             : ""
         } ${isDragging ? "opacity-40 scale-95" : ""} ${isMoving ? "opacity-70 animate-pulse" : ""}`}
@@ -754,7 +757,7 @@ export const DocumentsSidebar = ({
                 {/* Uncategorized files (root folder) - also a drop target for documents */}
                 <div
                   className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 cursor-pointer ${
-                    isUncategorizedDragOver && draggingItem?.type === "document"
+                    isUncategorizedDragOver
                       ? "bg-blue-100 ring-2 ring-blue-400 scale-[1.02]"
                       : isUncategorizedSelected
                         ? "bg-amber-100 text-amber-800"
@@ -764,7 +767,10 @@ export const DocumentsSidebar = ({
                   onDragOver={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    if (draggingItem?.type === "document") {
+                    // Accept any drag that has our data format
+                    const hasData = e.dataTransfer.types.includes("text/plain") || 
+                                    e.dataTransfer.types.includes("application/json");
+                    if (hasData) {
                       e.dataTransfer.dropEffect = "move";
                       setIsUncategorizedDragOver(true);
                     }
@@ -772,14 +778,21 @@ export const DocumentsSidebar = ({
                   onDragEnter={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    if (draggingItem?.type === "document") {
+                    const hasData = e.dataTransfer.types.includes("text/plain") || 
+                                    e.dataTransfer.types.includes("application/json");
+                    if (hasData) {
                       setIsUncategorizedDragOver(true);
                     }
                   }}
                   onDragLeave={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    setIsUncategorizedDragOver(false);
+                    // Only clear if actually leaving this element
+                    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                    if (e.clientX < rect.left || e.clientX > rect.right || 
+                        e.clientY < rect.top || e.clientY > rect.bottom) {
+                      setIsUncategorizedDragOver(false);
+                    }
                   }}
                   onDrop={async (e) => {
                     e.preventDefault();
@@ -787,6 +800,7 @@ export const DocumentsSidebar = ({
                     setIsUncategorizedDragOver(false);
                     try {
                       const jsonData = e.dataTransfer.getData("application/json") || e.dataTransfer.getData("text/plain");
+                      if (!jsonData) return;
                       const data = JSON.parse(jsonData) as DragData;
                       if (data.type === "document" && onDocumentMove) {
                         await onDocumentMove(data.path, "");

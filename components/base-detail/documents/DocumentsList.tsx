@@ -804,87 +804,116 @@ export const DocumentsList = ({
                 {sortedDocuments.map((doc) => {
                   if (isFolder(doc)) return null;
                   const docStatus = documentStatuses?.get(doc.path);
+                  
+                  // Drag handlers for grid view
+                  const handleGridDragStart = (e: React.DragEvent) => {
+                    const dragData: DocumentDragData = {
+                      type: "document",
+                      path: doc.path,
+                      name: doc.relative,
+                    };
+                    e.dataTransfer.setData("text/plain", JSON.stringify(dragData));
+                    e.dataTransfer.setData("application/json", JSON.stringify(dragData));
+                    e.dataTransfer.effectAllowed = "move";
+                    onDocumentDragStart?.(dragData);
+                  };
+                  
+                  const handleGridDragEnd = () => {
+                    onDocumentDragEnd?.();
+                  };
+                  
                   return (
-                    <button
+                    <div
                       key={doc.path}
-                      onClick={() => {
-                        if (!isFolder(doc)) {
-                          onDocumentSelect(doc.path);
-                        }
-                      }}
-                      onDoubleClick={() => {
-                        if (!isFolder(doc) && onDocumentEdit && isPdf(doc.mimeType)) {
-                          onDocumentEdit(doc);
-                        }
-                      }}
-                      className={`group relative p-2 rounded-lg border transition-all hover:shadow-md ${
-                        selectedDocPath === doc.path
-                          ? "border-blue-500 bg-blue-50 ring-2 ring-blue-200"
-                          : "border-gray-200 hover:border-gray-300 bg-white"
-                      }`}
-                      title={isPdf(doc.mimeType) ? "Double-click to edit" : ""}
+                      draggable={true}
+                      onDragStart={handleGridDragStart}
+                      onDragEnd={handleGridDragEnd}
+                      className="cursor-grab active:cursor-grabbing"
                     >
-                      {/* Status Badge - top left */}
-                      {docStatus && docStatus.status !== "draft" && (
-                        <div className="absolute top-1 left-1 z-10">
-                          <DocumentStatusBadge 
-                            status={docStatus.status} 
-                            size="sm"
-                            showIcon={true}
-                            showLabel={false}
-                          />
+                      <button
+                        onClick={() => {
+                          if (!isFolder(doc)) {
+                            onDocumentSelect(doc.path);
+                          }
+                        }}
+                        onDoubleClick={() => {
+                          if (!isFolder(doc) && onDocumentEdit && isPdf(doc.mimeType)) {
+                            onDocumentEdit(doc);
+                          }
+                        }}
+                        className={`group relative w-full p-2 rounded-lg border transition-all hover:shadow-md ${
+                          selectedDocPath === doc.path
+                            ? "border-blue-500 bg-blue-50 ring-2 ring-blue-200"
+                            : "border-gray-200 hover:border-gray-300 bg-white"
+                        }`}
+                        title={isPdf(doc.mimeType) ? "Double-click to edit • Drag to move" : "Drag to move"}
+                      >
+                        {/* Drag indicator */}
+                        <div className="absolute top-1 left-1 z-10 opacity-30 group-hover:opacity-70 transition-opacity">
+                          <GripVertical className="w-3 h-3 text-gray-500" />
                         </div>
-                      )}
-                      {/* Action Buttons - appear on hover */}
-                      <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                        {onDocumentEdit && isPdf(doc.mimeType) && (
+                        {/* Status Badge - top left */}
+                        {docStatus && docStatus.status !== "draft" && (
+                          <div className="absolute top-1 left-5 z-10">
+                            <DocumentStatusBadge 
+                              status={docStatus.status} 
+                              size="sm"
+                              showIcon={true}
+                              showLabel={false}
+                            />
+                          </div>
+                        )}
+                        {/* Action Buttons - appear on hover */}
+                        <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                          {onDocumentEdit && isPdf(doc.mimeType) && (
+                            <span
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onDocumentEdit(doc);
+                              }}
+                              className="p-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors shadow-sm"
+                              title="Edit document"
+                            >
+                              <FilePen className="w-3 h-3" />
+                            </span>
+                          )}
                           <span
                             onClick={(e) => {
                               e.stopPropagation();
-                              onDocumentEdit(doc);
+                              openCopyMoveModal(doc);
                             }}
-                            className="p-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors shadow-sm"
-                            title="Edit document"
+                            className="p-1.5 bg-green-600 hover:bg-green-700 text-white rounded-md transition-colors shadow-sm"
+                            title="Copy or move document"
                           >
-                            <FilePen className="w-3 h-3" />
+                            <FolderOutput className="w-3 h-3" />
                           </span>
-                        )}
-                        <span
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openCopyMoveModal(doc);
-                          }}
-                          className="p-1.5 bg-green-600 hover:bg-green-700 text-white rounded-md transition-colors shadow-sm"
-                          title="Copy or move document"
-                        >
-                          <FolderOutput className="w-3 h-3" />
-                        </span>
-                      </div>
-                      {/* Thumbnail */}
-                      <DocumentThumbnail
-                        documentPath={doc.path}
-                        baseId={baseId}
-                        tableId={tableId}
-                        signedUrl={signedUrls[doc.path]}
-                        mimeType={doc.mimeType}
-                        fileName={doc.relative}
-                        className="w-full aspect-3/4 mb-2"
-                      />
-                      {/* File Info */}
-                      <div className="text-left">
-                        <div className="flex items-center gap-1">
-                          <p className="text-xs font-medium text-gray-900 truncate flex-1" title={doc.relative}>
-                            {doc.relative}
-                          </p>
-                          {docStatus && docStatus.status !== "draft" && (
-                            <DocumentStatusDot status={docStatus.status} />
-                          )}
                         </div>
-                        <p className="text-[10px] text-gray-500">
-                          {formatSize(doc.size)}
-                        </p>
-                      </div>
-                    </button>
+                        {/* Thumbnail */}
+                        <DocumentThumbnail
+                          documentPath={doc.path}
+                          baseId={baseId}
+                          tableId={tableId}
+                          signedUrl={signedUrls[doc.path]}
+                          mimeType={doc.mimeType}
+                          fileName={doc.relative}
+                          className="w-full aspect-3/4 mb-2"
+                        />
+                        {/* File Info */}
+                        <div className="text-left">
+                          <div className="flex items-center gap-1">
+                            <p className="text-xs font-medium text-gray-900 truncate flex-1" title={doc.relative}>
+                              {doc.relative}
+                            </p>
+                            {docStatus && docStatus.status !== "draft" && (
+                              <DocumentStatusDot status={docStatus.status} />
+                            )}
+                          </div>
+                          <p className="text-[10px] text-gray-500">
+                            {formatSize(doc.size)}
+                          </p>
+                        </div>
+                      </button>
+                    </div>
                   );
                 })}
               </div>
