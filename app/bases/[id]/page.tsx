@@ -165,7 +165,7 @@ export default function BaseDetailPage() {
   useEffect(() => {
     if (pendingOpenRecordId && pendingOpenTableId) {
       // Check if we're on the correct table and records are loaded
-      if (selectedTableId === pendingOpenTableId && !loadingRecords && records.length >= 0) {
+      if (selectedTableId === pendingOpenTableId && !loadingRecords) {
         // Records are now available for the target table - open the record
         setInitialOpenRecordId(pendingOpenRecordId);
         // Clear the pending state
@@ -173,7 +173,7 @@ export default function BaseDetailPage() {
         setPendingOpenTableId(null);
       }
     }
-  }, [selectedTableId, loadingRecords, records.length, pendingOpenRecordId, pendingOpenTableId]);
+  }, [selectedTableId, loadingRecords, pendingOpenRecordId, pendingOpenTableId]);
   
   const {
     viewMode,
