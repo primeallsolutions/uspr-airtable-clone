@@ -237,6 +237,7 @@ export default function BaseDetailPage() {
   const [panelPosition, setPanelPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   // Track visibility of the Created At system field
   const [showCreatedAt, setShowCreatedAt] = useState(false);
+  const [addingRow, setAddingRow] = useState(false);
 
   // Mark base as opened on mount/id change
   useEffect(() => {
@@ -405,7 +406,9 @@ export default function BaseDetailPage() {
 
   const handleAddRow = async (initialValues: Record<string, unknown> = {}) => {
     try {
+      setAddingRow(true);
       await createRecord(initialValues);
+      setAddingRow(false);
     } catch (err) {
       console.error('Error creating record:', err);
     }
@@ -1096,6 +1099,7 @@ export default function BaseDetailPage() {
                   onBulkDelete={bulkDeleteRecords}
                   onAddRow={handleAddRow}
                   onAddField={handleAddField}
+                  addingRow={addingRow}
                   onFieldContextMenu={handleFieldContextMenu}
                   onRowContextMenu={handleRowContextMenu}
                   onReorderFields={handleReorderFields}

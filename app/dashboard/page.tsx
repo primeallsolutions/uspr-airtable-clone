@@ -472,6 +472,7 @@ function DashboardContent() {
                 onCollectionViewChange={setCollectionView}
                 onSortOptionChange={setSortOption}
                 onSortToggle={setIsSortOpen}
+                onCreateBase={openCreateModal}
                 onBaseStarToggle={toggleStar}
                 onBaseContextMenu={handleBaseContextMenu}
               />

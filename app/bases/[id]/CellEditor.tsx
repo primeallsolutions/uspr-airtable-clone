@@ -32,6 +32,18 @@ export default function CellEditor({
     setLocal(value == null ? "" : String(value));
   }, [value]);
 
+  // Special formatting for monetary fields
+  useEffect(() => {
+    if (field.type === 'monetary') {
+      const formatMonetary = (val: string) => {
+        const num = parseFloat(val.replace(/[^\d.-]/g, ''));
+        if (isNaN(num)) return '';
+        return num.toFixed(2);
+      };
+      setLocal(formatMonetary(String(value || '')));
+    }
+  }, [value, field.type]);
+
   const SelectDropdown = ({ 
     value,
     onUpdate,
@@ -271,11 +283,21 @@ export default function CellEditor({
   if (field.type === 'single_select') {
     const selectedColor = value == null ? undefined : choiceColors[String(value)];
 
+    const [tempValue, setTempValue] = useState<{ key: string; color: string } | null>(null);
+    const tempUpdate = (val: unknown) => {
+      const choice = selectChoices.find(c => c.key === val);
+      setTempValue({
+        key: choice ? choice.key : '',
+        color: choice ? choice.color : ''
+      });
+      onUpdate(val);
+    }
+
     return <SelectDropdown
-      value={value}
-      onUpdate={onUpdate}
+      value={isSaving && tempValue ? tempValue.key : value}
+      onUpdate={tempUpdate}
       selectChoices={selectChoices}
-      selectedColor={selectedColor}
+      selectedColor={isSaving && tempValue ? tempValue.color : selectedColor}
       isEmptyValue={isEmptyValue}
       EMPTY_LABEL={EMPTY_LABEL}
       isSaving={isSaving}
@@ -284,6 +306,8 @@ export default function CellEditor({
 
   if (field.type === 'multi_select') {
     const selectedValues = Array.isArray(value) ? value : (value ? [value] : []);
+    const [tempValue, setTempValue] = useState<string | null>(null);
+    const [isRemoving, setIsRemoving] = useState<boolean>(false);
 
     return (
       <div className="w-full min-h-[32px] px-2 py-1 text-center">
@@ -293,6 +317,9 @@ export default function CellEditor({
             if (newValue) {
               const currentValues = Array.isArray(value) ? value : (value ? [value] : []);
               if (!currentValues.includes(newValue)) {
+                const choice = selectChoices.find(c => c.key === newValue);
+                setTempValue(choice ? choice.key : null);
+                setIsRemoving(false);
                 onUpdate([...currentValues, newValue]);
               }
             }
@@ -303,9 +330,12 @@ export default function CellEditor({
           isSaving={isSaving}
         />
 
-        {selectedValues.length > 0 && (
+        {(selectedValues.length > 0 || (isSaving && tempValue)) && (
           <div className="flex flex-wrap gap-1 mt-1 justify-center">
-            {selectedValues.map((val) => {
+            {(isSaving && tempValue ?
+              isRemoving ? selectedValues.filter(key => key !== tempValue) : [...selectedValues, tempValue] :
+              selectedValues
+            ).map((val) => {
               const choice = selectChoices.find(c => c.key === String(val));
               const color = choice?.color || '#6B7280';
               return (
@@ -319,9 +349,11 @@ export default function CellEditor({
                     type="button"
                     onClick={() => {
                       const newValues = selectedValues.filter(v => v !== val);
+                      setTempValue(val);
+                      setIsRemoving(true);
                       onUpdate(newValues.length > 0 ? newValues : null);
                     }}
-                    className="ml-1 hover:bg-black/20 rounded-full p-0.5"
+                    className={`ml-1 rounded-full p-0.5 ${!isSaving ? "hover:bg-black/20 cursor-pointer" : "cursor-not-allowed opacity-50"}`}
                     disabled={isSaving}
                   >
                     <XIcon size={12} />
@@ -489,19 +521,19 @@ export default function CellEditor({
         <input
           type="text"
           className={baseInputClass}
-          value={formatMonetary(local)}
+          value={local}
           onChange={(e) => setLocal(e.target.value)}
           onBlur={() => {
             setLocal(formatMonetary(local));
             handleMonetaryCommit();
           }}
-        onKeyDown={(e) => { 
-          if (e.key === 'Enter') {
-            setLocal(formatMonetary(local));
-            handleMonetaryCommit();
-          }
-        }}
-        disabled={isSaving}
+          onKeyDown={(e) => { 
+            if (e.key === 'Enter') {
+              setLocal(formatMonetary(local));
+              handleMonetaryCommit();
+            }
+          }}
+          disabled={isSaving}
           placeholder={isEmptyValue ? EMPTY_LABEL : "0.00"}
       />
     </div>

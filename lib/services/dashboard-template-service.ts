@@ -1,515 +1,229 @@
-import { supabase } from "../supabaseClient";
-import { BaseService } from "./base-service";
-import { BaseExportService } from "./base-export-service";
-import type { TemplateCategory, Template } from "../types/templates";
+import { supabase } from '../supabaseClient';
+import { BaseExportService } from './base-export-service';
+import { BaseImportService } from './base-import-service';
+import type { Template, CreateTemplateData, UpdateTemplateData } from '../types/templates';
+import type { ExportedBase } from './base-export-service';
 
-const BUCKET = process.env.NEXT_PUBLIC_SUPABASE_DOCUMENTS_BUCKET || "documents";
-
-const basePrefix = (baseId: string, tableId?: string | null) =>
-  tableId ? `bases/${baseId}/tables/${tableId}/` : `bases/${baseId}/`;
-
-const sanitizeFileName = (name: string) => {
-  const fallback = "file";
-  const base = (name || fallback)
-    .replace(/[\s\u2013\u2014]+/g, "-")
-    .replace(/[^\w.\-()+]/g, "")
-    .replace(/-+/g, "-")
-    .replace(/\.+/g, ".")
-    .trim();
-  return base.length > 0 ? base : fallback;
-};
-
-export type TemplateField = {
-  id?: string;
-  template_id?: string;
-  field_name: string;
-  field_key: string;
-  field_type: "text" | "number" | "date" | "checkbox" | "signature";
-  page_number: number;
-  x_position: number;
-  y_position: number;
-  width?: number;
-  height?: number;
-  font_size?: number;
-  font_name?: string;
-  is_required?: boolean;
-  default_value?: string;
-  order_index?: number;
-  validation_rules?: Array<{
-    type: "minLength" | "maxLength" | "pattern" | "min" | "max" | "required";
-    value?: string | number;
-    message?: string;
-  }>;
-  formatting_options?: {
-    textCase?: "uppercase" | "lowercase" | "title";
-    numberFormat?: "currency" | "percentage" | "decimal" | "integer";
-    currencySymbol?: string;
-    decimalPlaces?: number;
-    dateFormat?: string;
-    inputMask?: string;
-  };
-  // E-signature configuration
-  requires_esignature?: boolean;
-  esignature_signer_email?: string;
-  esignature_signer_name?: string;
-  esignature_signer_role?: "signer" | "viewer" | "approver";
-  esignature_sign_order?: number;
-};
-
-export type DocumentTemplate = {
-  id: string;
-  base_id: string;
-  table_id?: string | null;
-  name: string;
-  description?: string | null;
-  template_file_path: string;
-  created_by?: string | null;
-  created_at: string;
-  updated_at: string;
-  fields?: TemplateField[];
-};
-
-export const TemplateService = {
+export class TemplateService {
   /**
-   * List all templates for a base/table
+   * Get all templates (global + user's own templates)
+   * @param userId - Optional user ID to filter user's templates
    */
-  async listTemplates(baseId: string, tableId?: string | null): Promise<DocumentTemplate[]> {
+  static async getTemplates(userId?: string): Promise<Template[]> {
     let query = supabase
-      .from("document_templates")
-      .select("*")
-      .eq("base_id", baseId)
-      .order("created_at", { ascending: false });
+      .from('templates')
+      .select('*')
+      .order('created_at', { ascending: false });
 
-    if (tableId) {
-      query = query.eq("table_id", tableId);
+    // If userId is provided, get global templates + user's templates
+    // If not provided, only get global templates
+    if (userId) {
+      query = query.or(`is_global.eq.true,created_by.eq.${userId}`);
     } else {
-      query = query.is("table_id", null);
+      query = query.eq('is_global', true);
     }
 
     const { data, error } = await query;
+
     if (error) throw error;
-    return data || [];
-  },
+    return (data ?? []) as Template[];
+  }
 
   /**
-   * Get a single template with its fields
+   * Get templates filtered by category
    */
-  async getTemplate(templateId: string): Promise<DocumentTemplate | null> {
-    const { data: template, error: templateError } = await supabase
-      .from("document_templates")
-      .select("*")
-      .eq("id", templateId)
-      .single();
-
-    if (templateError) throw templateError;
-    if (!template) return null;
-
-    // Fetch fields
-    const { data: fields, error: fieldsError } = await supabase
-      .from("template_fields")
-      .select("*")
-      .eq("template_id", templateId)
-      .order("order_index", { ascending: true });
-
-    if (fieldsError) throw fieldsError;
-
-    return {
-      ...template,
-      fields: fields || [],
-    };
-  },
+  static async getTemplatesByCategory(category: string, userId?: string): Promise<Template[]> {
+    const templates = await this.getTemplates(userId);
+    return templates.filter(t => t.category === category);
+  }
 
   /**
-   * Upload a template PDF file and create template record
+   * Get a single template by ID
    */
-  async createTemplate(params: {
-    baseId: string;
-    tableId?: string | null;
-    name: string;
-    description?: string;
-    file: File;
-  }): Promise<DocumentTemplate> {
-    const { baseId, tableId, name, description, file } = params;
-
-    if (!file || file.size === 0) {
-      throw new Error("Empty file or missing file data");
-    }
-
-    if (file.type !== "application/pdf") {
-      throw new Error("Only PDF files are supported as templates");
-    }
-
-    // Upload template file to storage
-    const prefix = basePrefix(baseId, tableId);
-    const templatesFolder = "templates/";
-    const safeName = sanitizeFileName(file.name);
-    const timestamp = Date.now();
-    const finalName = `${timestamp}-${safeName}`;
-    const fullPath = `${prefix}${templatesFolder}${finalName}`;
-
-    const { error: uploadError } = await supabase.storage.from(BUCKET).upload(fullPath, file, {
-      cacheControl: "3600",
-      upsert: false,
-      contentType: "application/pdf",
-    });
-
-    if (uploadError) throw uploadError;
-
-    // Create template record
-    const { data: profile } = await supabase.auth.getUser();
-    const { data: template, error: templateError } = await supabase
-      .from("document_templates")
-      .insert({
-        base_id: baseId,
-        table_id: tableId,
-        name,
-        description: description || null,
-        template_file_path: `${templatesFolder}${finalName}`,
-        created_by: profile?.user?.id || null,
-      })
-      .select()
-      .single();
-
-    if (templateError) throw templateError;
-    return template;
-  },
-
-  /**
-   * Update template metadata
-   */
-  async updateTemplate(
-    templateId: string,
-    updates: {
-      name?: string;
-      description?: string;
-    }
-  ): Promise<DocumentTemplate> {
+  static async getTemplateById(id: string): Promise<Template> {
     const { data, error } = await supabase
-      .from("document_templates")
-      .update({
-        ...updates,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", templateId)
-      .select()
+      .from('templates')
+      .select('*')
+      .eq('id', id)
       .single();
 
     if (error) throw error;
-    return data;
-  },
+    if (!data) throw new Error('Template not found');
+
+    return data as Template;
+  }
 
   /**
-   * Delete template and its file
+   * Create a template from an existing base
+   * @param baseId - The ID of the base to convert into a template
+   * @param templateData - Template metadata (name, description, category, icon)
    */
-  async deleteTemplate(baseId: string, tableId: string | null, templateId: string): Promise<void> {
-    // Get template to find file path
-    const template = await this.getTemplate(templateId);
-    if (!template) throw new Error("Template not found");
-
-    // Delete file from storage
-    const prefix = basePrefix(baseId, tableId);
-    const fullPath = `${prefix}${template.template_file_path}`;
-    const { error: deleteError } = await supabase.storage.from(BUCKET).remove([fullPath]);
-
-    // Delete template record (fields will be cascade deleted)
-    const { error: templateError } = await supabase
-      .from("document_templates")
-      .delete()
-      .eq("id", templateId);
-
-    if (templateError) throw templateError;
-    if (deleteError) {
-      console.warn("Failed to delete template file:", deleteError);
-      // Don't throw - template record is deleted
-    }
-  },
-
-  /**
-   * Get signed URL for template file
-   */
-  async getTemplateSignedUrl(
+  static async createTemplateFromBase(
     baseId: string,
-    tableId: string | null,
-    templateFilePath: string,
-    expiresIn = 600
-  ): Promise<string> {
-    const prefix = basePrefix(baseId, tableId);
-    const cleanPath = templateFilePath.startsWith("/") ? templateFilePath.slice(1) : templateFilePath;
-    const fullPath = `${prefix}${cleanPath}`;
-
-    const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(fullPath, expiresIn);
-    if (error) throw error;
-    return data.signedUrl;
-  },
-
-  /**
-   * Create or update a template field
-   */
-  async upsertField(templateId: string, field: TemplateField): Promise<TemplateField> {
-    const fieldData = {
-      template_id: templateId,
-      field_name: field.field_name,
-      field_key: field.field_key,
-      field_type: field.field_type,
-      page_number: field.page_number,
-      x_position: field.x_position,
-      y_position: field.y_position,
-      width: field.width || null,
-      height: field.height || null,
-      font_size: field.font_size || 12,
-      font_name: field.font_name || "Helvetica",
-      is_required: field.is_required || false,
-      default_value: field.default_value || null,
-      order_index: field.order_index || 0,
-      updated_at: new Date().toISOString(),
-    };
-
-    if (field.id) {
-      // Update existing field
-      const { data, error } = await supabase
-        .from("template_fields")
-        .update(fieldData)
-        .eq("id", field.id)
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
-    } else {
-      // Create new field
-      const { data, error } = await supabase
-        .from("template_fields")
-        .insert(fieldData)
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
+    templateData: CreateTemplateData
+  ): Promise<Template> {
+    // Get current user
+    const { data: userResp, error: userError } = await supabase.auth.getUser();
+    if (userError || !userResp.user?.id) {
+      throw new Error('User must be authenticated to create templates');
     }
-  },
 
-  /**
-   * Delete a template field
-   */
-  async deleteField(fieldId: string): Promise<void> {
-    const { error } = await supabase.from("template_fields").delete().eq("id", fieldId);
-    if (error) throw error;
-  },
+    // Export the base structure (with or without records)
+    const exportedBase = await BaseExportService.exportBase(
+      baseId,
+      templateData.includeRecords ?? true,
+      templateData.name
+    );
 
-  /**
-   * Get all fields for a template
-   */
-  async getTemplateFields(templateId: string): Promise<TemplateField[]> {
+    // Create the template in database
     const { data, error } = await supabase
-      .from("template_fields")
-      .select("*")
-      .eq("template_id", templateId)
-      .order("order_index", { ascending: true });
+      .from('templates')
+      .insert({
+        name: templateData.name,
+        description: templateData.description || null,
+        category: templateData.category,
+        icon: templateData.icon || null,
+        is_global: false, // User templates are never global
+        created_by: userResp.user.id,
+        template_data: exportedBase
+      })
+      .select()
+      .single();
 
     if (error) throw error;
-    return data || [];
-  },
+    if (!data) throw new Error('Failed to create template');
+
+    return data as Template;
+  }
 
   /**
-   * Check if a template has signature fields (any field with field_type === "signature")
+   * Create a template directly from ExportedBase data (for seeding)
+   * This is primarily used for creating global templates
    */
-  async hasActiveSignatureFields(templateId: string): Promise<boolean> {
-    const { data: fields, error } = await supabase
-      .from("template_fields")
-      .select("id")
-      .eq("template_id", templateId)
-      .eq("field_type", "signature");
+  static async createTemplateFromData(
+    templateData: ExportedBase,
+    metadata: {
+      name: string;
+      description?: string;
+      category: string;
+      icon?: string;
+      isGlobal?: boolean;
+    }
+  ): Promise<Template> {
+    const { data, error } = await supabase
+      .from('templates')
+      .insert({
+        name: metadata.name,
+        description: metadata.description || null,
+        category: metadata.category,
+        icon: metadata.icon || null,
+        is_global: metadata.isGlobal ?? false,
+        created_by: null, // System templates have no creator
+        template_data: templateData
+      })
+      .select()
+      .single();
 
     if (error) throw error;
-    return (fields?.length || 0) > 0;
-  },
+    if (!data) throw new Error('Failed to create template');
 
-  /**
-   * Get signature fields for a template (any field with field_type === "signature")
-   */
-  async getActiveSignatureFields(templateId: string): Promise<TemplateField[]> {
-    const { data: fields, error } = await supabase
-      .from("template_fields")
-      .select("*")
-      .eq("template_id", templateId)
-      .eq("field_type", "signature")
-      .order("order_index", { ascending: true });
-
-    if (error) throw error;
-    return fields || [];
-  },
+    return data as Template;
+  }
 
   /**
    * Create a new base from a template
-   * This creates a base with default structure and copies the template to it
+   * @param templateId - The ID of the template to use
+   * @param workspaceId - The workspace where the new base should be created
+   * @param baseName - Optional custom name for the new base
    */
-  async createBaseFromTemplate(
+  static async createBaseFromTemplate(
     templateId: string,
     workspaceId: string,
     baseName?: string
   ): Promise<string> {
     // Get the template
-    const template = await this.getTemplate(templateId);
-    if (!template) {
-      throw new Error("Template not found");
+    const template = await this.getTemplateById(templateId);
+
+    // Import the base using the template data
+    const newBaseId = await BaseImportService.importBase(
+      template.template_data,
+      workspaceId,
+      baseName || template.name
+    );
+
+    return newBaseId;
+  }
+
+  /**
+   * Update a template (only for user's own templates)
+   */
+  static async updateTemplate(
+    templateId: string,
+    updates: UpdateTemplateData
+  ): Promise<void> {
+    const updateData: Record<string, unknown> = {
+      updated_at: new Date().toISOString()
+    };
+
+    if (updates.name !== undefined) updateData.name = updates.name;
+    if (updates.description !== undefined) updateData.description = updates.description;
+    if (updates.category !== undefined) updateData.category = updates.category;
+    if (updates.icon !== undefined) updateData.icon = updates.icon;
+
+    const { error } = await supabase
+      .from('templates')
+      .update(updateData)
+      .eq('id', templateId);
+
+    if (error) throw error;
+  }
+
+  /**
+   * Delete a template (only for user's own templates)
+   */
+  static async deleteTemplate(templateId: string): Promise<void> {
+    const { error } = await supabase
+      .from('templates')
+      .delete()
+      .eq('id', templateId);
+
+    if (error) throw error;
+  }
+
+  /**
+   * Check if a template belongs to the current user
+   */
+  static async isOwner(templateId: string): Promise<boolean> {
+    const { data: userResp, error: userError } = await supabase.auth.getUser();
+    if (userError || !userResp.user?.id) {
+      return false;
     }
 
-    // Create the base with default structure
-    const finalBaseName = baseName || template.name || "New Base";
-    const baseId = await BaseService.createBase({
-      name: finalBaseName,
-      description: template.description || "",
-      workspaceId: workspaceId,
-    });
-
-    // Copy the template file to the new base
-    const BUCKET = process.env.NEXT_PUBLIC_SUPABASE_DOCUMENTS_BUCKET || "documents";
-    const oldPrefix = basePrefix(template.base_id, template.table_id);
-    const newPrefix = basePrefix(baseId, null);
-    
-    // Get the template file
-    const oldPath = `${oldPrefix}${template.template_file_path}`;
-    const { data: fileData, error: downloadError } = await supabase.storage
-      .from(BUCKET)
-      .download(oldPath);
-
-    if (downloadError || !fileData) {
-      throw new Error(`Failed to copy template file: ${downloadError?.message || "File not found"}`);
-    }
-
-    // Upload to new location
-    const newPath = `${newPrefix}${template.template_file_path}`;
-    const { error: uploadError } = await supabase.storage
-      .from(BUCKET)
-      .upload(newPath, fileData, {
-        cacheControl: "3600",
-        upsert: false,
-        contentType: "application/pdf",
-      });
-
-    if (uploadError) {
-      throw new Error(`Failed to upload template file: ${uploadError.message}`);
-    }
-
-    // Create template record in new base
-    const { data: profile } = await supabase.auth.getUser();
-    const { data: newTemplate, error: templateError } = await supabase
-      .from("document_templates")
-      .insert({
-        base_id: baseId,
-        table_id: null,
-        name: template.name,
-        description: template.description,
-        template_file_path: template.template_file_path,
-        created_by: profile?.user?.id || null,
-      })
-      .select("id")
+    const { data, error } = await supabase
+      .from('templates')
+      .select('created_by')
+      .eq('id', templateId)
       .single();
 
-    if (templateError || !newTemplate) {
-      throw new Error(`Failed to create template record: ${templateError?.message || "Unknown error"}`);
-    }
+    if (error || !data) return false;
 
-    // Copy template fields
-    if (template.fields && template.fields.length > 0) {
-      const fieldsToInsert = template.fields.map((field) => ({
-        template_id: newTemplate.id,
-        field_name: field.field_name,
-        field_key: field.field_key,
-        field_type: field.field_type,
-        page_number: field.page_number,
-        x_position: field.x_position,
-        y_position: field.y_position,
-        width: field.width || null,
-        height: field.height || null,
-        font_size: field.font_size || 12,
-        font_name: field.font_name || "Helvetica",
-        is_required: field.is_required || false,
-        default_value: field.default_value || null,
-        order_index: field.order_index || 0,
-      }));
-
-      const { error: fieldsError } = await supabase
-        .from("template_fields")
-        .insert(fieldsToInsert);
-
-      if (fieldsError) {
-        console.warn("Failed to copy template fields:", fieldsError);
-        // Don't throw - template is created, fields are optional
-      }
-    }
-
-    return baseId;
-  },
+    return data.created_by === userResp.user.id;
+  }
 
   /**
-   * Create a template (in `templates` table) from a base
-   * This exports the base structure and saves it as a reusable template
+   * Get template statistics (for UI display)
    */
-  async createTemplateFromBase(
-    baseId: string,
-    data: {
-      name: string;
-      description: string;
-      category: TemplateCategory;
-      icon: string;
-      includeRecords: boolean;
-    }
-  ): Promise<void> {
-    // Export the base
-    const exported = await BaseExportService.exportBase(baseId, data.includeRecords, data.name);
-
-    // Get current user
-    const { data: profile } = await supabase.auth.getUser();
-    if (!profile?.user) {
-      throw new Error("User not authenticated");
-    }
-
-    // Save to templates table
-    const { error } = await supabase.from("templates").insert({
-      name: data.name,
-      description: data.description,
-      category: data.category,
-      icon: data.icon,
-      is_global: false,
-      created_by: profile.user.id,
-      template_data: exported,
-    });
-
-    if (error) {
-      throw new Error(`Failed to create template: ${error.message}`);
-    }
-  },
-
-  /**
-   * Get base templates (from `templates` table, not `document_templates`)
-   * Returns global templates and user's custom templates
-   */
-  async getTemplates(userId?: string): Promise<Template[]> {
-    let query = supabase
-      .from("templates")
-      .select("*")
-      .or(`is_global.eq.true${userId ? `,created_by.eq.${userId}` : ""}`)
-      .order("created_at", { ascending: false });
-
-    const { data, error } = await query;
-    if (error) throw error;
-    return (data || []) as Template[];
-  },
-
-  /**
-   * Get template statistics (table count, field count, record count)
-   */
-  getTemplateStats(template: Template): {
+  static getTemplateStats(template: Template): {
     tableCount: number;
     fieldCount: number;
     recordCount: number;
   } {
     const templateData = template.template_data;
+    
     return {
-      tableCount: templateData?.tables?.length || 0,
-      fieldCount: templateData?.fields?.length || 0,
-      recordCount: templateData?.records?.length || 0,
+      tableCount: templateData.tables?.length ?? 0,
+      fieldCount: templateData.fields?.length ?? 0,
+      recordCount: templateData.records?.length ?? 0
     };
-  },
-};
+  }
+}

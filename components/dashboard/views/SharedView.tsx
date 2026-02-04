@@ -62,7 +62,7 @@ export const SharedView = ({
             ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4'
             : 'space-y-3'
           }>
-            {sortBases(sharedBases, sortOption).map(
+            {sharedBases.length ? sortBases(sharedBases, sortOption).map(
               (base) => (
                 <BaseCard
                   key={base.id}
@@ -72,6 +72,8 @@ export const SharedView = ({
                   onContextMenu={onBaseContextMenu}
                 />
               )
+            ) : (
+              <div className="text-sm text-gray-500">No shared bases available.</div>
             )}
           </div>
         </div>
