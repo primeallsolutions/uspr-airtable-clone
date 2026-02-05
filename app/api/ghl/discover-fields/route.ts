@@ -215,28 +215,34 @@ export async function POST(request: NextRequest) {
       console.warn('Error fetching contact custom fields:', err);
     }
 
-    // Also fetch a sample contact to discover any fields we might have missed
+    // Also fetch a sample contact to discover any fields we might have missed using new Search API
     try {
-      const contactsResponse: Response = await fetch(
-        `${GHL_API_BASE_URL}/contacts/?locationId=${integration.location_id}&limit=5`,
+      const searchResponse: Response = await fetch(
+        `${GHL_API_BASE_URL}/contacts/search`,
         {
+          method: 'POST',
           headers: {
             'Authorization': `Bearer ${integration.access_token}`,
             'Version': '2021-07-28',
             'Content-Type': 'application/json'
           },
+          body: JSON.stringify({
+            locationId: integration.location_id,
+            page: 1,
+            pageLimit: 5,
+          }),
         }
       );
 
-      if (contactsResponse.ok) {
-        const contactsData = await contactsResponse.json();
+      if (searchResponse.ok) {
+        const contactsData = await searchResponse.json();
         const contacts = contactsData.contacts || [];
 
         // Collect all keys from sample contacts
         contacts.forEach((contact: any) => {
           Object.keys(contact).forEach(key => {
             // Skip system fields
-            if (['id', 'locationId', 'dateAdded', 'dateUpdated', 'customFields'].includes(key)) {
+            if (['id', 'locationId', 'dateAdded', 'dateUpdated', 'searchAfter', 'attributionSource', 'lastAttributionSource', 'customFields'].includes(key)) {
               return;
             }
 
