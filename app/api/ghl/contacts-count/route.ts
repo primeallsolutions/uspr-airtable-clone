@@ -45,62 +45,37 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Fetch first page to get total count from meta
-    const contactsResponse: Response = await fetch(
-      `${GHL_API_BASE_URL}/contacts/?locationId=${integration.location_id}&limit=1`,
+    // Fetch first page to get total count from meta using new Search API
+    const searchResponse: Response = await fetch(
+      `${GHL_API_BASE_URL}/contacts/search`,
       {
+        method: 'POST',
         headers: {
           'Authorization': `Bearer ${integration.access_token}`,
           'Version': '2021-07-28',
           'Content-Type': 'application/json'
         },
+        body: JSON.stringify({
+          locationId: integration.location_id,
+          page: 1,
+          pageLimit: 1,
+        }),
       }
     );
 
-    if (!contactsResponse.ok) {
-      const errorText = await contactsResponse.text();
+    if (!searchResponse.ok) {
+      const errorText = await searchResponse.text();
       console.error('GHL API error:', errorText);
       return NextResponse.json(
-        { error: `Failed to fetch contacts from GHL: ${contactsResponse.status}` },
+        { error: `Failed to fetch contacts from GHL: ${searchResponse.status}` },
         { status: 500 }
       );
     }
 
-    const contactsData = await contactsResponse.json();
+    const searchData = await searchResponse.json();
     
-    // Get total count from meta or count contacts by paginating through all pages
-    let totalCount = 0;
-    
-    if (contactsData.meta?.total) {
-      // If GHL API provides total in meta
-      totalCount = contactsData.meta.total;
-    } else {
-      // Otherwise, count by fetching all pages
-      let nextPageUrl: string | null = `${GHL_API_BASE_URL}/contacts/?locationId=${integration.location_id}&limit=100`;
-      
-      while (nextPageUrl) {
-        const pageResponse: Response = await fetch(nextPageUrl, {
-          headers: {
-            'Authorization': `Bearer ${integration.access_token}`,
-            'Version': '2021-07-28',
-            'Content-Type': 'application/json'
-          },
-        });
-
-        if (!pageResponse.ok) break;
-        
-        const pageData = await pageResponse.json();
-        const contacts = pageData.contacts || [];
-        totalCount += contacts.length;
-        
-        nextPageUrl = pageData.meta?.nextPageUrl || null;
-        
-        // Small delay to avoid rate limiting
-        if (nextPageUrl) {
-          await new Promise(resolve => setTimeout(resolve, 100));
-        }
-      }
-    }
+    // Get total count from response
+    const totalCount = searchData.total || 0;
 
     return NextResponse.json({
       success: true,

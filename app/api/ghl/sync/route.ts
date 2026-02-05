@@ -107,29 +107,50 @@ export async function POST(request: NextRequest) {
     const syncType = isIncrementalSync ? 'incremental' : 'full';
     const lastSyncDate = isIncrementalSync ? new Date(integration.last_sync_at) : null;
 
-    // Build query URL - GHL API doesn't support date filtering, so we fetch all and filter client-side
-    let queryUrl = `${GHL_API_BASE_URL}/contacts/?locationId=${integration.location_id}&limit=100`;
-
     if (isIncrementalSync) {
       console.log(`Incremental sync: will filter contacts updated after ${lastSyncDate?.toISOString()}`);
     } else {
       console.log('Full sync: fetching all contacts');
     }
 
-    // Fetch contacts from GHL with pagination
+    // Fetch contacts from GHL using new Search API with standard pagination
     let allContacts: any[] = [];
-    let nextPageUrl: string | null = queryUrl;
     let pageCount = 0;
+    const pageSize = 100;
 
-    while (nextPageUrl) {
+    while (true) {
+      pageCount++;
+      
+      // Build request body for Search API
+      const searchRequestBody: any = {
+        locationId: integration.location_id,
+        page: pageCount,
+        pageLimit: pageSize,
+      };
+
+      // Add filters for incremental sync
+      if (isIncrementalSync && lastSyncDate) {
+        searchRequestBody.filters = [
+          {
+            field: 'dateUpdated',
+            operator: 'range',
+            value: {
+              gt: lastSyncDate.toISOString(),
+            },
+          },
+        ];
+      }
+
       const contactsResponse: Response = await fetch(
-        nextPageUrl,
+        `${GHL_API_BASE_URL}/contacts/search`,
         {
+          method: 'POST',
           headers: {
             'Authorization': `Bearer ${integration.access_token}`,
             'Version': '2021-07-28',
             'Content-Type': 'application/json'
           },
+          body: JSON.stringify(searchRequestBody),
         }
       );
 
@@ -144,38 +165,31 @@ export async function POST(request: NextRequest) {
 
       const contactsData = await contactsResponse.json();
       const contacts = contactsData.contacts || [];
-      allContacts = allContacts.concat(contacts);
-      pageCount++;
+      const totalContacts = contactsData.total || 0;
+      
+      console.log(`Page ${pageCount}: fetched ${contacts.length} contacts, total: ${totalContacts}`);
+      
+      if (contacts.length === 0) {
+        break; // No more results
+      }
 
-      // Get next page URL from meta
-      nextPageUrl = contactsData.meta?.nextPageUrl || null;
+      allContacts = allContacts.concat(contacts);
 
       // Update progress during fetching
-      const estimatedTotal = contactsData.meta?.total || allContacts.length + (nextPageUrl ? 100 : 0);
-      await updateSyncProgress(allContacts.length, estimatedTotal, 'fetching');
+      await updateSyncProgress(allContacts.length, totalContacts, 'fetching');
+
+      // Stop if we got fewer results than requested (we're on the last page)
+      if (contacts.length < pageSize) {
+        break;
+      }
 
       // Small delay between pages to avoid rate limiting
-      if (nextPageUrl) {
-        await new Promise(resolve => setTimeout(resolve, 200));
-      }
+      await new Promise(resolve => setTimeout(resolve, 200));
     }
 
-    // For incremental sync, filter contacts updated after last_sync_at
+    // For incremental sync, we already filtered on the server via Search API filters
+    // So we just use all the contacts we fetched
     let contacts = allContacts;
-    if (isIncrementalSync && lastSyncDate) {
-      const beforeFilterCount = allContacts.length;
-      contacts = allContacts.filter((contact: any) => {
-        // Check if contact has a dateUpdated field
-        if (contact.dateUpdated) {
-          const contactUpdated = new Date(contact.dateUpdated);
-          return contactUpdated > lastSyncDate;
-        }
-        // If no dateUpdated, include it (might be new)
-        return true;
-      });
-      
-      console.log(`Filtered ${beforeFilterCount} contacts to ${contacts.length} modified since last sync`);
-    }
 
     totalContactsToSync = contacts.length;
 
@@ -296,8 +310,12 @@ export async function POST(request: NextRequest) {
       }
       
       try {
-        // Fetch full contact details to get custom field values
+        // With the new Search API, contacts already include custom fields
+        // We may still want to fetch individual contact for detailed information
         let fullContact = contact;
+        
+        // Optionally fetch full contact details if needed (removes the extra API call)
+        // For now, we'll use the contact data from search results which includes custom fields
         try {
           const fullContactResponse: Response = await fetch(
             `${GHL_API_BASE_URL}/contacts/${contact.id}`,
@@ -321,6 +339,7 @@ export async function POST(request: NextRequest) {
           }
         } catch (fetchError) {
           console.warn(`Could not fetch full contact ${contact.id}:`, fetchError);
+          // Use the contact data from search results
         }
 
         // Small delay to avoid rate limiting (50ms between requests)

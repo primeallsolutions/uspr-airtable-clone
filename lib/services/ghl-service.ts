@@ -191,6 +191,70 @@ export class GHLService {
   }
 
   /**
+   * Search for contacts using the new Search API
+   * Supports pagination, filtering, and sorting
+   */
+  static async searchContacts(
+    integration: GHLIntegration,
+    options: {
+      page?: number;
+      pageLimit?: number;
+      searchAfter?: any;
+      filters?: any;
+      sort?: any;
+      query?: string;
+    } = {}
+  ): Promise<{ contacts: GHLContact[]; total: number; searchAfter?: any }> {
+    const accessToken = await this.getValidAccessToken(integration);
+
+    const searchBody: any = {
+      locationId: integration.location_id,
+      pageLimit: options.pageLimit || 100,
+    };
+
+    if (options.page !== undefined) {
+      searchBody.page = options.page;
+    }
+    if (options.searchAfter !== undefined) {
+      searchBody.searchAfter = options.searchAfter;
+    }
+    if (options.filters) {
+      searchBody.filters = options.filters;
+    }
+    if (options.sort) {
+      searchBody.sort = options.sort;
+    }
+    if (options.query) {
+      searchBody.query = options.query;
+    }
+
+    const response = await fetch(
+      `${GHL_API_BASE_URL}/contacts/search`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Version': '2021-07-28',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(searchBody),
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`Failed to search contacts: ${error}`);
+    }
+
+    const data = await response.json();
+    return {
+      contacts: data.contacts || [],
+      total: data.total || 0,
+      searchAfter: data.searchAfter,
+    };
+  }
+
+  /**
    * Fetch a contact by ID from GHL
    */
   static async getContact(
