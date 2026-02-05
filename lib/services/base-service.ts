@@ -193,21 +193,11 @@ export class BaseService {
         name: "Status",
         type: "single_select",
         order_index: 3,
-        options: { choices: ["Todo", "In progress", "Done"] },
-      },
-      {
-        table_id: tableId,
-        name: "Attachments",
-        type: "text",
-        order_index: 4,
-        options: {},
-      },
-      {
-        table_id: tableId,
-        name: "Attachment Summary",
-        type: "text",
-        order_index: 5,
-        options: {},
+        options: {
+          option_1: { color: "#1E40AF", label: "To Do" },
+          option_2: { color: "#065F46", label: "In Progress" },
+          option_3: { color: "#C2410C", label: "Done" }
+        },
       },
     ]);
 

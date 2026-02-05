@@ -144,7 +144,7 @@ export const WorkspaceView = ({
               ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4'
               : 'space-y-3'
             }>
-              {workspaceBases.length > 0 ? sortBases(workspaceBases, sortOption).map(
+              {workspaceBases.length > 0 || !initialLoad ? sortBases(workspaceBases, sortOption).map(
                 (base) => (
                   <BaseCard
                     key={base.id}

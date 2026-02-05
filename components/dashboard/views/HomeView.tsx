@@ -116,9 +116,9 @@ export const HomeView = ({
           </div>
         )}
 
-        {today.length === 0 && earlier.length === 0 && (
+        {today.length === 0 && earlier.length === 0 && initialLoad && (
           <div className="rounded-lg border border-gray-200 bg-white p-6 text-sm text-gray-500 w-1/3">
-            No bases found in this workspace.
+            No bases found in this account.
             <button
               onClick={onCreateBase}
               className="flex items-center mt-2 gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 cursor-pointer"
