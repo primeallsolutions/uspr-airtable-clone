@@ -17,6 +17,7 @@ interface SharedViewProps {
   onBaseStarToggle?: (base: BaseRecord) => void;
   onBaseContextMenu: (e: React.MouseEvent, base: BaseRecord) => void;
   searchQuery?: string;
+  setSearchQuery?: (query: string) => void;
 }
 
 export const SharedView = ({
@@ -31,7 +32,8 @@ export const SharedView = ({
   onSortToggle,
   onBaseStarToggle,
   onBaseContextMenu,
-  searchQuery
+  searchQuery,
+  setSearchQuery
 }: SharedViewProps) => {
   if (loading && !initialLoad) {
     return (
@@ -76,7 +78,7 @@ export const SharedView = ({
                 />
               )
             ) : (
-              <div className="text-sm text-gray-500">No shared bases available.</div>
+              <div className="text-sm text-gray-500">No shared bases available{sharedBases.length && searchQuery ? ` matching "${searchQuery}"` : ""}.</div>
             )}
           </div>
         </div>

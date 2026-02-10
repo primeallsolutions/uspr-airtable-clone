@@ -15,6 +15,7 @@ interface TemplatesViewProps {
   userId?: string;
   collectionView: CollectionView;
   onCollectionViewChange: (view: CollectionView) => void;
+  searchQuery: string;
 }
 
 const CATEGORY_INFO: Record<TemplateCategory | 'all', CategoryInfo | { id: 'all'; label: string; icon: string; description: string }> = {
@@ -78,11 +79,11 @@ export const TemplatesView = ({
   onDeleteTemplate,
   userId,
   collectionView,
-  onCollectionViewChange
+  onCollectionViewChange,
+  searchQuery
 }: TemplatesViewProps) => {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<TemplateCategory | 'all'>('all');
 
   const loadTemplates = useCallback(async () => {
@@ -272,20 +273,6 @@ export const TemplatesView = ({
           collectionView={collectionView}
           setCollectionView={onCollectionViewChange}
         />
-      </div>
-
-      {/* Search and Filters */}
-      <div className="flex gap-4">
-        <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Search templates..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
       </div>
 
       {/* Category Filters */}

@@ -1,4 +1,4 @@
-import { Plus } from "lucide-react";
+import { Plus, SearchX } from "lucide-react";
 import { SortDropdown } from "../SortDropdown";
 import { ViewToggle } from "../ViewToggle";
 import { sortBases } from "@/lib/utils/sort-helpers";
@@ -8,6 +8,7 @@ import { WorkspaceActivityCard } from "../cards/WorkspaceActivityCard";
 import { WorkspaceAnalyticsDashboard } from "../WorkspaceAnalyticsDashboard";
 import { BaseCard } from "../BaseCard";
 import { ManageWorkspaceMembersCard } from "../cards/ManageWorkspaceMembersCard";
+import { WorkspaceSettingsCard } from "../cards/WorkspaceSettingsCard";
 
 interface WorkspaceViewProps {
   workspaceBases: BaseRecord[];
@@ -29,6 +30,7 @@ interface WorkspaceViewProps {
   onLeaveWorkspace?: () => void;
   canLeaveWorkspace?: boolean;
   searchQuery?: string;
+  setSearchQuery?: (query: string) => void;
 }
 
 export const WorkspaceView = ({
@@ -50,7 +52,8 @@ export const WorkspaceView = ({
   canManageMembers,
   onLeaveWorkspace,
   canLeaveWorkspace = false,
-  searchQuery
+  searchQuery,
+  setSearchQuery
 }: WorkspaceViewProps) => {
   const currentWorkspace = workspaces.find(w => w.id === selectedWorkspaceId);
   const [activeTab, setActiveTab] = useState<'bases' | 'analytics' | 'settings'>(
@@ -99,7 +102,7 @@ export const WorkspaceView = ({
       {/* Tab Navigation */}
       <div className="mb-6 border-b border-gray-200 overflow-x-auto">
         <div className="flex gap-4 md:gap-8">
-          {(canManageMembers ? ['analytics', 'bases', 'settings'] as const : ['bases', 'settings'] as const).map((tab) => (
+          {(canManageMembers ? ['bases', 'analytics', 'settings'] as const : ['bases', 'settings'] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -157,16 +160,27 @@ export const WorkspaceView = ({
                     onContextMenu={onBaseContextMenu}
                   />
                 )
-              ) : (
+              ) : initialLoad && (
                 <div className="rounded-lg border border-gray-200 bg-white p-6 text-sm text-gray-500">
-                  No bases found in this workspace.
-                  <button
-                    onClick={onCreateBase}
-                    className="flex items-center mt-2 gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 cursor-pointer"
-                  >
-                    <Plus size={16} />
-                    Create your first base
-                  </button>
+                  {searchQuery ? "No bases found matching your search." : "No bases found in this workspace."}
+                  {(!searchQuery || setSearchQuery) && (
+                    <button
+                      onClick={searchQuery ? () => setSearchQuery?.('') : onCreateBase}
+                      className="flex items-center mt-2 gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 cursor-pointer"
+                    >
+                      {searchQuery ? (
+                        <>
+                          <SearchX size={16} />
+                          Clear search
+                        </>
+                      ) : (
+                        <>
+                          <Plus size={16} />
+                          Create your first base
+                        </>
+                      )}
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -193,8 +207,17 @@ export const WorkspaceView = ({
       {/* Settings tab */}
       {activeTab === 'settings' && (
         <div className="space-y-8">
-          {canManageMembers && selectedWorkspaceId && (
-            <ManageWorkspaceMembersCard workspaceId={selectedWorkspaceId} />
+          {canManageMembers && selectedWorkspaceId && currentWorkspace && (
+            <>
+              <WorkspaceSettingsCard 
+                workspaceId={selectedWorkspaceId} 
+                workspaceName={currentWorkspace.name}
+                onWorkspaceDeleted={() => {
+                  window.location.href = '/dashboard?view=home';
+                }}
+              />
+              <ManageWorkspaceMembersCard workspaceId={selectedWorkspaceId} />
+            </>
           )}
           {canLeaveWorkspace && onLeaveWorkspace ? (
             <div className="w-1/2 rounded-lg border border-gray-200 bg-white p-6 space-y-4">

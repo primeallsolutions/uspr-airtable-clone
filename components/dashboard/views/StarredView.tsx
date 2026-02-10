@@ -17,6 +17,7 @@ interface StarredViewProps {
   onBaseStarToggle?: (base: BaseRecord) => void;
   onBaseContextMenu: (e: React.MouseEvent, base: BaseRecord) => void;
   searchQuery?: string;
+  setSearchQuery?: (query: string) => void;
 }
 
 export const StarredView = ({
@@ -31,7 +32,8 @@ export const StarredView = ({
   onSortToggle,
   onBaseStarToggle,
   onBaseContextMenu,
-  searchQuery
+  searchQuery,
+  setSearchQuery
 }: StarredViewProps) => {
   if (loading && !initialLoad) {
     return (
@@ -76,7 +78,7 @@ export const StarredView = ({
                 />
               )
             ) : (
-              <div className="text-sm text-gray-500">You have no starred bases.</div>
+              <div className="text-sm text-gray-500">You have no starred bases{starredBases.length && searchQuery ? ` matching "${searchQuery}"` : ""}.</div>
             )}
           </div>
         </div>

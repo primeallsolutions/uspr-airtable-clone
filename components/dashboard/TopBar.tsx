@@ -10,10 +10,11 @@ interface TopBarProps {
   onOpenAccount?: () => void;
   onMenuToggle?: () => void;
   isMobileMenuOpen?: boolean;
+  searchQuery?: string;
   setSearchQuery?: (query: string) => void;
 }
 
-export const TopBar = ({ user, onSignOut, onOpenAccount, onMenuToggle, isMobileMenuOpen, setSearchQuery }: TopBarProps) => {
+export const TopBar = ({ user, onSignOut, onOpenAccount, onMenuToggle, isMobileMenuOpen, searchQuery, setSearchQuery }: TopBarProps) => {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 
   useEffect(() => {
@@ -51,6 +52,7 @@ export const TopBar = ({ user, onSignOut, onOpenAccount, onMenuToggle, isMobileM
             className="w-full bg-transparent text-sm outline-none placeholder:text-gray-400"
             placeholder="Search..."
             onChange={(e) => setSearchQuery?.(e.target.value)}
+            value={searchQuery}
           />
         </div>
         <button onClick={onOpenAccount} className="flex sm:hidden h-8 w-8 items-center justify-center rounded-full bg-gray-300 text-sm font-medium text-gray-700 cursor-pointer overflow-hidden flex-shrink-0 hover:bg-gray-400 transition-colors" title="Profile" aria-label="Open profile">

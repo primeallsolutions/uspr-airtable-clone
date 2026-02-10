@@ -78,7 +78,7 @@ export const Sidebar = ({
       )}
       
       {/* Sidebar */}
-      <aside className={`w-64 h-screen flex flex-col border-r bg-white fixed top-0 left-0 z-50 transition-transform duration-300 overflow-hidden ${
+      <aside className={`w-64 h-screen flex flex-col border-r bg-white fixed top-0 left-0 z-49 transition-transform duration-300 overflow-hidden ${
         isMobileOpen ? '!translate-x-0' : '!-translate-x-full md:!translate-x-0'
       }`}>
       <div className="flex items-center gap-2 px-4 py-4 flex-shrink-0">

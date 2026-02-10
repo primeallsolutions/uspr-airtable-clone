@@ -1,4 +1,4 @@
-import { Plus } from "lucide-react";
+import { Plus, SearchX } from "lucide-react";
 import { SortDropdown } from "../SortDropdown";
 import { ViewToggle } from "../ViewToggle";
 import { sortBases } from "@/lib/utils/sort-helpers";
@@ -8,6 +8,8 @@ import { BaseCard } from "../BaseCard";
 
 interface HomeViewProps {
   recentBases: BaseRecord[];
+  workspaces: { id: string; name: string }[];
+  onCreateWorkspace: () => void;
   collectionView: CollectionView;
   sortOption: SortOption;
   isSortOpen: boolean;
@@ -20,10 +22,13 @@ interface HomeViewProps {
   onBaseStarToggle?: (base: BaseRecord) => void;
   onBaseContextMenu: (e: React.MouseEvent, base: BaseRecord) => void;
   searchQuery?: string;
+  setSearchQuery?: (query: string) => void;
 }
 
 export const HomeView = ({
   recentBases,
+  workspaces,
+  onCreateWorkspace,
   collectionView,
   sortOption,
   isSortOpen,
@@ -35,7 +40,8 @@ export const HomeView = ({
   onCreateBase,
   onBaseStarToggle,
   onBaseContextMenu,
-  searchQuery
+  searchQuery,
+  setSearchQuery
 }: HomeViewProps) => {
   // Split bases by today/earlier
   const today = recentBases.filter((b) => {
@@ -118,17 +124,41 @@ export const HomeView = ({
           </div>
         )}
 
-        {today.length === 0 && earlier.length === 0 && (
-          <div className="rounded-lg border border-gray-200 bg-white p-4 md:p-6 text-sm text-gray-500 w-full sm:w-2/3">
-            No bases found in this workspace.
-            <button
-              onClick={onCreateBase}
-              className="flex items-center mt-3 gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 cursor-pointer min-h-10"
-            >
-              <Plus size={16} />
-              Create your first base
-            </button>
-          </div>
+        {initialLoad && today.length === 0 && earlier.length === 0 && (
+          workspaces.length === 0 ? (
+            <div className="rounded-lg border border-gray-200 bg-white p-4 md:p-6 text-sm text-gray-500 w-full sm:w-2/3">
+              No bases found.
+              <button
+                onClick={onCreateWorkspace}
+                className="flex items-center mt-3 gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 cursor-pointer min-h-10"
+              >
+                <Plus size={16} />
+                Create your first workspace
+              </button>
+            </div>
+          ) : (
+            <div className="rounded-lg border border-gray-200 bg-white p-4 md:p-6 text-sm text-gray-500 w-full sm:w-2/3">
+              {searchQuery ? `No bases found for "${searchQuery}".` : "No bases found."}
+              {(!searchQuery || setSearchQuery) && (
+                <button
+                  onClick={searchQuery ? () => setSearchQuery?.('') : onCreateBase}
+                  className="flex items-center mt-3 gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 cursor-pointer min-h-10"
+                >
+                  {searchQuery ? (
+                    <>
+                      <SearchX size={16} />
+                      Clear search
+                    </>
+                  ) : (
+                    <>
+                      <Plus size={16} />
+                      Create your first base
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+          )
         )}
       </div>
     </>

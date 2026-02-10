@@ -465,6 +465,7 @@ function DashboardContent() {
             onOpenAccount={switchToAccountView}
             onMenuToggle={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
             isMobileMenuOpen={isMobileSidebarOpen}
+            searchQuery={searchQuery}
             setSearchQuery={setSearchQuery}
           />
 
@@ -476,6 +477,8 @@ function DashboardContent() {
             {activeView === 'home' && (
               <HomeView
                 recentBases={recentBases}
+                workspaces={workspaces}
+                onCreateWorkspace={() => setIsCreateWorkspaceOpen(true)}
                 collectionView={collectionView}
                 sortOption={sortOption}
                 isSortOpen={isSortOpen}
@@ -488,6 +491,7 @@ function DashboardContent() {
                 onBaseStarToggle={toggleStar}
                 onBaseContextMenu={handleBaseContextMenu}
                 searchQuery={searchQuery}
+                setSearchQuery={setSearchQuery}
               />
             )}
             
@@ -512,6 +516,7 @@ function DashboardContent() {
                 onLeaveWorkspace={handleLeaveWorkspace}
                 canLeaveWorkspace={role === 'member' || role === 'admin'}
                 searchQuery={searchQuery}
+                setSearchQuery={setSearchQuery}
               />
             )}
             
@@ -529,6 +534,7 @@ function DashboardContent() {
                 onBaseStarToggle={toggleStar}
                 onBaseContextMenu={handleBaseContextMenu}
                 searchQuery={searchQuery}
+                setSearchQuery={setSearchQuery}
               />
             )}
             
@@ -546,6 +552,7 @@ function DashboardContent() {
                 onBaseStarToggle={toggleStar}
                 onBaseContextMenu={handleBaseContextMenu}
                 searchQuery={searchQuery}
+                setSearchQuery={setSearchQuery}
               />
             )}
 
@@ -560,6 +567,7 @@ function DashboardContent() {
                 userId={user?.id}
                 collectionView={collectionView}
                 onCollectionViewChange={setCollectionView}
+                searchQuery={searchQuery}
               />
             )}
 
