@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { X, Save, Edit2, Loader2, Calendar, Hash, Mail, Phone, Link as LinkIcon, CheckSquare, FileText, Clock, Info, Paperclip, History } from "lucide-react";
+import { X, Save, Edit2, Loader2, Calendar, Hash, Mail, Phone, Link as LinkIcon, CheckSquare, FileText, Clock, Info, Paperclip, History, Check } from "lucide-react";
 import type { RecordRow, FieldRow, SavingCell, TableRow } from "@/lib/types/base-detail";
 import type { AuditLogRow } from "@/lib/services/audit-log-service";
 import { AuditLogService } from "@/lib/services/audit-log-service";
+import { ChecklistTemplatesService, type ChecklistTemplate, type ChecklistItem } from "@/lib/services/checklist-templates-service";
 import { formatInTimezone } from "@/lib/utils/date-helpers";
 import { useTimezone } from "@/lib/hooks/useTimezone";
 import { RecordDocuments } from "./documents/RecordDocuments";
@@ -39,12 +40,17 @@ export const RecordDetailsModal = ({
   const [editValue, setEditValue] = useState<unknown>("");
   const [localNameValue, setLocalNameValue] = useState<string>("");
   const nameFieldRef = useRef<HTMLInputElement>(null);
-  const [activeTab, setActiveTab] = useState<"fields" | "documents">("fields");
+  const [activeTab, setActiveTab] = useState<"fields" | "documents" | "tasks">("fields");
   const [documentCount, setDocumentCount] = useState<number>(0);
   const [isAuditOpen, setIsAuditOpen] = useState<boolean>(false);
   const [auditLogs, setAuditLogs] = useState<AuditLogRow[]>([]);
   const [auditLoading, setAuditLoading] = useState<boolean>(false);
   const [auditError, setAuditError] = useState<string | null>(null);
+  const [checklists, setChecklists] = useState<ChecklistTemplate[]>([]);
+  const [selectedChecklistId, setSelectedChecklistId] = useState<string | null>(null);
+  const [checklistItems, setChecklistItems] = useState<Array<ChecklistItem & { is_completed: boolean }>>([]);
+  const [checklistLoading, setChecklistLoading] = useState<boolean>(false);
+  const [checklistError, setChecklistError] = useState<string | null>(null);
 
   const loadAudit = useCallback(async () => {
     if (!record) return;
@@ -60,11 +66,52 @@ export const RecordDetailsModal = ({
     }
   }, [record]);
 
+  const loadChecklists = useCallback(async () => {
+    if (!baseId) return;
+    setChecklistLoading(true);
+    setChecklistError(null);
+    try {
+      const templates = await ChecklistTemplatesService.listTemplatesForRecords(baseId);
+      setChecklists(templates);
+      // Auto-select first checklist if available
+      if (templates.length > 0 && !selectedChecklistId) {
+        setSelectedChecklistId(templates[0].id);
+      }
+    } catch (err) {
+      setChecklistError(err instanceof Error ? err.message : "Failed to load checklists");
+    } finally {
+      setChecklistLoading(false);
+    }
+  }, [baseId, selectedChecklistId]);
+
+  useEffect(() => {
+    if (activeTab === "tasks") {
+      loadChecklists();
+    }
+  }, [activeTab, loadChecklists]);
+
   useEffect(() => {
     if (isAuditOpen && record) {
       loadAudit();
     }
   }, [isAuditOpen, record, loadAudit]);
+
+  useEffect(() => {
+    if (selectedChecklistId && record && activeTab === "tasks") {
+      const loadChecklistItems = async () => {
+        try {
+          const items = await ChecklistTemplatesService.getRecordChecklistItems(
+            record.id,
+            selectedChecklistId
+          );
+          setChecklistItems(items);
+        } catch (err) {
+          setChecklistError(err instanceof Error ? err.message : "Failed to load checklist items");
+        }
+      };
+      loadChecklistItems();
+    }
+  }, [selectedChecklistId, record, activeTab]);
 
   // Find the "Name" field
   const nameField = useMemo(() => {
@@ -309,6 +356,34 @@ export const RecordDetailsModal = ({
     }
   };
 
+  const handleToggleChecklistItem = async (itemId: string, currentlyCompleted: boolean) => {
+    if (!record) return;
+    
+    try {
+      // Update local state
+      setChecklistItems(
+        checklistItems.map((item) =>
+          item.id === itemId ? { ...item, is_completed: !currentlyCompleted } : item
+        )
+      );
+
+      await ChecklistTemplatesService.toggleRecordChecklistItem(
+        record.id,
+        itemId,
+        !currentlyCompleted
+      );
+    } catch (err) {
+      setChecklistError(err instanceof Error ? err.message : "Failed to update item");
+
+      // Update local state to flip it back
+      setChecklistItems(
+        checklistItems.map((item) =>
+          item.id === itemId ? { ...item, is_completed: !currentlyCompleted } : item
+        )
+      );
+    }
+  };
+
   // Reset editing state when modal closes or record changes
   useEffect(() => {
     if (!isOpen) {
@@ -529,6 +604,19 @@ export const RecordDetailsModal = ({
                     {documentCount}
                   </span>
                 )}
+              </span>
+            </button>
+            <button
+              onClick={() => setActiveTab("tasks")}
+              className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === "tasks"
+                  ? "border-blue-600 text-blue-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+              }`}
+            >
+              <span className="flex items-center gap-2">
+                <CheckSquare className="w-4 h-4" />
+                Tasks
               </span>
             </button>
           </div>
@@ -837,7 +925,7 @@ export const RecordDetailsModal = ({
                 </div>
               )}
             </>
-          ) : (
+          ) : activeTab === "documents" ? (
             <RecordDocuments
               recordId={record.id}
               baseId={baseId}
@@ -846,6 +934,123 @@ export const RecordDetailsModal = ({
               recordValues={record.values}
               fields={fields}
             />
+          ) : (
+            // Tasks tab
+            <div>
+              {checklistError && (
+                <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-red-800">{checklistError}</p>
+                </div>
+              )}
+
+              {checklistLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-6 h-6 text-blue-600 animate-spin" />
+                </div>
+              ) : checklists.length === 0 ? (
+                <div className="text-center py-12">
+                  <CheckSquare className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                  <p className="text-gray-500 text-lg">No checklists available in this base</p>
+                  <p className="text-gray-400 text-sm mt-2">Create a checklist in the Templates view first</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-6 h-full">
+                  {/* Left column: Checklist Selection */}
+                  <div className="border border-gray-200 rounded-lg bg-white overflow-hidden flex flex-col">
+                    <div className="px-4 py-3 border-b border-gray-200 bg-gray-50">
+                      <h4 className="text-sm font-semibold text-gray-900">Available Checklists</h4>
+                    </div>
+                    <div className="flex-1 overflow-y-auto">
+                      {checklists.map((checklist) => (
+                        <button
+                          key={checklist.id}
+                          onClick={() => setSelectedChecklistId(checklist.id)}
+                          className={`w-full text-left px-4 py-3 border-b border-gray-100 transition-colors ${
+                            selectedChecklistId === checklist.id
+                              ? "bg-blue-50 border-l-4 border-l-blue-600"
+                              : "hover:bg-gray-50"
+                          }`}
+                        >
+                          <div className="font-medium text-sm text-gray-900">{checklist.name}</div>
+                          {checklist.description && (
+                            <div className="text-xs text-gray-500 mt-1">{checklist.description}</div>
+                          )}
+                          {checklist.items && (
+                            <div className="text-xs text-gray-400 mt-1">
+                              {checklist.items.length} item{checklist.items.length !== 1 ? "s" : ""}
+                            </div>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Right column: Checklist Items */}
+                  <div className="border border-gray-200 rounded-lg bg-white overflow-hidden flex flex-col">
+                    <div className="px-4 py-3 border-b border-gray-200 bg-gray-50">
+                      <h4 className="text-sm font-semibold text-gray-900">
+                        {selectedChecklistId
+                          ? checklists.find((c) => c.id === selectedChecklistId)?.name || "Items"
+                          : "Select a Checklist"}
+                      </h4>
+                    </div>
+                    <div className="flex-1 overflow-y-auto">
+                      {selectedChecklistId && checklistItems.length > 0 ? (
+                        <div className="space-y-1 p-3">
+                          {checklistItems.map((item) => (
+                            <div
+                              key={item.id}
+                              onClick={() =>
+                                handleToggleChecklistItem(item.id!, item.is_completed)
+                              }
+                              className="flex items-start gap-3 p-3 rounded-lg hover:bg-blue-50 cursor-pointer transition-colors group"
+                            >
+                              <div className="flex-shrink-0 mt-1">
+                                <div
+                                  className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+                                    item.is_completed
+                                      ? "bg-blue-600 border-blue-600"
+                                      : "border-gray-300 group-hover:border-blue-400"
+                                  }`}
+                                >
+                                  {item.is_completed && (
+                                    <Check className="w-3 h-3 text-white" />
+                                  )}
+                                </div>
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p
+                                  className={`text-sm font-medium transition-colors ${
+                                    item.is_completed
+                                      ? "text-gray-500 line-through"
+                                      : "text-gray-900"
+                                  }`}
+                                >
+                                  {item.title}
+                                </p>
+                                {item.description && (
+                                  <p className="text-xs text-gray-500 mt-1">
+                                    {item.description}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : selectedChecklistId ? (
+                        <div className="text-center py-12 text-gray-400">
+                          <p className="text-sm">No items in this checklist</p>
+                        </div>
+                      ) : (
+                        <div className="text-center py-12 text-gray-400">
+                          <p className="text-sm">Select a checklist to view items</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
           )}
         </div>
 
