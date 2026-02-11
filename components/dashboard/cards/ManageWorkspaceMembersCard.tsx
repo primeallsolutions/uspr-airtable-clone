@@ -144,19 +144,19 @@ export const ManageWorkspaceMembersCard = ({ workspaceId }: ManageWorkspaceMembe
   }
 
   return (
-    <div className="w-4/5 rounded-lg border border-gray-200 bg-white">
+    <div className="w-full lg:w-4/5 rounded-lg border border-gray-200 bg-white">
       <button
         onClick={() => setIsCollapsed(!isCollapsed)}
-        className={`w-full border-b border-gray-200 px-6 py-4 transition-colors text-left ${isCollapsed ? 'rounded-lg' : ''} hover:bg-gray-50`}
+        className={`w-full border-b border-gray-200 px-3 sm:px-6 py-3 sm:py-4 transition-colors text-left ${isCollapsed ? 'rounded-lg' : ''} hover:bg-gray-50`}
       >
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-gray-900">Manage Workspace Members</h3>
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="text-base sm:text-lg font-semibold text-gray-900">Manage Members</h3>
           <ChevronDown size={14} className={`text-gray-600 transition-transform duration-200 ${isCollapsed ? '-rotate-90' : ''}`} />
         </div>
       </button>
 
       {!isCollapsed && (
-        <div className="space-y-4 px-6 py-4">
+        <div className="space-y-3 sm:space-y-4 px-3 sm:px-6 py-3 sm:py-4">
             {error && (
               <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md p-3">{error}</div>
             )}
@@ -165,9 +165,9 @@ export const ManageWorkspaceMembersCard = ({ workspaceId }: ManageWorkspaceMembe
             )}
 
             <div>
-              <h4 className="text-sm font-medium text-gray-700 mb-2">Members</h4>
-              <div className="border border-gray-200 rounded-lg overflow-hidden">
-                <div className="grid grid-cols-4 bg-gray-50 text-xs font-medium text-gray-600 px-4 py-2">
+              <h4 className="text-xs sm:text-sm font-medium text-gray-700 mb-2">Members</h4>
+              <div className="border border-gray-200 rounded-lg overflow-x-auto">
+                <div className="hidden sm:grid grid-cols-4 bg-gray-50 text-xs font-medium text-gray-600 px-4 py-2">
                   <div>User</div>
                   <div>Role</div>
                   <div>Added</div>
@@ -183,29 +183,65 @@ export const ManageWorkspaceMembersCard = ({ workspaceId }: ManageWorkspaceMembe
                       const isOwner = m.role === 'owner' || (ownerId && m.user_id === ownerId);
                       const displayName = m.full_name || m.email || 'Unknown user';
                       return (
-                      <div key={m.membership_id} className="grid grid-cols-4 items-center px-4 py-2 text-sm">
-                        <div className="truncate" title={m.user_id}>{displayName}</div>
-                        <div>
-                          <select
-                            value={m.role}
-                            onChange={(e) => handleRoleChange(m.membership_id, e.target.value as RoleType)}
-                            className="px-2 py-1 border border-gray-300 rounded disabled:opacity-50"
-                            disabled={Boolean(isOwner)}
-                          >
-                            <option value="owner" disabled>Owner</option>
-                            <option value="member">Member</option>
-                            <option value="admin">{isOwner ? 'Admin (Owner)' : 'Admin'}</option>
-                          </select>
+                      <div key={m.membership_id}>
+                        {/* Desktop view */}
+                        <div className="hidden sm:grid grid-cols-4 items-center px-4 py-2 text-sm">
+                          <div className="truncate" title={m.user_id}>{displayName}</div>
+                          <div>
+                            <select
+                              value={m.role}
+                              onChange={(e) => handleRoleChange(m.membership_id, e.target.value as RoleType)}
+                              className="px-2 py-1 border border-gray-300 rounded disabled:opacity-50 text-xs"
+                              disabled={Boolean(isOwner)}
+                            >
+                              <option value="owner" disabled>Owner</option>
+                              <option value="member">Member</option>
+                              <option value="admin">{isOwner ? 'Admin (Owner)' : 'Admin'}</option>
+                            </select>
+                          </div>
+                          <div className="text-xs">{formatInTimezone(m.created_at, timezone, { year: 'numeric', month: 'short', day: '2-digit', hour: 'numeric', minute: '2-digit' })}</div>
+                          <div className="text-right">
+                            <button
+                              onClick={() => handleRemove(m.membership_id)}
+                              className="px-2 py-1 text-xs text-red-600 hover:bg-red-50 rounded disabled:opacity-50"
+                              disabled={Boolean(isOwner)}
+                            >
+                              Remove
+                            </button>
+                          </div>
                         </div>
-                        <div>{formatInTimezone(m.created_at, timezone, { year: 'numeric', month: 'short', day: '2-digit', hour: 'numeric', minute: '2-digit' })}</div>
-                        <div className="text-right">
-                          <button
-                            onClick={() => handleRemove(m.membership_id)}
-                            className="px-2 py-1 text-red-600 hover:bg-red-50 rounded disabled:opacity-50"
-                            disabled={Boolean(isOwner)}
-                          >
-                            Remove
-                          </button>
+                        {/* Mobile view */}
+                        <div className="sm:hidden px-4 py-3 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-medium text-gray-600">User</span>
+                            <span className="text-sm font-medium truncate" title={m.user_id}>{displayName}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-medium text-gray-600">Role</span>
+                            <select
+                              value={m.role}
+                              onChange={(e) => handleRoleChange(m.membership_id, e.target.value as RoleType)}
+                              className="px-2 py-1 border border-gray-300 rounded disabled:opacity-50 text-xs"
+                              disabled={Boolean(isOwner)}
+                            >
+                              <option value="owner" disabled>Owner</option>
+                              <option value="member">Member</option>
+                              <option value="admin">{isOwner ? 'Admin (Owner)' : 'Admin'}</option>
+                            </select>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-medium text-gray-600">Added</span>
+                            <span className="text-xs">{formatInTimezone(m.created_at, timezone, { year: 'numeric', month: 'short', day: '2-digit', hour: 'numeric', minute: '2-digit' })}</span>
+                          </div>
+                          <div className="flex justify-end pt-2">
+                            <button
+                              onClick={() => handleRemove(m.membership_id)}
+                              className="px-3 py-1 text-xs text-red-600 hover:bg-red-50 rounded disabled:opacity-50"
+                              disabled={Boolean(isOwner)}
+                            >
+                              Remove
+                            </button>
+                          </div>
                         </div>
                       </div>
                       );
@@ -216,8 +252,8 @@ export const ManageWorkspaceMembersCard = ({ workspaceId }: ManageWorkspaceMembe
             </div>
 
             <div>
-              <h4 className="text-sm font-medium text-gray-700 mb-2">Invite by Email</h4>
-              <div className="flex items-center gap-2">
+              <h4 className="text-xs sm:text-sm font-medium text-gray-700 mb-2">Invite by Email</h4>
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                 <input
                   type="email"
                   value={inviteEmail}
@@ -243,7 +279,7 @@ export const ManageWorkspaceMembersCard = ({ workspaceId }: ManageWorkspaceMembe
                   {inviting ? 'Sending...' : 'Send Invite'}
                 </button>
               </div>
-              <p className="mt-2 text-xs text-gray-500">After creating an invite, share a link like /invites/accept/TOKEN with the user.</p>
+              <p className="mt-2 text-xs text-gray-500">Share a link like /invites/accept/TOKEN with the user.</p>
             </div>
           </div>
         )}

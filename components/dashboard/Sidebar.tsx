@@ -167,7 +167,8 @@ export const Sidebar = ({
           ) : (
             workspaceList.map((workspace, idx) => {
               const color = dotColors[idx % dotColors.length];
-              const canManageWorkspace = workspace.accessRole === 'owner';
+              const canManageWorkspace = workspace.accessRole === 'admin' || workspace.accessRole === 'owner';
+              const canDeleteWorkspace = workspace.accessRole === 'owner';
               return (
                 <div key={workspace.id} className="group relative">
                   {editingWorkspaceId === workspace.id ? (
@@ -235,12 +236,12 @@ export const Sidebar = ({
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          if (!canManageWorkspace) return;
+                          if (!canDeleteWorkspace) return;
                           onDeleteWorkspace({ id: workspace.id, name: workspace.name });
                         }}
-                        className={`p-1 rounded disabled:opacity-40 ${canManageWorkspace ? 'text-gray-400 hover:text-red-600 cursor-pointer' : 'text-gray-300 cursor-not-allowed'}`}
+                        className={`p-1 rounded disabled:opacity-40 ${canDeleteWorkspace ? 'text-gray-400 hover:text-red-600 cursor-pointer' : 'text-gray-300 cursor-not-allowed'}`}
                         title="Delete workspace"
-                        disabled={!canManageWorkspace}
+                        disabled={!canDeleteWorkspace}
                       >
                         <Trash2 className="w-3 h-3" />
                       </button>

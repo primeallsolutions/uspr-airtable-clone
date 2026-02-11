@@ -457,7 +457,7 @@ export const RecordDetailsModal = ({
 
         {/* Summary Section */}
         <div className="px-8 py-5 bg-gradient-to-r from-gray-50 to-blue-50/30 border-b border-gray-200">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="flex items-center gap-3 p-3 bg-white rounded-lg shadow-sm border border-gray-200">
               <div className="p-2 bg-blue-100 rounded-lg">
                 <Info className="w-5 h-5 text-blue-600" />

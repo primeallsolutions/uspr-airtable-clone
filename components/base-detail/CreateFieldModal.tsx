@@ -261,7 +261,7 @@ export const CreateFieldModal = ({ isOpen, onClose, onCreateField }: CreateField
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Backdrop */}
       <div 
         className="absolute inset-0 bg-black/20 backdrop-blur-sm" 
@@ -269,10 +269,10 @@ export const CreateFieldModal = ({ isOpen, onClose, onCreateField }: CreateField
       />
       
       {/* Modal */}
-      <div className="relative bg-white rounded-lg shadow-xl max-w-[50vw] w-full mx-4 max-h-[90vh] overflow-y-auto">
+      <div className="relative bg-white rounded-lg shadow-xl w-full max-w-[90vw] sm:max-w-[80vw] md:max-w-[70vw] lg:max-w-[50vw] max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <h2 className="text-xl font-semibold text-gray-900">Create New Field</h2>
+        <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200 gap-2">
+          <h2 className="text-lg sm:text-xl font-semibold text-gray-900">Create New Field</h2>
           <button
             onClick={handleClose}
             className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
@@ -282,10 +282,10 @@ export const CreateFieldModal = ({ isOpen, onClose, onCreateField }: CreateField
         </div>
         
         {/* Content */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4 sm:space-y-6">
           {/* Field Name */}
           <div>
-            <label htmlFor="fieldName" className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="fieldName" className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">
               Field Name
             </label>
             <input
@@ -302,26 +302,28 @@ export const CreateFieldModal = ({ isOpen, onClose, onCreateField }: CreateField
           
           {/* Field Type */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-3">
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-3">
               Field Type
             </label>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3">
               {fieldTypes.map((fieldType) => (
                 <button
                   key={fieldType.type}
                   type="button"
                   onClick={() => setSelectedType(fieldType.type)}
-                  className={`p-3 border rounded-lg text-left transition-colors ${
+                  className={`p-2 sm:p-3 border rounded-lg text-left transition-colors ${
                     selectedType === fieldType.type
                       ? 'border-blue-500 bg-blue-50'
                       : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
                   }`}
                 >
-                  <div className="flex items-center gap-2 mb-1">
-                    {fieldType.icon}
-                    <span className="font-medium text-sm">{fieldType.label}</span>
+                  <div className="flex items-start gap-1 sm:gap-2 mb-1">
+                    <div className="flex-shrink-0">
+                      {fieldType.icon}
+                    </div>
+                    <span className="font-medium text-xs sm:text-sm line-clamp-2">{fieldType.label}</span>
                   </div>
-                  <p className="text-xs text-gray-500">{fieldType.description}</p>
+                  <p className="text-xs text-gray-500 line-clamp-2">{fieldType.description}</p>
                 </button>
               ))}
             </div>
@@ -330,7 +332,7 @@ export const CreateFieldModal = ({ isOpen, onClose, onCreateField }: CreateField
           {/* Options for Select Fields (single_select, multi_select, radio_select) */}
           {(selectedType === 'single_select' || selectedType === 'multi_select' || selectedType === 'radio_select') && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-3">
+              <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-3">
                 Options
               </label>
               
@@ -349,15 +351,15 @@ export const CreateFieldModal = ({ isOpen, onClose, onCreateField }: CreateField
                     onDragLeave={handleDragLeave}
                     onDrop={(e) => handleDrop(e, index)}
                     onDragEnd={handleDragEnd}
-                    className={`flex items-center gap-2 p-3 bg-gray-50 rounded-lg group transition-all ${
+                    className={`flex flex-col sm:flex-row sm:items-center gap-2 p-2 sm:p-3 bg-gray-50 rounded-lg group transition-all ${
                       isDragging ? 'opacity-50' : ''
                     } ${isDragOver ? 'border-l-4 border-l-blue-500' : ''}`}
                   >
-                    <GripVertical size={16} className="text-gray-400 cursor-grab active:cursor-grabbing" />
+                    <GripVertical size={16} className="text-gray-400 cursor-grab active:cursor-grabbing flex-shrink-0" />
                     
                     {/* Color Preview */}
                     <div 
-                      className="w-4 h-4 rounded-full border border-gray-300"
+                      className="w-4 h-4 rounded-full border border-gray-300 flex-shrink-0"
                       style={{ backgroundColor: option.color }}
                     />
                     
@@ -375,52 +377,55 @@ export const CreateFieldModal = ({ isOpen, onClose, onCreateField }: CreateField
                             setEditingOption(null);
                           }
                         }}
-                        className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        className="flex-1 px-2 py-1 text-xs sm:text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
                         autoFocus
                       />
                     ) : (
                       <span 
-                        className="flex-1 text-sm cursor-pointer"
+                        className="flex-1 text-xs sm:text-sm cursor-pointer"
                         onClick={() => setEditingOption(option.id)}
                       >
                         {option.label}
                       </span>
                     )}
                     
-                    {/* Color Picker */}
-                    <div className="flex items-center gap-1">
-                      {predefinedColors.map((color) => (
+                    {/* Color Picker and Actions */}
+                    <div className="flex items-center gap-1 ml-auto sm:ml-0">
+                      {/* Color Picker */}
+                      <div className="flex items-center gap-0.5">
+                        {predefinedColors.map((color) => (
+                          <button
+                            key={color.value}
+                            type="button"
+                            onClick={() => handleUpdateOptionColor(option.id, color.value)}
+                            className={`w-3 h-3 sm:w-4 sm:h-4 rounded-full border-2 ${
+                              option.color === color.value ? 'border-gray-400' : 'border-gray-200'
+                            }`}
+                            style={{ backgroundColor: color.value }}
+                            title={color.name}
+                          />
+                        ))}
+                      </div>
+                      
+                      {/* Actions */}
+                      <div className="flex items-center gap-1 ml-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                         <button
-                          key={color.value}
                           type="button"
-                          onClick={() => handleUpdateOptionColor(option.id, color.value)}
-                          className={`w-4 h-4 rounded-full border-2 ${
-                            option.color === color.value ? 'border-gray-400' : 'border-gray-200'
-                          }`}
-                          style={{ backgroundColor: color.value }}
-                          title={color.name}
-                        />
-                      ))}
-                    </div>
-                    
-                    {/* Actions */}
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button
-                        type="button"
-                        onClick={() => setEditingOption(option.id)}
-                        className="p-1 hover:bg-gray-200 rounded text-gray-500 hover:text-blue-600"
-                        title="Edit option"
-                      >
-                        <Edit2 size={14} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveOption(option.id)}
-                        className="p-1 hover:bg-gray-200 rounded text-gray-500 hover:text-red-600"
-                        title="Remove option"
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                          onClick={() => setEditingOption(option.id)}
+                          className="p-1 hover:bg-gray-200 rounded text-gray-500 hover:text-blue-600"
+                          title="Edit option"
+                        >
+                          <Edit2 size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveOption(option.id)}
+                          className="p-1 hover:bg-gray-200 rounded text-gray-500 hover:text-red-600"
+                          title="Remove option"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
                     </div>
                   </div>
                   );
@@ -428,30 +433,31 @@ export const CreateFieldModal = ({ isOpen, onClose, onCreateField }: CreateField
               </div>
               
               {/* Add New Option */}
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
-                <div className="flex items-center gap-3 mb-3">
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-3 sm:p-4">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-3">
                   <input
                     type="text"
                     value={newOptionLabel}
                     onChange={(e) => setNewOptionLabel(e.target.value)}
                     onKeyPress={handleKeyPress}
                     placeholder="Enter option name..."
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-xs sm:text-sm"
                   />
                   <button
                     type="button"
                     onClick={handleAddOption}
                     disabled={!newOptionLabel.trim()}
-                    className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors text-sm"
+                    className="w-full sm:w-auto px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors text-sm flex items-center justify-center gap-2 sm:gap-0"
                   >
                     <Plus size={16} />
+                    <span className="sm:hidden">Add Option</span>
                   </button>
                 </div>
                 
                 {/* Color Selection for New Option */}
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-500">Color:</span>
-                  <div className="flex items-center gap-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs text-gray-500 w-full sm:w-auto">Color:</span>
+                  <div className="flex items-center gap-1 flex-wrap">
                     {predefinedColors.map((color) => (
                       <button
                         key={color.value}
@@ -471,18 +477,18 @@ export const CreateFieldModal = ({ isOpen, onClose, onCreateField }: CreateField
           )}
           
           {/* Actions */}
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200">
+          <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-3 pt-4 sm:pt-4 border-t border-gray-200">
             <button
               type="button"
               onClick={handleClose}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              className="px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={!fieldName.trim()}
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+              className="px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
             >
               Create Field
             </button>

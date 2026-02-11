@@ -220,7 +220,7 @@ export const WorkspaceView = ({
             </>
           )}
           {canLeaveWorkspace && onLeaveWorkspace ? (
-            <div className="w-1/2 rounded-lg border border-gray-200 bg-white p-6 space-y-4">
+            <div className="w-full lg:w-1/2 rounded-lg border border-gray-200 bg-white p-4 sm:p-6 space-y-4">
               <p className="text-gray-500">You can leave this workspace if you no longer want to be a member.</p>
               <button
                 onClick={onLeaveWorkspace}
