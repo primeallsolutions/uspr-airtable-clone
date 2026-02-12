@@ -30,7 +30,7 @@ export const Sidebar = ({
       )}
 
       {/* Sidebar */}
-      <aside className={`w-64 h-screen flex flex-col bg-white border-r border-gray-200 fixed top-0 left-0 z-50 transition-transform overflow-hidden ${
+      <aside className={`w-64 h-screen flex flex-col bg-white border-r border-gray-200 fixed top-0 left-0 z-40 transition-transform overflow-hidden ${
         isMobileOpen ? '!translate-x-0' : '!-translate-x-full md:!translate-x-0'
       }`}>
       {/* Header */}
