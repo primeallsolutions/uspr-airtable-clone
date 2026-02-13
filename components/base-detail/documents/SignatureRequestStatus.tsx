@@ -247,11 +247,11 @@ export const SignatureRequestStatus = ({
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold text-gray-900">Signature Requests</h2>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
+        <h2 className="text-lg sm:text-xl font-semibold text-gray-900">Signature Requests</h2>
         <button
           onClick={loadRequests}
-          className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+          className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
         >
           <RefreshCw className="w-4 h-4" />
           Refresh
@@ -271,7 +271,7 @@ export const SignatureRequestStatus = ({
               className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer"
               onClick={() => setSelectedRequest(selectedRequest?.id === request.id ? null : request)}
             >
-              <div className="flex items-start justify-between">
+              <div className="flex items-start justify-between gap-3 flex-col sm:flex-row sm:items-start">
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-2">
                     {getStatusIcon(request.status || "draft")}
@@ -335,7 +335,7 @@ export const SignatureRequestStatus = ({
                   )}
 
                   {/* Metadata */}
-                  <div className="flex items-center gap-4 text-xs text-gray-500">
+                  <div className="flex flex-col gap-2 text-xs text-gray-500">
                     <span>
                       Created: {new Date(request.created_at || "").toLocaleDateString()}
                     </span>
@@ -353,7 +353,7 @@ export const SignatureRequestStatus = ({
                 </div>
 
                 {/* Actions */}
-                <div className="flex items-center gap-2 ml-4">
+                <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap sm:flex-nowrap justify-end">
                   {/* Send button for draft requests */}
                   {request.status === "draft" && (
                     <button
@@ -362,7 +362,7 @@ export const SignatureRequestStatus = ({
                         handleSendRequest(request);
                       }}
                       disabled={sendingRequestId === request.id}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-green-600 hover:text-green-700 hover:bg-green-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full sm:w-auto inline-flex items-center justify-center gap-1 px-3 py-1.5 text-sm font-medium text-green-600 hover:text-green-700 hover:bg-green-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       title="Send Signature Request"
                     >
                       {sendingRequestId === request.id ? (
@@ -384,7 +384,7 @@ export const SignatureRequestStatus = ({
                         e.stopPropagation();
                         handleViewSignedDocument(request);
                       }}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
+                      className="w-full sm:w-auto inline-flex items-center justify-center gap-1 px-3 py-1.5 text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
                       title="View Signed Document"
                     >
                       <Eye className="w-4 h-4" />
@@ -396,7 +396,7 @@ export const SignatureRequestStatus = ({
                       e.stopPropagation();
                       handleDeleteRequest(request);
                     }}
-                    className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+                    className="w-full sm:w-auto inline-flex items-center justify-center gap-1 px-3 py-1.5 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
                     title="Delete Signature Request"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -408,7 +408,7 @@ export const SignatureRequestStatus = ({
               {/* Expanded Details */}
               {selectedRequest?.id === request.id && (
                 <div className="mt-4 pt-4 border-t border-gray-200">
-                  <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                     <div>
                       <span className="font-medium text-gray-700">Document:</span>
                       <span className="ml-2 text-gray-600">{request.document_path}</span>
@@ -431,7 +431,7 @@ export const SignatureRequestStatus = ({
         <div className="fixed inset-0 z-50 bg-black/80 flex flex-col">
           <div className="flex-1 flex flex-col bg-white">
             {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0 px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200">
               <div className="flex items-center gap-3">
                 <FileText className="w-5 h-5 text-gray-600" />
                 <h2 className="text-lg font-semibold text-gray-900">

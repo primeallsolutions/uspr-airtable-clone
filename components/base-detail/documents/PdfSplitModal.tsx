@@ -346,28 +346,27 @@ export const PdfSplitModal = ({
   )?.selected;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl md:max-w-4xl max-h-[90vh] flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-          <div className="flex items-center gap-3">
-            <Scissors className="w-5 h-5 text-blue-600" />
-            <h2 className="text-lg font-semibold text-gray-900">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0 px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <Scissors className="w-5 h-5 text-blue-600 flex-shrink-0" />
+            <h2 className="text-base sm:text-lg font-semibold text-gray-900 truncate">
               Split PDF - {document.name}
             </h2>
           </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-          >
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors self-end sm:self-auto">
             <X className="w-5 h-5 text-gray-500" />
           </button>
         </div>
 
         {/* Content */}
-        <div className="flex-1 flex overflow-hidden">
+        <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
           {/* Preview Panel */}
-          <div className="flex-1 flex flex-col border-r border-gray-200 p-4">
+          <div className="flex-1 flex flex-col border-b md:border-b-0 md:border-r border-gray-200 p-3 sm:p-4 min-h-0">
             {loading ? (
               <div className="flex-1 flex items-center justify-center">
                 <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
@@ -428,7 +427,7 @@ export const PdfSplitModal = ({
           </div>
 
           {/* Page Selection Panel */}
-          <div className="w-72 flex flex-col p-4">
+          <div className="w-full md:w-72 flex flex-col p-3 sm:p-4 overflow-y-auto md:overflow-y-visible">
             <h3 className="font-medium text-gray-900 mb-3">Select Pages</h3>
 
             {/* Quick Actions */}
@@ -449,7 +448,7 @@ export const PdfSplitModal = ({
 
             {/* Page Grid */}
             <div className="flex-1 overflow-y-auto">
-              <div className="grid grid-cols-5 gap-2">
+              <div className="grid grid-cols-4 md:grid-cols-5 gap-2">
                 {pageSelections.map((page) => (
                   <button
                     key={page.pageNumber}
@@ -543,18 +542,18 @@ export const PdfSplitModal = ({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200 bg-gray-50">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-2 sm:gap-3 px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-200 bg-gray-50">
           <button
             onClick={onClose}
             disabled={splitting}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+            className="w-full sm:w-auto px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
           >
             Cancel
           </button>
           <button
             onClick={handleSplit}
             disabled={splitting || selectedCount === 0 || !outputFileName.trim() || !selectedFolder}
-            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            className="w-full sm:w-auto px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             {splitting ? (
               <>

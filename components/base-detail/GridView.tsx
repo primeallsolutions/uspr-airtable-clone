@@ -411,54 +411,55 @@ export const GridView = ({
       </div>
 
       {/* Pagination controls - Fixed outside scrollable area */}
-      <div className="flex-shrink-0 flex items-center justify-between px-6 py-3 bg-gray-50 border-t border-gray-200">
+      <div className="flex-shrink-0 flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-4 px-3 md:px-6 py-2 md:py-3 bg-gray-50 border-t border-gray-200">
         {/* Left side - Record count and page size selector */}
-        <div className="flex items-center gap-4">
-          <span className="text-sm text-gray-500">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+          <span className="text-xs sm:text-sm text-gray-500">
             {totalRecords} {totalRecords === 1 ? 'record' : 'records'}
           </span>
           <div className="flex items-center gap-2">
-            <label className="text-sm text-gray-500">Show:</label>
+            <label className="text-xs sm:text-sm text-gray-500 whitespace-nowrap">Show:</label>
             <select
               value={pageSize}
               onChange={(e) => handlePageSizeChange(Number(e.target.value))}
-              className="px-2 py-1 text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 bg-white"
+              className="px-2 py-1.5 text-xs sm:text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 bg-white"
             >
               {pageSizeOptions.map(size => (
                 <option key={size} value={size}>{size}</option>
               ))}
             </select>
-            <span className="text-sm text-gray-500">per page</span>
+            <span className="text-xs sm:text-sm text-gray-500 whitespace-nowrap">per page</span>
           </div>
         </div>
 
         {/* Right side - Pagination controls */}
         {totalPages > 1 && (
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-600">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-2">
+            <span className="text-xs sm:text-sm text-gray-600 order-2 sm:order-none">
               {startIndex + 1}-{endIndex} of {totalRecords}
             </span>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 flex-wrap justify-between sm:justify-start">
+              {/* Hide first page button on mobile to save space */}
               <button
                 onClick={goToFirstPage}
                 disabled={currentPage === 1}
-                className="p-1.5 rounded hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                className="hidden sm:inline-flex p-2 rounded hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed"
                 title="First page"
               >
-                <ChevronsLeft size={18} className="text-gray-600" />
+                <ChevronsLeft size={16} className="text-gray-600" />
               </button>
               <button
                 onClick={goToPrevPage}
                 disabled={currentPage === 1}
-                className="p-1.5 rounded hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                className="p-2 rounded hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed"
                 title="Previous page"
               >
-                <ChevronLeft size={18} className="text-gray-600" />
+                <ChevronLeft size={16} className="text-gray-600" />
               </button>
               
-              {/* Page number input */}
-              <div className="flex items-center gap-1 mx-2">
-                <span className="text-sm text-gray-600">Page</span>
+              {/* Page number input - compact on mobile */}
+              <div className="flex items-center gap-1 mx-1 sm:mx-2">
+                <span className="text-xs sm:text-sm text-gray-600 whitespace-nowrap hidden sm:inline">Page</span>
                 <input
                   type="number"
                   min={1}
@@ -468,33 +469,34 @@ export const GridView = ({
                     const page = parseInt(e.target.value, 10);
                     if (!isNaN(page)) goToPage(page);
                   }}
-                  className="w-14 px-2 py-1 text-sm text-center border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  className="w-12 sm:w-14 px-1.5 sm:px-2 py-1.5 text-xs sm:text-sm text-center border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                 />
-                <span className="text-sm text-gray-600">of {totalPages}</span>
+                <span className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">/{totalPages}</span>
               </div>
 
               <button
                 onClick={goToNextPage}
                 disabled={currentPage === totalPages}
-                className="p-1.5 rounded hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                className="p-2 rounded hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed"
                 title="Next page"
               >
-                <ChevronRight size={18} className="text-gray-600" />
+                <ChevronRight size={16} className="text-gray-600" />
               </button>
+              {/* Hide last page button on mobile to save space */}
               <button
                 onClick={goToLastPage}
                 disabled={currentPage === totalPages}
-                className="p-1.5 rounded hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                className="hidden sm:inline-flex p-2 rounded hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed"
                 title="Last page"
               >
-                <ChevronsRight size={18} className="text-gray-600" />
+                <ChevronsRight size={16} className="text-gray-600" />
               </button>
             </div>
               
-            {/* Add Row button */}
+            {/* Add Row button - full width on mobile */}
             <button
               onClick={() => onAddRow()}
-              className={`pointer-events-auto inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg shadow-lg hover:bg-blue-700 transition-colors ${
+              className={`pointer-events-auto inline-flex items-center justify-center sm:justify-start gap-2 px-3 sm:px-4 py-2 w-full sm:w-auto bg-blue-600 text-white text-sm rounded-lg shadow-lg hover:bg-blue-700 transition-colors ${
                 addingRow ? 'cursor-not-allowed opacity-70' : ''
               }`}
             >

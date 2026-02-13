@@ -93,6 +93,7 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
   const [showAuditLog, setShowAuditLog] = useState<boolean>(false);
   const [showFolderSetup, setShowFolderSetup] = useState<boolean>(false);
   const [checkedDocuments, setCheckedDocuments] = useState<string[]>([]);
+  const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
 
   const currentPrefix = useMemo(
     () => (folderPath && !folderPath.endsWith("/") ? `${folderPath}/` : folderPath),
@@ -859,57 +860,82 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
         onMergeDocuments={() => setShowMergeWithReorderModal(true)}
       />
 
-      <div className="flex flex-1 min-h-0">
-        <DocumentsSidebar
-          folderTree={folderTree}
-          currentPrefix={currentPrefix}
-          onFolderSelect={handleFolderSelect}
-          onFolderRename={handleFolderRename}
-          onFolderDelete={handleFolderDelete}
-          loading={loading && isInitialLoad}
-        />
+      <div className="flex flex-1 min-h-0 relative">
+        {/* Mobile Overlay for Sidebar */}
+        {isSidebarOpen && (
+          <div
+            className="fixed inset-0 bg-black/50 lg:hidden z-40"
+            onClick={() => setIsSidebarOpen(false)}
+          />
+        )}
+        
+        {/* Sidebar - Hidden on mobile, visible on lg with overlay */}
+        <div className={`absolute lg:relative w-64 h-full lg:h-auto ${isSidebarOpen ? 'block' : 'hidden lg:block'} bg-white border-r border-gray-200 z-50 lg:z-auto overflow-y-auto`}>
+          <DocumentsSidebar
+            folderTree={folderTree}
+            currentPrefix={currentPrefix}
+            onFolderSelect={(folder: string) => {
+              handleFolderSelect(folder);
+              setIsSidebarOpen(false);
+            }}
+            onFolderRename={handleFolderRename}
+            onFolderDelete={handleFolderDelete}
+            loading={loading && isInitialLoad}
+          />
+        </div>
 
         {/* Tab Navigation */}
         <div className="flex-1 min-h-0 flex flex-col">
-          <div className="flex items-center border-b border-gray-200 px-4">
+          <div className="flex flex-col md:flex-row md:items-center border-b border-gray-200 px-2 md:px-4 gap-2 md:gap-0">
+            {/* Sidebar Toggle for Mobile */}
             <button
-              onClick={() => setActiveTab("documents")}
-              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                activeTab === "documents"
-                  ? "border-blue-600 text-blue-600"
-                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-              }`}
+              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+              className="lg:hidden px-3 py-2 text-sm text-left font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+              title="Toggle sidebar"
             >
-              Documents
-            </button>
-            <button
-              onClick={() => setActiveTab("photos")}
-              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                activeTab === "photos"
-                  ? "border-blue-600 text-blue-600"
-                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-              }`}
-            >
-              Photos
+              ☰ Folders
             </button>
             
+            <div className="flex flex-wrap items-center gap-1">
+              <button
+                onClick={() => setActiveTab("documents")}
+                className={`px-2 md:px-4 py-2 text-xs md:text-sm font-medium border-b-2 transition-colors ${
+                  activeTab === "documents"
+                    ? "border-blue-600 text-blue-600"
+                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                }`}
+              >
+                Documents
+              </button>
+              <button
+                onClick={() => setActiveTab("photos")}
+                className={`px-2 md:px-4 py-2 text-xs md:text-sm font-medium border-b-2 transition-colors ${
+                  activeTab === "photos"
+                    ? "border-blue-600 text-blue-600"
+                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                }`}
+              >
+                Photos
+              </button>
+            </div>
+            
             {/* Activity Feed Toggle */}
-            <div className="ml-auto flex items-center gap-2">
+            <div className="ml-auto flex items-center gap-1 md:gap-2">
               <button
                 onClick={() => setShowFolderSetup(true)}
-                className="px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
+                className="hidden md:block px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
               >
                 Setup Folders
               </button>
               <button
                 onClick={() => setShowAuditLog(true)}
-                className="px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
+                className="hidden md:block px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
               >
                 View Audit Log
               </button>
               <button
                 onClick={() => setShowActivityFeed(!showActivityFeed)}
-                className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                className={`hidden md:block px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
                   showActivityFeed
                     ? "bg-blue-100 text-blue-700"
                     : "bg-gray-100 text-gray-600 hover:bg-gray-200"
@@ -921,7 +947,7 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
           </div>
 
           {/* Content Area */}
-          <div className={`flex-1 min-h-0 grid grid-cols-1 ${activeTab === "documents" && showActivityFeed ? 'lg:grid-cols-[1fr_1fr_280px]' : activeTab === "documents" ? 'lg:grid-cols-2' : ''}`}>
+          <div className={`flex-1 min-h-0 grid ${activeTab === "documents" && showActivityFeed ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-[1fr_1fr_280px]' : activeTab === "documents" ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1'}`}>
             {activeTab === "documents" ? (
               <>
                 <DocumentsList
@@ -953,7 +979,7 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
               
                 {/* Activity Feed Sidebar */}
                 {showActivityFeed && (
-                  <div className="hidden lg:flex flex-col border-l border-gray-200 bg-white">
+                  <div className="hidden md:flex lg:flex flex-col border-l border-gray-200 bg-white">
                     <ActivityFeed
                       baseId={baseId}
                       tableId={selectedTable?.id}

@@ -1,10 +1,11 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
-import { FileText, Image as ImageIcon, File, Loader2, Trash2, Search, X, LayoutGrid, List } from "lucide-react";
+import { FileText, Image as ImageIcon, File, Loader2, Trash2, Search, X, LayoutGrid, List, FilePen, Copy, FolderOutput } from "lucide-react";
 import type { StoredDocument } from "@/lib/services/documents-service";
 import { DocumentsService } from "@/lib/services/documents-service";
 import { formatSize, isImage, isPdf, isFolder } from "./utils";
 import { DocumentSkeleton } from "./DocumentsSkeleton";
 import { DocumentThumbnail } from "./DocumentThumbnail";
+import { CopyMoveModal } from "./CopyMoveModal";
 
 type DocumentsListProps = {
   documents: Array<StoredDocument & { relative: string }>;
@@ -42,6 +43,9 @@ export const DocumentsList = ({
   const [searchQuery, setSearchQuery] = useState("");
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
+  const [copyMoveModalOpen, setCopyMoveModalOpen] = useState(false);
+  const [selectedDocForCopyMove, setSelectedDocForCopyMove] = useState<(StoredDocument & { relative: string }) | null>(null);
+  const [folders, setFolders] = useState<Array<{ name: string; path: string }>>([]);
 
   const filteredDocuments = useMemo(() => {
     if (!searchQuery.trim()) return documents;
@@ -75,6 +79,29 @@ export const DocumentsList = ({
       });
     }
   }, [viewMode, filteredDocuments, loadSignedUrl, signedUrls]);
+
+  // Load folders for copy/move modal
+  useEffect(() => {
+    const loadFolders = async () => {
+      try {
+        const folderList = await DocumentsService.listFolders(baseId, tableId ?? null, null, true, recordId);
+        setFolders(folderList);
+      } catch (err) {
+        console.error("Failed to load folders:", err);
+      }
+    };
+    loadFolders();
+  }, [baseId, tableId, recordId]);
+
+  const openCopyMoveModal = useCallback((doc: StoredDocument & { relative: string }) => {
+    setSelectedDocForCopyMove(doc);
+    setCopyMoveModalOpen(true);
+  }, []);
+
+  const closeCopyMoveModal = useCallback(() => {
+    setCopyMoveModalOpen(false);
+    setSelectedDocForCopyMove(null);
+  }, []);
 
   return (
     <div className="border-r border-gray-200 min-h-0 overflow-y-auto flex flex-col">
@@ -135,114 +162,171 @@ export const DocumentsList = ({
         Drag and drop files anywhere in this panel to upload. You can also forward email
         attachments to your ingest address (e.g., tc@allprime.com) to auto-save here.
       </div>
-      {folderPath ? (
-        <div className="divide-y divide-gray-100">
-          {loading ? (
-            <DocumentSkeleton count={6} />
-          ) : error ? (
-            <div className="p-6 text-sm text-red-600">{error}</div>
-          ) : filteredDocuments.length === 0 ? (
-            <div className="p-6 text-sm text-gray-500">
-              {searchQuery ? (
-                <>No documents found matching &quot;{searchQuery}&quot;.</>
-              ) : (
-                <>No documents yet. Upload files to get started.</>
-              )}
-            </div>
+
+      <div className="divide-y divide-gray-100">
+        {loading ? (
+          <DocumentSkeleton count={6} />
+        ) : error ? (
+          <div className="p-6 text-sm text-red-600">{error}</div>
+        ) : filteredDocuments.length === 0 ? (
+          <div className="p-6 text-sm text-gray-500">
+            {searchQuery ? (
+              <>No documents found matching &quot;{searchQuery}&quot;.</>
+            ) : (
+              <>No documents yet. Upload files to get started.</>
+            )}
+          </div>
+        ) : (
+          viewMode === "list" ? (
+            // List View
+            filteredDocuments.map((doc) => {
+              // Double-check: don't allow selecting folders
+              if (isFolder(doc)) return null;
+              return (
+                <button
+                  key={doc.path}
+                  onClick={() => {
+                    // Validate before selecting
+                    if (!isFolder(doc)) {
+                      onDocumentSelect(doc.path);
+                    }
+                  }}
+                  onDoubleClick={() => {
+                    // Open editor on double-click for PDF files only
+                    if (!isFolder(doc) && onDocumentEdit && isPdf(doc.mimeType)) {
+                      onDocumentEdit(doc);
+                    }
+                  }}
+                  className={`w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-gray-50 transition-colors ${
+                    selectedDocPath === doc.path ? "bg-blue-50 border-l-4 border-blue-500" : ""
+                  }`}
+                  title={isPdf(doc.mimeType) ? "Double-click to edit" : ""}
+                >
+                  <div className="flex-shrink-0">{renderDocIcon(doc.mimeType)}</div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-semibold text-gray-900 truncate">
+                      {doc.relative}
+                    </div>
+                    <div className="text-xs text-gray-500 flex items-center gap-2">
+                      <span>{formatSize(doc.size)}</span>
+                      <span>•</span>
+                      <span>{new Date(doc.createdAt).toLocaleString()}</span>
+                    </div>
+                  </div>
+                  <div className="flex-shrink-0 flex items-center gap-1">
+                    {onDocumentEdit && isPdf(doc.mimeType) && (
+                      <span
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDocumentEdit(doc);
+                        }}
+                        className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        title="Edit document"
+                      >
+                        <FilePen className="w-4 h-4" />
+                      </span>
+                    )}
+                    <span
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openCopyMoveModal(doc);
+                      }}
+                      className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                      title="Copy or move document"
+                    >
+                      <FolderOutput className="w-4 h-4" />
+                    </span>
+                  </div>
+                </button>
+              );
+            })
           ) : (
-            viewMode === "list" ? (
-              // List View
-              filteredDocuments.map((doc) => {
-                // Double-check: don't allow selecting folders
+            // Grid View with Thumbnails
+            <div className="grid grid-cols-2 gap-2 p-2">
+              {filteredDocuments.map((doc) => {
                 if (isFolder(doc)) return null;
                 return (
                   <button
                     key={doc.path}
                     onClick={() => {
-                      // Validate before selecting
                       if (!isFolder(doc)) {
                         onDocumentSelect(doc.path);
                       }
                     }}
                     onDoubleClick={() => {
-                      // Open editor on double-click for PDF files only
                       if (!isFolder(doc) && onDocumentEdit && isPdf(doc.mimeType)) {
                         onDocumentEdit(doc);
                       }
                     }}
-                    className={`w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-gray-50 transition-colors ${
-                      selectedDocPath === doc.path ? "bg-blue-50 border-l-4 border-blue-500" : ""
+                    className={`group relative p-2 rounded-lg border transition-all hover:shadow-md ${
+                      selectedDocPath === doc.path
+                        ? "border-blue-500 bg-blue-50 ring-2 ring-blue-200"
+                        : "border-gray-200 hover:border-gray-300 bg-white"
                     }`}
                     title={isPdf(doc.mimeType) ? "Double-click to edit" : ""}
                   >
-                    <div className="flex-shrink-0">{renderDocIcon(doc.mimeType)}</div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-semibold text-gray-900 truncate">
+                    {/* Action Buttons - appear on hover */}
+                    <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                      {onDocumentEdit && isPdf(doc.mimeType) && (
+                        <span
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDocumentEdit(doc);
+                          }}
+                          className="p-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors shadow-sm"
+                          title="Edit document"
+                        >
+                          <FilePen className="w-3 h-3" />
+                        </span>
+                      )}
+                      <span
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openCopyMoveModal(doc);
+                        }}
+                        className="p-1.5 bg-green-600 hover:bg-green-700 text-white rounded-md transition-colors shadow-sm"
+                        title="Copy or move document"
+                      >
+                        <FolderOutput className="w-3 h-3" />
+                      </span>
+                    </div>
+                    {/* Thumbnail */}
+                    <DocumentThumbnail
+                      documentPath={doc.path}
+                      baseId={baseId}
+                      tableId={tableId}
+                      signedUrl={signedUrls[doc.path]}
+                      mimeType={doc.mimeType}
+                      fileName={doc.relative}
+                      className="w-full aspect-[3/4] mb-2"
+                    />
+                    {/* File Info */}
+                    <div className="text-left">
+                      <p className="text-xs font-medium text-gray-900 truncate" title={doc.relative}>
                         {doc.relative}
-                      </div>
-                      <div className="text-xs text-gray-500 flex items-center gap-2">
-                        <span>{formatSize(doc.size)}</span>
-                        <span>•</span>
-                        <span>{new Date(doc.createdAt).toLocaleString()}</span>
-                      </div>
+                      </p>
+                      <p className="text-[10px] text-gray-500">
+                        {formatSize(doc.size)}
+                      </p>
                     </div>
                   </button>
                 );
-              })
-            ) : (
-              // Grid View with Thumbnails
-              <div className="grid grid-cols-2 gap-2 p-2">
-                {filteredDocuments.map((doc) => {
-                  if (isFolder(doc)) return null;
-                  return (
-                    <button
-                      key={doc.path}
-                      onClick={() => {
-                        if (!isFolder(doc)) {
-                          onDocumentSelect(doc.path);
-                        }
-                      }}
-                      onDoubleClick={() => {
-                        if (!isFolder(doc) && onDocumentEdit && isPdf(doc.mimeType)) {
-                          onDocumentEdit(doc);
-                        }
-                      }}
-                      className={`relative p-2 rounded-lg border transition-all hover:shadow-md ${
-                        selectedDocPath === doc.path
-                          ? "border-blue-500 bg-blue-50 ring-2 ring-blue-200"
-                          : "border-gray-200 hover:border-gray-300 bg-white"
-                      }`}
-                      title={isPdf(doc.mimeType) ? "Double-click to edit" : ""}
-                    >
-                      {/* Thumbnail */}
-                      <DocumentThumbnail
-                        documentPath={doc.path}
-                        baseId={baseId}
-                        tableId={tableId}
-                        signedUrl={signedUrls[doc.path]}
-                        mimeType={doc.mimeType}
-                        fileName={doc.relative}
-                        className="w-full aspect-[3/4] mb-2"
-                      />
-                      {/* File Info */}
-                      <div className="text-left">
-                        <p className="text-xs font-medium text-gray-900 truncate" title={doc.relative}>
-                          {doc.relative}
-                        </p>
-                        <p className="text-[10px] text-gray-500">
-                          {formatSize(doc.size)}
-                        </p>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            )
-          )}
-        </div>
-      ) : (
-        <div className="p-6 text-sm text-gray-500">Select a folder to view documents.</div>
-      )}
+              })}
+            </div>
+          )
+        )}
+      </div>
+      <CopyMoveModal
+        isOpen={copyMoveModalOpen}
+        onClose={closeCopyMoveModal}
+        document={selectedDocForCopyMove}
+        folders={folders}
+        baseId={baseId}
+        tableId={tableId}
+        recordId={recordId}
+        currentFolderPath={folderPath}
+        onSuccess={() => window.location.reload()}
+      />
     </div>
   );
 };

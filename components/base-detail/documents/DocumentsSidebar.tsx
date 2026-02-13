@@ -60,35 +60,43 @@ const FolderItem = ({
   return (
     <div className="group relative">
       <div className="flex items-center">
+        {/* Chevron Button - Only expands/collapses */}
+        {hasChildren && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleFolder(folder.path);
+            }}
+            className="p-2 hover:bg-gray-200 rounded transition-colors flex-shrink-0"
+            title="Toggle folder"
+          >
+            {isExpanded ? (
+              <ChevronDown className="w-4 h-4 flex-shrink-0" />
+            ) : (
+              <ChevronRight className="w-4 h-4 flex-shrink-0" />
+            )}
+          </button>
+        )}
+        {!hasChildren && (
+          <div className="w-10" />
+        )}
+        
+        {/* Folder Button - Selects folder */}
         <button
           onClick={() => {
-            if (hasChildren) {
-              toggleFolder(folder.path);
-            }
             onFolderSelect(folder.path);
           }}
-          className={`flex-1 text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
+          className={`flex-1 text-left py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
             isSelected
               ? "bg-blue-100 text-blue-800"
               : "hover:bg-white text-gray-700"
           }`}
-          style={{ paddingLeft: `${0.75 + level * 1}rem` }}
+          style={{ paddingLeft: `${0.5 + level * 1}rem`, paddingRight: "0.5rem" }}
         >
-          {hasChildren ? (
-            <>
-              {isExpanded ? (
-                <ChevronDown className="w-4 h-4 flex-shrink-0" />
-              ) : (
-                <ChevronRight className="w-4 h-4 flex-shrink-0" />
-              )}
-              {isExpanded ? (
-                <FolderOpen className="w-4 h-4 flex-shrink-0" />
-              ) : (
-                <Folder className="w-4 h-4 flex-shrink-0" />
-              )}
-            </>
+          {isExpanded ? (
+            <FolderOpen className="w-4 h-4 flex-shrink-0" />
           ) : (
-            <div className="w-4 h-4 flex-shrink-0" />
+            <Folder className="w-4 h-4 flex-shrink-0" />
           )}
           <span className="truncate">{folder.name}</span>
         </button>

@@ -216,16 +216,16 @@ export const RecordDocuments = ({
   return (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
       {/* Header */}
-      <div className="px-4 py-3 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-blue-50/30 flex items-center justify-between">
+      <div className="px-4 py-3 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-blue-50/30 flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-0">
         <div className="flex items-center gap-2">
           <Paperclip className="w-5 h-5 text-blue-600" />
           <h3 className="font-semibold text-gray-900">Attached Documents</h3>
           <span className="text-sm text-gray-500">({documents.length})</span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 overflow-x-auto md:overflow-x-visible flex-nowrap md:flex-wrap pb-2 md:pb-0" style={{ scrollbarWidth: 'thin', scrollbarColor: '#d1d5db transparent' }}>
           <button
             onClick={() => setActiveModal('signature-request')}
-            className="px-3 py-1.5 text-sm font-medium text-white bg-purple-600 border border-purple-700 rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-1.5"
+            className="flex-shrink-0 px-3 py-1.5 text-sm font-medium text-white bg-purple-600 border border-purple-700 rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-1.5"
             title="Request e-signature for documents"
           >
             <PenTool className="w-4 h-4" />
@@ -233,7 +233,7 @@ export const RecordDocuments = ({
           </button>
           <button
             onClick={() => setActiveModal('signature-status')}
-            className="px-3 py-1.5 text-sm font-medium text-purple-700 bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100 transition-colors flex items-center gap-1.5"
+            className="flex-shrink-0 px-3 py-1.5 text-sm font-medium text-purple-700 bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100 transition-colors flex items-center gap-1.5"
             title="View signature request status"
           >
             <CheckSquare className="w-4 h-4" />
@@ -241,7 +241,7 @@ export const RecordDocuments = ({
           </button>
           <button
             onClick={() => setActiveModal('template-management')}
-            className="px-3 py-1.5 text-sm font-medium text-white bg-green-600 border border-green-700 rounded-lg hover:bg-green-700 transition-colors flex items-center gap-1.5"
+            className="hidden md:flex flex-shrink-0 px-3 py-1.5 text-sm font-medium text-white bg-green-600 border border-green-700 rounded-lg hover:bg-green-700 transition-colors items-center gap-1.5"
             title="Generate document from template with auto-filled record data"
           >
             <FileText className="w-4 h-4" />
@@ -249,13 +249,13 @@ export const RecordDocuments = ({
           </button>
           <button
             onClick={handleAdvancedDocuments}
-            className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-1.5"
+            className="flex-shrink-0 px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-1.5"
             title="Advanced operations: templates, e-signatures, merge, etc."
           >
             <FileEdit className="w-4 h-4" />
             Advanced
           </button>
-          <label className="cursor-pointer px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1.5 disabled:opacity-50">
+          <label className="flex-shrink-0 cursor-pointer px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1.5 disabled:opacity-50">
             {uploading ? (
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
@@ -314,15 +314,15 @@ export const RecordDocuments = ({
                   >
                     {doc.document_name}
                   </button>
-                  <div className="flex items-center gap-2 text-xs text-gray-500">
+                  <div className="flex items-center md:gap-2 text-xs text-gray-500">
                     <span>{formatSize(doc.size_bytes)}</span>
-                    <span>•</span>
+                    <span className="text-white md:text-gray-500">•</span>
                     <span>{formatDate(doc.created_at)}</span>
                   </div>
                 </div>
 
                 {/* Actions */}
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="flex items-center gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                   <button
                     onClick={() => handlePreview(doc)}
                     className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
@@ -370,10 +370,10 @@ export const RecordDocuments = ({
             onClick={(e) => e.stopPropagation()}
           >
             {/* Preview Header */}
-            <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
-              <div className="flex items-center gap-2">
+            <div className="px-4 py-3 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
+              <div className="flex items-center gap-2 min-w-0">
                 {getFileIcon(previewDoc.mime_type)}
-                <span className="font-medium text-gray-900 truncate max-w-md">
+                <span className="font-medium text-gray-900 truncate max-w-xs sm:max-w-md">
                   {previewDoc.document_name}
                 </span>
               </div>

@@ -456,46 +456,48 @@ export const RecordDetailsModal = ({
         </div>
 
         {/* Summary Section */}
-        <div className="px-8 py-5 bg-gradient-to-r from-gray-50 to-blue-50/30 border-b border-gray-200">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="flex items-center gap-3 p-3 bg-white rounded-lg shadow-sm border border-gray-200">
-              <div className="p-2 bg-blue-100 rounded-lg">
-                <Info className="w-5 h-5 text-blue-600" />
+        {activeTab === "fields" && (
+          <div className="px-8 py-5 bg-gradient-to-r from-gray-50 to-blue-50/30 border-b border-gray-200">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="flex items-center gap-3 p-3 bg-white rounded-lg shadow-sm border border-gray-200">
+                <div className="p-2 bg-blue-100 rounded-lg">
+                  <Info className="w-5 h-5 text-blue-600" />
+                </div>
+                <div>
+                  <div className="text-xs text-gray-500 uppercase tracking-wide">Total Fields</div>
+                  <div className="text-lg font-bold text-gray-900">{fieldStats.total}</div>
+                </div>
               </div>
-              <div>
-                <div className="text-xs text-gray-500 uppercase tracking-wide">Total Fields</div>
-                <div className="text-lg font-bold text-gray-900">{fieldStats.total}</div>
+              <div className="flex items-center gap-3 p-3 bg-white rounded-lg shadow-sm border border-gray-200">
+                <div className="p-2 bg-green-100 rounded-lg">
+                  <CheckSquare className="w-5 h-5 text-green-600" />
+                </div>
+                <div>
+                  <div className="text-xs text-gray-500 uppercase tracking-wide">Filled</div>
+                  <div className="text-lg font-bold text-gray-900">{fieldStats.filled}</div>
+                </div>
               </div>
-            </div>
-            <div className="flex items-center gap-3 p-3 bg-white rounded-lg shadow-sm border border-gray-200">
-              <div className="p-2 bg-green-100 rounded-lg">
-                <CheckSquare className="w-5 h-5 text-green-600" />
+              <div className="flex items-center gap-3 p-3 bg-white rounded-lg shadow-sm border border-gray-200">
+                <div className="p-2 bg-gray-100 rounded-lg">
+                  <FileText className="w-5 h-5 text-gray-600" />
+                </div>
+                <div>
+                  <div className="text-xs text-gray-500 uppercase tracking-wide">Empty</div>
+                  <div className="text-lg font-bold text-gray-900">{fieldStats.empty}</div>
+                </div>
               </div>
-              <div>
-                <div className="text-xs text-gray-500 uppercase tracking-wide">Filled</div>
-                <div className="text-lg font-bold text-gray-900">{fieldStats.filled}</div>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 p-3 bg-white rounded-lg shadow-sm border border-gray-200">
-              <div className="p-2 bg-gray-100 rounded-lg">
-                <FileText className="w-5 h-5 text-gray-600" />
-              </div>
-              <div>
-                <div className="text-xs text-gray-500 uppercase tracking-wide">Empty</div>
-                <div className="text-lg font-bold text-gray-900">{fieldStats.empty}</div>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 p-3 bg-white rounded-lg shadow-sm border border-gray-200">
-              <div className="p-2 bg-purple-100 rounded-lg">
-                <Hash className="w-5 h-5 text-purple-600" />
-              </div>
-              <div>
-                <div className="text-xs text-gray-500 uppercase tracking-wide">Completion</div>
-                <div className="text-lg font-bold text-gray-900">{fieldStats.percentage}%</div>
+              <div className="flex items-center gap-3 p-3 bg-white rounded-lg shadow-sm border border-gray-200">
+                <div className="p-2 bg-purple-100 rounded-lg">
+                  <Hash className="w-5 h-5 text-purple-600" />
+                </div>
+                <div>
+                  <div className="text-xs text-gray-500 uppercase tracking-wide">Completion</div>
+                  <div className="text-lg font-bold text-gray-900">{fieldStats.percentage}%</div>
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Tab Navigation */}
         <div className="px-8 border-b border-gray-200 bg-white">
@@ -854,29 +856,13 @@ export const RecordDetailsModal = ({
           <div className="flex items-center gap-6 text-xs text-gray-500">
             <div>
               <span className="font-medium text-gray-700">Record ID:</span>{" "}
-              <span className="font-mono bg-gray-100 px-2 py-1 rounded">{record.id.slice(0, 8)}...</span>
+              <span className="font-mono bg-gray-100 px-2 py-1 rounded cursor-pointer hover:bg-gray-200" onClick={() => alert(record.id)}>{record.id.slice(0, 8)}...</span>
             </div>
             <div>
               <span className="font-medium text-gray-700">Table ID:</span>{" "}
-              <span className="font-mono bg-gray-100 px-2 py-1 rounded">{record.table_id.slice(0, 8)}...</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5" />
-              <span>
-                Created {formatInTimezone(record.created_at, timezone, {
-                  year: "numeric",
-                  month: "short",
-                  day: "numeric",
-                })}
-              </span>
+              <span className="font-mono bg-gray-100 px-2 py-1 rounded cursor-pointer hover:bg-gray-200" onClick={() => alert(record.table_id)}>{record.table_id.slice(0, 8)}...</span>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-          >
-            Close
-          </button>
         </div>
       </div>
 

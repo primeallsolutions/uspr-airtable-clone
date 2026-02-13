@@ -704,14 +704,14 @@ export const SignatureRequestModal = ({
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-7xl max-h-[90vh] flex flex-col overflow-hidden border border-gray-100"
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl md:max-w-7xl max-h-[90vh] flex flex-col overflow-hidden border border-gray-100"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50 flex items-center justify-between">
+        <div className="px-4 md:px-6 py-3 md:py-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
           <div>
-            <h2 className="text-xl font-semibold text-gray-900">Request Signature</h2>
-            <p className="text-sm text-gray-600 mt-1">Send document for e-signature</p>
+            <h2 className="text-lg md:text-xl font-semibold text-gray-900">Request Signature</h2>
+            <p className="text-xs md:text-sm text-gray-600 mt-1">Send document for e-signature</p>
           </div>
           <button
             onClick={onClose}
@@ -722,8 +722,8 @@ export const SignatureRequestModal = ({
         </div>
 
         {/* Content */}
-        <div className="flex-1 min-h-0 overflow-y-auto p-6">
-          <div className="grid grid-cols-2 gap-6">
+        <div className="flex-1 min-h-0 overflow-y-auto p-4 md:p-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
             {/* Left Column - Form Fields */}
             <div className="space-y-6">
           {/* Template Selection */}
@@ -1071,7 +1071,7 @@ export const SignatureRequestModal = ({
             </div>
             
             {/* Right Column - PDF Preview */}
-            <div className="space-y-4">
+            <div className="space-y-3 md:space-y-4">
               <h3 className="text-sm font-medium text-gray-700 mb-2">Document Preview</h3>
               
               {selectedTemplateId && pdfDoc ? (
@@ -1227,21 +1227,21 @@ export const SignatureRequestModal = ({
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex items-center justify-between">
-          <div className="text-sm text-gray-600">
+        <div className="px-4 md:px-6 py-3 md:py-4 border-t border-gray-200 bg-gray-50 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
+          <div className="text-xs sm:text-sm text-gray-600">
             {signers.filter((s) => s.email.trim() !== "").length} signer(s) added
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col sm:flex-row items-center gap-2 w-full sm:w-auto">
             <button
               onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              className="w-full sm:w-auto px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
             >
               Cancel
             </button>
             <button
               onClick={handleSave}
               disabled={saving || sending}
-              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {saving ? (
                 <>
@@ -1258,7 +1258,7 @@ export const SignatureRequestModal = ({
             <button
               onClick={handleSaveAndSend}
               disabled={saving || sending}
-              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {sending ? (
                 <>

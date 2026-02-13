@@ -392,32 +392,32 @@ export const PdfMergeWithReorderModal = ({
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden border border-gray-100"
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl md:max-w-5xl max-h-[90vh] flex flex-col overflow-hidden border border-gray-100"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50 flex items-center justify-between">
+        <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0">
           <div>
-            <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
-              <ArrowsUpFromLine className="w-5 h-5 text-blue-600" />
+            <h2 className="text-base sm:text-xl font-semibold text-gray-900 flex items-center gap-2">
+              <ArrowsUpFromLine className="w-4 sm:w-5 h-4 sm:h-5 text-blue-600 flex-shrink-0" />
               Merge PDFs with Page Reordering
             </h2>
-            <p className="text-sm text-gray-600 mt-1">
+            <p className="text-xs sm:text-sm text-gray-600 mt-1">
               Select documents, then drag and drop pages to reorder before merging
             </p>
           </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-white/70 rounded-lg transition-colors"
+            className="p-2 hover:bg-white/70 rounded-lg transition-colors self-end sm:self-auto"
           >
             <X className="w-5 h-5 text-gray-700" />
           </button>
         </div>
 
         {/* Content */}
-        <div className="flex-1 min-h-0 flex overflow-hidden">
+        <div className="flex-1 min-h-0 flex flex-col md:flex-row overflow-hidden">
           {/* Left Panel - Document Selection */}
-          <div className="w-64 border-r border-gray-200 flex flex-col p-4">
+          <div className="w-full md:w-64 border-b md:border-b-0 md:border-r border-gray-200 flex flex-col p-3 sm:p-4 max-h-[40vh] md:max-h-none overflow-y-auto md:overflow-y-visible">
             <h3 className="font-medium text-gray-900 mb-3">Select PDFs</h3>
             
             {loading ? (
@@ -485,7 +485,7 @@ export const PdfMergeWithReorderModal = ({
           </div>
 
           {/* Middle Panel - Page Order */}
-          <div className="flex-1 flex flex-col p-4 min-w-0">
+          <div className="w-full md:flex-1 flex flex-col p-3 sm:p-4 min-w-0 border-b md:border-b-0 max-h-[50vh] md:max-h-none overflow-y-auto md:overflow-y-visible">
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-medium text-gray-900">
                 Page Order ({selectedPages.length} pages)
@@ -510,7 +510,7 @@ export const PdfMergeWithReorderModal = ({
               </div>
             ) : (
               <div className="flex-1 overflow-y-auto">
-                <div className="grid grid-cols-4 gap-2">
+                <div className="grid grid-cols-3 md:grid-cols-4 gap-2">
                   {selectedPages.map((page, index) => (
                     <div
                       key={page.id}
@@ -590,7 +590,7 @@ export const PdfMergeWithReorderModal = ({
           </div>
 
           {/* Right Panel - Preview */}
-          <div className="w-80 border-l border-gray-200 flex flex-col p-4">
+          <div className="w-full md:w-80 flex flex-col p-3 sm:p-4 border-t md:border-t-0 md:border-l border-gray-200 max-h-[40vh] md:max-h-none overflow-y-auto md:overflow-y-visible">
             <h3 className="font-medium text-gray-900 mb-3">Page Preview</h3>
             
             {previewPage ? (
@@ -651,22 +651,22 @@ export const PdfMergeWithReorderModal = ({
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex items-center justify-between">
-          <div className="text-sm text-gray-600">
+        <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-200 bg-gray-50 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
+          <div className="text-xs sm:text-sm text-gray-600">
             {selectedPages.length} pages from {loadedDocuments.length} document(s)
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col sm:flex-row items-center gap-2 w-full sm:w-auto">
             <button
               onClick={onClose}
               disabled={merging}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+              className="w-full sm:w-auto px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
             >
               Cancel
             </button>
             <button
               onClick={handleMerge}
               disabled={merging || selectedPages.length < 2 || !outputFileName.trim()}
-              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {merging ? (
                 <>
