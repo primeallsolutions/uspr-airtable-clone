@@ -926,6 +926,13 @@ export const TemplatesView = ({ baseId, baseName = "Base", tables = [], records 
                   <div
                     key={template.id}
                     className="group p-5 border-2 border-gray-200 rounded-xl hover:border-blue-400 hover:shadow-lg transition-all duration-200 bg-white cursor-pointer"
+                    onClick={() => {
+                      if (!selectedRecord) alert("Please select a record before creating a signature request.");
+                      else {
+                        setTemplateForSignature(template);
+                        setShowSignatureRequestModal(true);
+                      }
+                    }}
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex-1 min-w-0">
@@ -1160,7 +1167,8 @@ export const TemplatesView = ({ baseId, baseName = "Base", tables = [], records 
                 {checklistTemplates.map((template) => (
                   <div
                     key={template.id}
-                    className="group p-5 border-2 border-gray-200 rounded-xl hover:border-emerald-400 hover:shadow-lg transition-all duration-200 bg-white"
+                    className="group p-5 border-2 border-gray-200 rounded-xl hover:border-emerald-400 hover:shadow-lg transition-all duration-200 bg-white cursor-pointer"
+                    onClick={() => handleViewChecklist(template.id)}
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex-1 min-w-0">
