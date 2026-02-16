@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { X, FileText, Upload, Trash2, Plus, Loader2, Settings, CheckCircle2, AlertCircle, PenTool, CheckSquare, Edit2, GripVertical, ChevronUp, ChevronDown } from "lucide-react";
+import { X, FileText, Upload, Trash2, Plus, Loader2, Settings, CheckCircle2, AlertCircle, PenTool, CheckSquare, Edit2, GripVertical, ChevronUp, ChevronDown, Copy } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import type { DocumentTemplate, TemplateField } from "@/lib/services/template-service";
 import type { ChecklistTemplate, ChecklistItem } from "@/lib/services/checklist-templates-service";
@@ -10,6 +10,7 @@ import type { FieldRow, RecordRow } from "@/lib/types/base-detail";
 import { BaseDetailService } from "@/lib/services/base-detail-service";
 import { TemplateFieldEditor } from "./documents/TemplateFieldEditor";
 import { SignatureRequestModal } from "./documents/SignatureRequestModal";
+import { ImportTemplateModal } from "./ImportTemplateModal";
 
 type TemplatesViewProps = {
   baseId: string;
@@ -61,6 +62,9 @@ export const TemplatesView = ({ baseId, baseName = "Base", tables = [], records 
   const [editingItemTitle, setEditingItemTitle] = useState("");
   const [editingItemDescription, setEditingItemDescription] = useState("");
   const [draggedItemId, setDraggedItemId] = useState<string | null>(null);
+
+  // Import Template Modal State
+  const [showImportModal, setShowImportModal] = useState(false);
 
   const loadTemplates = useCallback(async () => {
     try {
@@ -645,13 +649,23 @@ export const TemplatesView = ({ baseId, baseName = "Base", tables = [], records 
             <h2 className="text-2xl font-bold text-gray-900 mb-1">Templates</h2>
             <p className="text-sm text-gray-600">Manage your PDF templates and field mappings for {baseName}</p>
           </div>
-          <button
-            onClick={() => activeTab === "documents" ? setShowUploadForm(!showUploadForm) : setShowCreateChecklist(!showCreateChecklist)}
-            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            {activeTab === "documents" ? "New Template" : "New Checklist"}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowImportModal(true)}
+              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              title="Import a template or checklist from another base"
+            >
+              <Copy className="w-4 h-4" />
+              Import
+            </button>
+            <button
+              onClick={() => activeTab === "documents" ? setShowUploadForm(!showUploadForm) : setShowCreateChecklist(!showCreateChecklist)}
+              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              {activeTab === "documents" ? "New Template" : "New Checklist"}
+            </button>
+          </div>
         </div>
 
         {/* Tab Navigation */}
@@ -1428,6 +1442,22 @@ export const TemplatesView = ({ baseId, baseName = "Base", tables = [], records 
           </div>
         </div>
       )}
+
+      {/* Import Template Modal */}
+      <ImportTemplateModal
+        isOpen={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        currentBaseId={baseId}
+        currentBaseName={baseName}
+        templateType={activeTab === "documents" ? "documents" : "tasks"}
+        onImportSuccess={() => {
+          if (activeTab === "documents") {
+            loadTemplates();
+          } else {
+            loadChecklistTemplates();
+          }
+        }}
+      />
     </div>
   );
 };
