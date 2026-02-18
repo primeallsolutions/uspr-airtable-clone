@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { X, Save, Edit2, Loader2, Calendar, Hash, Mail, Phone, Link as LinkIcon, CheckSquare, FileText, Clock, Info, Paperclip, History } from "lucide-react";
+import { X, Save, Edit2, Loader2, Calendar, Hash, Mail, Phone, Link as LinkIcon, CheckSquare, FileText, Clock, Info, Paperclip, History, Send } from "lucide-react";
 import type { RecordRow, FieldRow, SavingCell, TableRow } from "@/lib/types/base-detail";
 import type { AuditLogRow } from "@/lib/services/audit-log-service";
 import { AuditLogService } from "@/lib/services/audit-log-service";
@@ -10,6 +10,7 @@ import { useTimezone } from "@/lib/hooks/useTimezone";
 import { RecordDocuments } from "./documents/RecordDocuments";
 import { RecordDocumentsService } from "@/lib/services/record-documents-service";
 import { getFieldTypeLabel } from "@/lib/utils/field-type-helpers";
+import { RecordEmails } from "./RecordEmails";
 
 interface RecordDetailsModalProps {
   isOpen: boolean;
@@ -18,6 +19,7 @@ interface RecordDetailsModalProps {
   tables: TableRow[];
   selectedTableId: string | null;
   baseId: string;
+  workspaceId?: string;
   savingCell: SavingCell;
   onUpdateCell: (recordId: string, fieldId: string, value: unknown) => void;
   onClose: () => void;
@@ -30,6 +32,7 @@ export const RecordDetailsModal = ({
   tables,
   selectedTableId,
   baseId,
+  workspaceId,
   savingCell,
   onUpdateCell,
   onClose,
@@ -39,8 +42,9 @@ export const RecordDetailsModal = ({
   const [editValue, setEditValue] = useState<unknown>("");
   const [localNameValue, setLocalNameValue] = useState<string>("");
   const nameFieldRef = useRef<HTMLInputElement>(null);
-  const [activeTab, setActiveTab] = useState<"fields" | "documents">("fields");
+  const [activeTab, setActiveTab] = useState<"fields" | "documents" | "emails">("fields");
   const [documentCount, setDocumentCount] = useState<number>(0);
+  const [emailCount, setEmailCount] = useState<number>(0);
   const [isAuditOpen, setIsAuditOpen] = useState<boolean>(false);
   const [auditLogs, setAuditLogs] = useState<AuditLogRow[]>([]);
   const [auditLoading, setAuditLoading] = useState<boolean>(false);
@@ -332,6 +336,26 @@ export const RecordDetailsModal = ({
     }
   }, [record?.id, record?.values]); // Reload count if record updates
 
+  // Load email count whenever record changes
+  useEffect(() => {
+    const loadEmailCount = async () => {
+      if (!record?.id) {
+        setEmailCount(0);
+        return;
+      }
+      try {
+        const response = await fetch(`/api/emails/record/${record.id}?limit=1`);
+        if (response.ok) {
+          const data = await response.json();
+          setEmailCount(data.total || 0);
+        }
+      } catch {
+        setEmailCount(0);
+      }
+    };
+    loadEmailCount();
+  }, [record?.id]);
+
   if (!isOpen || !record) return null;
 
   const isSaving = savingCell?.recordId === record.id && savingCell?.fieldId !== null;
@@ -529,6 +553,24 @@ export const RecordDetailsModal = ({
                 {documentCount > 0 && (
                   <span className="px-1.5 py-0.5 text-xs bg-blue-100 text-blue-600 rounded-full">
                     {documentCount}
+                  </span>
+                )}
+              </span>
+            </button>
+            <button
+              onClick={() => setActiveTab("emails")}
+              className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === "emails"
+                  ? "border-blue-600 text-blue-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+              }`}
+            >
+              <span className="flex items-center gap-2">
+                <Send className="w-4 h-4" />
+                Emails
+                {emailCount > 0 && (
+                  <span className="px-1.5 py-0.5 text-xs bg-blue-100 text-blue-600 rounded-full">
+                    {emailCount}
                   </span>
                 )}
               </span>
@@ -839,7 +881,7 @@ export const RecordDetailsModal = ({
                 </div>
               )}
             </>
-          ) : (
+          ) : activeTab === "documents" ? (
             <RecordDocuments
               recordId={record.id}
               baseId={baseId}
@@ -847,6 +889,14 @@ export const RecordDetailsModal = ({
               recordName={nameValue || "Record"}
               recordValues={record.values}
               fields={fields}
+            />
+          ) : (
+            <RecordEmails
+              recordId={record.id}
+              recordName={nameValue || "Record"}
+              recordValues={record.values}
+              fields={fields}
+              workspaceId={workspaceId}
             />
           )}
         </div>
