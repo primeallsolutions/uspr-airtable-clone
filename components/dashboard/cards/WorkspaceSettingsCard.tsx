@@ -182,7 +182,7 @@ export const WorkspaceSettingsCard = ({
               ) : (
                 <div className="border border-red-300 bg-red-50 rounded-lg p-3 sm:p-4 space-y-3">
                   <p className="text-xs sm:text-sm font-medium text-red-900 break-words">
-                    Are you sure you want to delete "{workspaceName}"?
+                    Are you sure you want to delete &ldquo;{workspaceName}&rdquo;?
                   </p>
                   <p className="text-xs text-red-700">
                     This action cannot be undone.

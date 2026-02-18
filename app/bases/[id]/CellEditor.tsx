@@ -21,6 +21,12 @@ export default function CellEditor({
   const [emailError, setEmailError] = useState<string | null>(null);
   const [phoneError, setPhoneError] = useState<string | null>(null);
   const [linkError, setLinkError] = useState<string | null>(null);
+  // State for single_select temp value
+  const [singleSelectTempValue, setSingleSelectTempValue] = useState<{ key: string; color: string } | null>(null);
+  // State for multi_select
+  const [multiSelectTempValue, setMultiSelectTempValue] = useState<string | null>(null);
+  const [isRemoving, setIsRemoving] = useState<boolean>(false);
+  
   const isEmptyValue =
     value === null ||
     value === undefined ||
@@ -283,10 +289,9 @@ export default function CellEditor({
   if (field.type === 'single_select') {
     const selectedColor = value == null ? undefined : choiceColors[String(value)];
 
-    const [tempValue, setTempValue] = useState<{ key: string; color: string } | null>(null);
     const tempUpdate = (val: unknown) => {
       const choice = selectChoices.find(c => c.key === val);
-      setTempValue({
+      setSingleSelectTempValue({
         key: choice ? choice.key : '',
         color: choice ? choice.color : ''
       });
@@ -294,10 +299,10 @@ export default function CellEditor({
     }
 
     return <SelectDropdown
-      value={isSaving && tempValue ? tempValue.key : value}
+      value={isSaving && singleSelectTempValue ? singleSelectTempValue.key : value}
       onUpdate={tempUpdate}
       selectChoices={selectChoices}
-      selectedColor={isSaving && tempValue ? tempValue.color : selectedColor}
+      selectedColor={isSaving && singleSelectTempValue ? singleSelectTempValue.color : selectedColor}
       isEmptyValue={isEmptyValue}
       EMPTY_LABEL={EMPTY_LABEL}
       isSaving={isSaving}
@@ -306,8 +311,6 @@ export default function CellEditor({
 
   if (field.type === 'multi_select') {
     const selectedValues = Array.isArray(value) ? value : (value ? [value] : []);
-    const [tempValue, setTempValue] = useState<string | null>(null);
-    const [isRemoving, setIsRemoving] = useState<boolean>(false);
 
     return (
       <div className="w-full min-h-[32px] px-2 py-1 text-center">
@@ -318,7 +321,7 @@ export default function CellEditor({
               const currentValues = Array.isArray(value) ? value : (value ? [value] : []);
               if (!currentValues.includes(newValue)) {
                 const choice = selectChoices.find(c => c.key === newValue);
-                setTempValue(choice ? choice.key : null);
+                setMultiSelectTempValue(choice ? choice.key : null);
                 setIsRemoving(false);
                 onUpdate([...currentValues, newValue]);
               }
@@ -330,10 +333,10 @@ export default function CellEditor({
           isSaving={isSaving}
         />
 
-        {(selectedValues.length > 0 || (isSaving && tempValue)) && (
+        {(selectedValues.length > 0 || (isSaving && multiSelectTempValue)) && (
           <div className="flex flex-wrap gap-1 mt-1 justify-center">
-            {(isSaving && tempValue ?
-              isRemoving ? selectedValues.filter(key => key !== tempValue) : [...selectedValues, tempValue] :
+            {(isSaving && multiSelectTempValue ?
+              isRemoving ? selectedValues.filter(key => key !== multiSelectTempValue) : [...selectedValues, multiSelectTempValue] :
               selectedValues
             ).map((val) => {
               const choice = selectChoices.find(c => c.key === String(val));
@@ -349,7 +352,7 @@ export default function CellEditor({
                     type="button"
                     onClick={() => {
                       const newValues = selectedValues.filter(v => v !== val);
-                      setTempValue(val);
+                      setMultiSelectTempValue(val);
                       setIsRemoving(true);
                       onUpdate(newValues.length > 0 ? newValues : null);
                     }}
