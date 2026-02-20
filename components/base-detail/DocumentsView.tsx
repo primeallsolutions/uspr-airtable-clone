@@ -21,6 +21,7 @@ import { FolderNameModal } from "./documents/FolderNameModal";
 import { RenameDocumentModal } from "./documents/RenameDocumentModal";
 import { RenameFolderModal } from "./documents/RenameFolderModal";
 import { DeleteFolderModal } from "./documents/DeleteFolderModal";
+import { ConfirmDeleteModal } from "./documents/ConfirmDeleteModal";
 import { PdfSplitModal } from "./documents/PdfSplitModal";
 import { AuditLogViewer } from "./documents/AuditLogViewer";
 import { TransactionFolderSetupModal } from "./documents/TransactionFolderSetupModal";
@@ -94,6 +95,9 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
   const [showFolderSetup, setShowFolderSetup] = useState<boolean>(false);
   const [checkedDocuments, setCheckedDocuments] = useState<string[]>([]);
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
+  const [showDeleteDocumentModal, setShowDeleteDocumentModal] = useState<boolean>(false);
+  const [deleteDocumentTarget, setDeleteDocumentTarget] = useState<{ mode: "single"; doc: StoredDocument } | { mode: "bulk"; paths: string[] } | null>(null);
+  const [isDeletingDocuments, setIsDeletingDocuments] = useState<boolean>(false);
 
   const currentPrefix = useMemo(
     () => (folderPath && !folderPath.endsWith("/") ? `${folderPath}/` : folderPath),
@@ -532,67 +536,66 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
     };
   }, [selectedDoc, baseId, selectedTable?.id, recordId]);
 
-  const handleDeleteSelected = async () => {
+  const handleDeleteSelected = () => {
     if (!selectedDoc || isFolder(selectedDoc)) return;
-    
-    const fileName = selectedDoc.path.split("/").pop() || selectedDoc.path;
-    // Use browser confirm for now, but could be replaced with a confirmation modal
-    const confirmDelete = window.confirm(
-      `Delete "${fileName}"? This cannot be undone.`
-    );
-    if (!confirmDelete) return;
-    
-    const toastId = toast.loading(`Deleting "${fileName}"...`);
-    
-    try {
-      await DocumentsService.deleteDocument(baseId, selectedTable?.id ?? null, selectedDoc.path, recordId);
-      
-      // Log activity
-      await DocumentActivityService.logActivity({
-        baseId,
-        tableId: selectedTable?.id,
-        action: 'delete',
-        documentPath: selectedDoc.path,
-        documentName: fileName,
-      });
-      
-      setSelectedDocPath(null);
-      await refresh();
-      toast.success("Document deleted", {
-        id: toastId,
-        description: `"${fileName}" has been deleted.`,
-      });
-    } catch (err) {
-      console.error("Failed to delete document", err);
-      const errorMessage = err instanceof Error ? err.message : "Unable to delete document";
-      toast.error("Failed to delete document", {
-        id: toastId,
-        description: errorMessage,
-      });
-    }
-  }
+    setDeleteDocumentTarget({ mode: "single", doc: selectedDoc });
+    setShowDeleteDocumentModal(true);
+  };
 
   const handleRenameSelected = () => {
     if (!selectedDoc || isFolder(selectedDoc)) return;
     setShowRenameModal(true);
   };
-  const handleDeleteChecked = async () => {
+
+  const handleDeleteChecked = () => {
     if (checkedDocuments.length === 0) return;
-    const confirmDelete = window.confirm(
-      `Delete ${checkedDocuments.length} selected documents? This cannot be undone.`
+    setDeleteDocumentTarget({ mode: "bulk", paths: [...checkedDocuments] });
+    setShowDeleteDocumentModal(true);
+  };
+
+  const handleConfirmDeleteDocuments = async () => {
+    if (!deleteDocumentTarget) return;
+    setIsDeletingDocuments(true);
+    const toastId = toast.loading(
+      deleteDocumentTarget.mode === "single" ? "Deleting document..." : `Deleting ${deleteDocumentTarget.paths.length} documents...`
     );
-    if (!confirmDelete) return;
     try {
-      for (const docPath of checkedDocuments)
-        await DocumentsService.deleteDocument(baseId, selectedTable?.id ?? null, docPath);
-      if (selectedDoc && checkedDocuments.includes(selectedDoc.path)) setSelectedDocPath(null);
-      setCheckedDocuments([]);
+      if (deleteDocumentTarget.mode === "single") {
+        const doc = deleteDocumentTarget.doc;
+        const fileName = doc.path.split("/").pop() || doc.path;
+        await DocumentsService.deleteDocument(baseId, selectedTable?.id ?? null, doc.path, recordId);
+        await DocumentActivityService.logActivity({
+          baseId,
+          tableId: selectedTable?.id,
+          action: "delete",
+          documentPath: doc.path,
+          documentName: fileName,
+        });
+        setSelectedDocPath(null);
+        toast.success("Document deleted", { id: toastId, description: `"${fileName}" has been deleted.` });
+      } else {
+        for (const docPath of deleteDocumentTarget.paths) {
+          await DocumentsService.deleteDocument(baseId, selectedTable?.id ?? null, docPath, recordId);
+        }
+        if (selectedDoc && deleteDocumentTarget.paths.includes(selectedDoc.path)) setSelectedDocPath(null);
+        setCheckedDocuments([]);
+        toast.success("Documents deleted", {
+          id: toastId,
+          description: `${deleteDocumentTarget.paths.length} document(s) have been deleted.`,
+        });
+      }
+      setDeleteDocumentTarget(null);
+      setShowDeleteDocumentModal(false);
       await refresh();
     } catch (err) {
       console.error("Failed to delete document", err);
-      alert("Unable to delete document");
+      const errorMessage = err instanceof Error ? err.message : "Unable to delete document";
+      toast.error("Failed to delete document", { id: toastId, description: errorMessage });
+      throw err;
+    } finally {
+      setIsDeletingDocuments(false);
     }
-  }
+  };
 
   const handleRenameDocument = async (newName: string) => {
     if (!selectedDoc || isFolder(selectedDoc)) return;
@@ -656,7 +659,8 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
         baseId,
         selectedTable?.id ?? null,
         selectedFolder.path,
-        newName
+        newName,
+        recordId
       );
       
       // Update current folder path if it's the renamed folder
@@ -706,7 +710,8 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
       await DocumentsService.deleteFolder(
         baseId,
         selectedTable?.id ?? null,
-        selectedFolder.path
+        selectedFolder.path,
+        recordId
       );
       
       // Clear folder path if it's the deleted folder or a subfolder
@@ -962,6 +967,7 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
                   baseId={baseId}
                   tableId={selectedTable?.id}
                   recordId={recordId}
+                  onRefresh={refresh}
                 />
 
                 <DocumentPreview
@@ -1111,6 +1117,27 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
           onDelete={handleDeleteFolder}
           folderName={selectedFolder.name}
           folderPath={selectedFolder.path}
+          hasChildren={dbFolders.some((f) => f.parent_path === selectedFolder.path)}
+          documentCount={allDocs.filter((d) => d.path.startsWith(selectedFolder.path)).length}
+        />
+      )}
+
+      {/* Confirm Delete Document Modal */}
+      {deleteDocumentTarget && (
+        <ConfirmDeleteModal
+          isOpen={showDeleteDocumentModal}
+          onClose={() => {
+            setShowDeleteDocumentModal(false);
+            setDeleteDocumentTarget(null);
+          }}
+          onConfirm={handleConfirmDeleteDocuments}
+          title="Delete Document"
+          message={
+            deleteDocumentTarget.mode === "single"
+              ? `Are you sure you want to delete "${deleteDocumentTarget.doc.path.split("/").pop() || "this file"}"? This cannot be undone.`
+              : `Are you sure you want to delete ${deleteDocumentTarget.paths.length} selected documents? This cannot be undone.`
+          }
+          isLoading={isDeletingDocuments}
         />
       )}
 
@@ -1181,6 +1208,7 @@ export const DocumentsView = ({ baseId, baseName = "Base", selectedTable, record
         onClose={() => setShowMergeWithReorderModal(false)}
         baseId={baseId}
         tableId={selectedTable?.id}
+        recordId={recordId}
         onMergeComplete={() => {
           refresh();
         }}

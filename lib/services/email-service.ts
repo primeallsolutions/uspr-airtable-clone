@@ -29,49 +29,86 @@ export type EmailOptions = {
 
 export const EmailService = {
   /**
-   * Send an email using Nodemailer with Gmail
+   * Send an email using Resend (when RESEND_API_KEY is set) or Nodemailer with Gmail as fallback.
    */
   async sendEmail(options: EmailOptions): Promise<void> {
-    const transporter = createTransporter();
-    
-    if (!transporter) {
-      const errorMsg = "Email transporter not available. Please configure EMAIL_USER and EMAIL_APP_PASSWORD environment variables.";
-      console.warn(errorMsg);
-      throw new Error(errorMsg);
-    }
-
-    const fromEmail = options.from || process.env.EMAIL_USER || "noreply@example.com";
+    const resendApiKey = process.env.RESEND_API_KEY;
     const fromName = process.env.EMAIL_FROM_NAME || "Document Management System";
 
-    try {
-      // Add timeout to prevent hanging (30 seconds)
-      const emailPromise = transporter.sendMail({
-        from: `"${fromName}" <${fromEmail}>`,
-        to: Array.isArray(options.to) ? options.to.join(", ") : options.to,
-        subject: options.subject,
-        html: options.html,
-        text: options.text || options.html.replace(/<[^>]*>/g, ""), // Strip HTML for text version
-      });
+    if (resendApiKey) {
+      // Use Resend API
+      const fromEmail = options.from || process.env.RESEND_FROM_EMAIL || "noreply@example.com";
+      const from = `"${fromName}" <${fromEmail}>`;
+      const to = Array.isArray(options.to) ? options.to : [options.to];
 
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error("Email sending timeout after 30 seconds")), 30000);
-      });
+      try {
+        const response = await fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${resendApiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            from,
+            to,
+            subject: options.subject,
+            html: options.html,
+          }),
+        });
 
-      await Promise.race([emailPromise, timeoutPromise]);
+        if (!response.ok) {
+          const errData = await response.json().catch(() => ({}));
+          const errMsg = (errData as { message?: string }).message || response.statusText;
+          throw new Error(`Resend API error: ${errMsg}`);
+        }
 
-      console.log(`Email sent successfully to: ${options.to}`);
-    } catch (error) {
-      console.error("Failed to send email:", error);
-      const errorMessage = error instanceof Error ? error.message : "Unknown error";
-      
-      // Provide more helpful error messages
-      if (errorMessage.includes("Invalid login") || errorMessage.includes("authentication")) {
-        throw new Error("Email authentication failed. Please check your EMAIL_USER and EMAIL_APP_PASSWORD.");
-      } else if (errorMessage.includes("timeout")) {
-        throw new Error("Email sending timed out. Please check your network connection and email configuration.");
+        console.log(`Email sent successfully via Resend to: ${options.to}`);
+      } catch (error) {
+        console.error("Failed to send email via Resend:", error);
+        const errorMessage = error instanceof Error ? error.message : "Unknown error";
+        throw new Error(`Failed to send email: ${errorMessage}`);
       }
-      
-      throw new Error(`Failed to send email: ${errorMessage}`);
+    } else {
+      // Fallback to Nodemailer with Gmail
+      const transporter = createTransporter();
+
+      if (!transporter) {
+        const errorMsg =
+          "Email not configured. Set RESEND_API_KEY (for Resend) or EMAIL_USER and EMAIL_APP_PASSWORD (for Gmail).";
+        console.warn(errorMsg);
+        throw new Error(errorMsg);
+      }
+
+      const fromEmail = options.from || process.env.EMAIL_USER || "noreply@example.com";
+
+      try {
+        const emailPromise = transporter.sendMail({
+          from: `"${fromName}" <${fromEmail}>`,
+          to: Array.isArray(options.to) ? options.to.join(", ") : options.to,
+          subject: options.subject,
+          html: options.html,
+          text: options.text || options.html.replace(/<[^>]*>/g, ""),
+        });
+
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error("Email sending timeout after 30 seconds")), 30000);
+        });
+
+        await Promise.race([emailPromise, timeoutPromise]);
+
+        console.log(`Email sent successfully to: ${options.to}`);
+      } catch (error) {
+        console.error("Failed to send email:", error);
+        const errorMessage = error instanceof Error ? error.message : "Unknown error";
+
+        if (errorMessage.includes("Invalid login") || errorMessage.includes("authentication")) {
+          throw new Error("Email authentication failed. Please check your EMAIL_USER and EMAIL_APP_PASSWORD.");
+        } else if (errorMessage.includes("timeout")) {
+          throw new Error("Email sending timed out. Please check your network connection and email configuration.");
+        }
+
+        throw new Error(`Failed to send email: ${errorMessage}`);
+      }
     }
   },
 

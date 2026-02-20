@@ -19,6 +19,7 @@ type DocumentsListProps = {
   baseId: string;
   tableId?: string | null;
   recordId?: string | null;
+  onRefresh?: () => void | Promise<void>;
 };
 
 const renderDocIcon = (mimeType: string) => {
@@ -39,6 +40,7 @@ export const DocumentsList = ({
   baseId,
   tableId,
   recordId,
+  onRefresh,
 }: DocumentsListProps) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
@@ -325,7 +327,7 @@ export const DocumentsList = ({
         tableId={tableId}
         recordId={recordId}
         currentFolderPath={folderPath}
-        onSuccess={() => window.location.reload()}
+        onSuccess={onRefresh ? () => { onRefresh(); } : () => window.location.reload()}
       />
     </div>
   );

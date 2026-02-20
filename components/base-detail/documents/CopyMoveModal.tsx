@@ -3,6 +3,7 @@ import { X, Copy, Move, Loader2 } from "lucide-react";
 import { DocumentsService } from "@/lib/services/documents-service";
 import { toast } from "sonner";
 import type { StoredDocument } from "@/lib/services/documents-service";
+import { validateFileName } from "./utils";
 
 type CopyMoveModalProps = {
   isOpen: boolean;
@@ -51,9 +52,17 @@ export const CopyMoveModal = ({
       return;
     }
 
+    const fileName = newFileName?.trim() || document.relative.split("/").pop() || document.relative;
+    if (newFileName?.trim()) {
+      const validationError = validateFileName(fileName);
+      if (validationError) {
+        toast.error(validationError);
+        return;
+      }
+    }
+
     setIsLoading(true);
     try {
-      const fileName = newFileName || document.relative.split("/").pop() || document.relative;
 
       if (operation === "copy") {
         await DocumentsService.copyDocument({

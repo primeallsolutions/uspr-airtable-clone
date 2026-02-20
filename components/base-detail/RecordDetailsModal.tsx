@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { X, Save, Edit2, Loader2, Calendar, Hash, Mail, Phone, Link as LinkIcon, CheckSquare, FileText, Clock, Info, Paperclip, History } from "lucide-react";
+import { X, Save, Edit2, Loader2, Calendar, Hash, Mail, Phone, Link as LinkIcon, CheckSquare, FileText, Clock, Info, Paperclip, History, MailOpen } from "lucide-react";
 import type { RecordRow, FieldRow, SavingCell, TableRow } from "@/lib/types/base-detail";
 import type { AuditLogRow } from "@/lib/services/audit-log-service";
 import { AuditLogService } from "@/lib/services/audit-log-service";
 import { formatInTimezone } from "@/lib/utils/date-helpers";
 import { useTimezone } from "@/lib/hooks/useTimezone";
 import { RecordDocuments } from "./documents/RecordDocuments";
+import { RecordEmails } from "./RecordEmails";
 import { RecordDocumentsService } from "@/lib/services/record-documents-service";
 import { getFieldTypeLabel } from "@/lib/utils/field-type-helpers";
 
@@ -39,7 +40,7 @@ export const RecordDetailsModal = ({
   const [editValue, setEditValue] = useState<unknown>("");
   const [localNameValue, setLocalNameValue] = useState<string>("");
   const nameFieldRef = useRef<HTMLInputElement>(null);
-  const [activeTab, setActiveTab] = useState<"fields" | "documents">("fields");
+  const [activeTab, setActiveTab] = useState<"fields" | "documents" | "email">("fields");
   const [documentCount, setDocumentCount] = useState<number>(0);
   const [isAuditOpen, setIsAuditOpen] = useState<boolean>(false);
   const [auditLogs, setAuditLogs] = useState<AuditLogRow[]>([]);
@@ -531,6 +532,19 @@ export const RecordDetailsModal = ({
                 )}
               </span>
             </button>
+            <button
+              onClick={() => setActiveTab("email")}
+              className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === "email"
+                  ? "border-blue-600 text-blue-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+              }`}
+            >
+              <span className="flex items-center gap-2">
+                <MailOpen className="w-4 h-4" />
+                Email
+              </span>
+            </button>
           </div>
         </div>
 
@@ -837,11 +851,18 @@ export const RecordDetailsModal = ({
                 </div>
               )}
             </>
-          ) : (
+          ) : activeTab === "documents" ? (
             <RecordDocuments
               recordId={record.id}
               baseId={baseId}
               tableId={record.table_id}
+              recordName={nameValue || "Record"}
+              recordValues={record.values}
+              fields={fields}
+            />
+          ) : (
+            <RecordEmails
+              recordId={record.id}
               recordName={nameValue || "Record"}
               recordValues={record.values}
               fields={fields}

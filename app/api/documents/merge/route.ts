@@ -40,11 +40,13 @@ export async function POST(request: NextRequest) {
     const {
       baseId,
       tableId,
+      recordId,
       pages, // Array of { documentPath: string, pageNumber: number } - 1-based page numbers
       outputFileName,
     }: {
       baseId: string;
       tableId?: string | null;
+      recordId?: string | null;
       pages: { documentPath: string; pageNumber: number }[];
       outputFileName: string;
     } = body;
@@ -56,10 +58,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Build storage prefix
-    const prefix = tableId
-      ? `bases/${baseId}/tables/${tableId}/`
-      : `bases/${baseId}/`;
+    // Build storage prefix (record-scoped or base/table-scoped)
+    const prefix = recordId
+      ? `bases/${baseId}/records/${recordId}/`
+      : tableId
+        ? `bases/${baseId}/tables/${tableId}/`
+        : `bases/${baseId}/`;
 
     // Group pages by document for efficient loading
     const documentMap = new Map<string, number[]>();

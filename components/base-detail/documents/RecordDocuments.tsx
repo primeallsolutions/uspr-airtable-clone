@@ -24,6 +24,7 @@ import {
   type RecordDocument,
 } from "@/lib/services/record-documents-service";
 
+import { ConfirmDeleteModal } from "./ConfirmDeleteModal";
 import { DocumentGeneratorForm } from "./DocumentGeneratorForm";
 import { TemplateManagementModal } from "./TemplateManagementModal";
 import { TemplateFieldEditor } from "./TemplateFieldEditor";
@@ -92,6 +93,8 @@ export const RecordDocuments = ({
   const [activeModal, setActiveModal] = useState<ModalType>('none');
   const [selectedTemplate, setSelectedTemplate] = useState<DocumentTemplate | null>(null);
   const [templateToEdit, setTemplateToEdit] = useState<DocumentTemplate | null>(null);
+  const [docToDelete, setDocToDelete] = useState<RecordDocument | null>(null);
+  const [isDeletingDoc, setIsDeletingDoc] = useState(false);
 
   // Navigate to advanced documents page
   const handleAdvancedDocuments = () => {
@@ -151,20 +154,27 @@ export const RecordDocuments = ({
     }
   };
 
-  // Handle delete
-  const handleDelete = async (doc: RecordDocument) => {
-    if (!window.confirm(`Remove "${doc.document_name}" from this record?`)) return;
+  // Handle delete - open confirmation modal
+  const handleDeleteClick = (doc: RecordDocument) => {
+    setDocToDelete(doc);
+  };
 
-    setDeleting(doc.id);
+  const handleConfirmDelete = async () => {
+    if (!docToDelete) return;
+    setIsDeletingDoc(true);
+    setDeleting(docToDelete.id);
     try {
-      await RecordDocumentsService.detachDocument(doc.id, { deleteFile: true });
+      await RecordDocumentsService.detachDocument(docToDelete.id, { deleteFile: true });
       toast.success("Document removed");
+      setDocToDelete(null);
       await loadDocuments();
     } catch (err) {
       console.error("Failed to delete document:", err);
       toast.error("Failed to remove document");
+      throw err;
     } finally {
       setDeleting(null);
+      setIsDeletingDoc(false);
     }
   };
 
@@ -338,7 +348,7 @@ export const RecordDocuments = ({
                     <Download className="w-4 h-4" />
                   </button>
                   <button
-                    onClick={() => handleDelete(doc)}
+                    onClick={() => handleDeleteClick(doc)}
                     disabled={deleting === doc.id}
                     className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
                     title="Remove"
@@ -522,6 +532,18 @@ export const RecordDocuments = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Confirm Delete Document Modal */}
+      {docToDelete && (
+        <ConfirmDeleteModal
+          isOpen={!!docToDelete}
+          onClose={() => setDocToDelete(null)}
+          onConfirm={handleConfirmDelete}
+          title="Remove Document"
+          message={`Are you sure you want to remove "${docToDelete.document_name}" from this record? This will permanently delete the file. This cannot be undone.`}
+          isLoading={isDeletingDoc}
+        />
       )}
     </div>
   );

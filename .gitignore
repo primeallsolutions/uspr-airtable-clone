@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+TAKE_HOME_ASSIGNMENT_BRIEF.md
+TAKE_HOME_ASSIGNMENT.md
+.cursor/settings.json
+.gitignore

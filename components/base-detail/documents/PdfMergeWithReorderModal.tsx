@@ -39,6 +39,7 @@ type PdfMergeWithReorderModalProps = {
   onClose: () => void;
   baseId: string;
   tableId?: string | null;
+  recordId?: string | null;
   onMergeComplete?: () => void;
 };
 
@@ -47,6 +48,7 @@ export const PdfMergeWithReorderModal = ({
   onClose,
   baseId,
   tableId,
+  recordId,
   onMergeComplete,
 }: PdfMergeWithReorderModalProps) => {
   const [availableDocuments, setAvailableDocuments] = useState<StoredDocument[]>([]);
@@ -70,7 +72,7 @@ export const PdfMergeWithReorderModal = ({
     try {
       setLoading(true);
       const { DocumentsService } = await import("@/lib/services/documents-service");
-      const docs = await DocumentsService.listDocuments(baseId, tableId);
+      const docs = await DocumentsService.listDocuments(baseId, tableId, recordId);
       const pdfDocs = docs.filter((doc) => doc.path.toLowerCase().endsWith(".pdf"));
       setAvailableDocuments(pdfDocs);
     } catch (error) {
@@ -79,7 +81,7 @@ export const PdfMergeWithReorderModal = ({
     } finally {
       setLoading(false);
     }
-  }, [baseId, tableId]);
+  }, [baseId, tableId, recordId]);
 
   useEffect(() => {
     if (isOpen) {
@@ -336,6 +338,7 @@ export const PdfMergeWithReorderModal = ({
         body: JSON.stringify({
           baseId,
           tableId,
+          recordId,
           pages,
           outputFileName: outputFileName.trim(),
         }),

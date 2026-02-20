@@ -422,48 +422,50 @@ export const DocumentsService = {
     return data || [];
   },
 
-  async deleteFolder(baseId: string, tableId: string | null, folderPath: string) {
-    const prefix = basePrefix(baseId, tableId);
-    
+  async deleteFolder(baseId: string, tableId: string | null, folderPath: string, recordId?: string | null) {
+    const prefix = recordId ? recordPrefix(baseId, recordId) : basePrefix(baseId, tableId);
+
     // Delete the .keep file from storage
     const keepFilePath = `${prefix}${folderPath}.keep`;
     const { error: storageError } = await supabase.storage.from(BUCKET).remove([keepFilePath]);
     if (storageError) throw storageError;
-    
+
     // Delete folder metadata from database
     let query = supabase
       .from("document_folders")
       .delete()
       .eq("base_id", baseId)
       .eq("path", folderPath);
-    
-    if (tableId) {
-      query = query.eq("table_id", tableId);
+
+    if (recordId) {
+      query = query.eq("record_id", recordId);
+    } else if (tableId) {
+      query = query.eq("table_id", tableId).is("record_id", null);
     } else {
-      query = query.is("table_id", null);
+      query = query.is("table_id", null).is("record_id", null);
     }
-    
+
     const { error: dbError } = await query;
     if (dbError) throw dbError;
   },
 
-  async renameFolder(baseId: string, tableId: string | null, oldPath: string, newName: string) {
-    const prefix = basePrefix(baseId, tableId);
+  async renameFolder(baseId: string, tableId: string | null, oldPath: string, newName: string, recordId?: string | null) {
+    const prefix = recordId ? recordPrefix(baseId, recordId) : basePrefix(baseId, tableId);
     const safeName = sanitizeFileName(newName);
-    
+
     // Extract parent path from old path
     const parentPath = oldPath.split("/").slice(0, -1).join("/");
     const newPath = parentPath ? `${parentPath}/${safeName}/` : `${safeName}/`;
-    
+
     // Move the .keep file in storage
     const oldKeepPath = `${prefix}${oldPath}.keep`;
     const newKeepPath = `${prefix}${newPath}.keep`;
-    
+
     const { error: moveError } = await supabase.storage
       .from(BUCKET)
       .move(oldKeepPath, newKeepPath);
     if (moveError) throw moveError;
-    
+
     // Update folder metadata in database
     let query = supabase
       .from("document_folders")
@@ -473,42 +475,63 @@ export const DocumentsService = {
       })
       .eq("base_id", baseId)
       .eq("path", oldPath);
-    
-    if (tableId) {
-      query = query.eq("table_id", tableId);
+
+    if (recordId) {
+      query = query.eq("record_id", recordId);
+    } else if (tableId) {
+      query = query.eq("table_id", tableId).is("record_id", null);
     } else {
-      query = query.is("table_id", null);
+      query = query.is("table_id", null).is("record_id", null);
     }
-    
+
     const { error: updateError } = await query;
     if (updateError) throw updateError;
-    
+
     // Update paths for all child folders (recursively)
-    const { data: childFolders } = await supabase
+    let childQuery = supabase
       .from("document_folders")
       .select("path, parent_path")
       .eq("base_id", baseId)
       .like("path", `${oldPath}%`);
-    
+
+    if (recordId) {
+      childQuery = childQuery.eq("record_id", recordId);
+    } else if (tableId) {
+      childQuery = childQuery.eq("table_id", tableId).is("record_id", null);
+    } else {
+      childQuery = childQuery.is("table_id", null).is("record_id", null);
+    }
+
+    const { data: childFolders } = await childQuery;
+
     if (childFolders && childFolders.length > 0) {
       for (const child of childFolders) {
         const newChildPath = child.path.replace(oldPath, newPath);
-        // Calculate new parent_path: if parent was oldPath, it's now newPath, otherwise update the path segment
-        const newParentPath = child.parent_path === oldPath 
-          ? newPath 
+        const newParentPath = child.parent_path === oldPath
+          ? newPath
           : child.parent_path?.replace(oldPath, newPath) || null;
-        
-        await supabase
+
+        let updateQuery = supabase
           .from("document_folders")
-          .update({ 
+          .update({
             path: newChildPath,
-            parent_path: newParentPath
+            parent_path: newParentPath,
           })
           .eq("base_id", baseId)
           .eq("path", child.path);
+
+        if (recordId) {
+          updateQuery = updateQuery.eq("record_id", recordId);
+        } else if (tableId) {
+          updateQuery = updateQuery.eq("table_id", tableId).is("record_id", null);
+        } else {
+          updateQuery = updateQuery.is("table_id", null).is("record_id", null);
+        }
+
+        await updateQuery;
       }
     }
-    
+
     return newPath;
   },
 
