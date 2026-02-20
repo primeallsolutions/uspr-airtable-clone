@@ -22,6 +22,8 @@ import {
   CheckCircle,
   XCircle,
   Paperclip,
+  Search,
+  X as XIcon,
 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 import type { RecordEmail, FieldRow } from "@/lib/types/base-detail";
@@ -60,6 +62,7 @@ export const RecordEmails = ({
   const [copiedAddress, setCopiedAddress] = useState(false);
   const [showComposeModal, setShowComposeModal] = useState(false);
   const [replyToEmail, setReplyToEmail] = useState<RecordEmail | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Find email field value from record
   const recipientEmail = fields?.find(
@@ -276,6 +279,27 @@ export const RecordEmails = ({
   const inboundCount = emails.filter((e) => e.direction === "inbound").length;
   const outboundCount = emails.filter((e) => e.direction === "outbound").length;
 
+  // Filter emails by search query
+  const filteredEmails = emails.filter((email) => {
+    if (!searchQuery.trim()) return true;
+    
+    const query = searchQuery.toLowerCase();
+    return (
+      email.subject?.toLowerCase().includes(query) ||
+      email.body_text?.toLowerCase().includes(query) ||
+      email.from_email?.toLowerCase().includes(query) ||
+      email.from_name?.toLowerCase().includes(query) ||
+      email.to_email?.toLowerCase().includes(query) ||
+      email.to_name?.toLowerCase().includes(query)
+    );
+  });
+
+  // Apply direction filter to search results
+  const displayedEmails = filteredEmails.filter((email) => {
+    if (filter === "all") return true;
+    return email.direction === filter;
+  });
+
   return (
     <div className="h-full flex flex-col">
       {/* Header with Email Address */}
@@ -319,7 +343,7 @@ export const RecordEmails = ({
         </p>
       </div>
 
-      {/* Filter Tabs and Refresh */}
+      {/* Filter Tabs, Search, and Refresh */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-1 p-1 bg-gray-100 rounded-lg">
           <button
@@ -330,7 +354,7 @@ export const RecordEmails = ({
                 : "text-gray-600 hover:text-gray-900"
             }`}
           >
-            All ({emails.length})
+            All ({filteredEmails.length})
           </button>
           <button
             onClick={() => setFilter("inbound")}
@@ -341,7 +365,7 @@ export const RecordEmails = ({
             }`}
           >
             <Inbox className="w-3.5 h-3.5" />
-            Received ({inboundCount})
+            Received ({filteredEmails.filter(e => e.direction === "inbound").length})
           </button>
           <button
             onClick={() => setFilter("outbound")}
@@ -352,18 +376,40 @@ export const RecordEmails = ({
             }`}
           >
             <Send className="w-3.5 h-3.5" />
-            Sent ({outboundCount})
+            Sent ({filteredEmails.filter(e => e.direction === "outbound").length})
           </button>
         </div>
 
-        <button
-          onClick={fetchEmails}
-          disabled={loading}
-          className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
-          title="Refresh"
-        >
-          <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
-        </button>
+        {/* Search Input */}
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search emails..."
+              className="w-48 pl-9 pr-8 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-gray-400 hover:text-gray-600 rounded"
+              >
+                <XIcon className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          <button
+            onClick={fetchEmails}
+            disabled={loading}
+            className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+            title="Refresh"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+          </button>
+        </div>
       </div>
 
       {/* Email List */}
@@ -384,17 +430,34 @@ export const RecordEmails = ({
               Try again
             </button>
           </div>
-        ) : emails.length === 0 ? (
+        ) : displayedEmails.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-gray-500">
             <Mail className="w-12 h-12 mb-3 text-gray-300" />
-            <p className="text-lg font-medium text-gray-700">No emails yet</p>
-            <p className="text-sm mt-1">
-              Send an email to the record address above, or compose a new email.
-            </p>
+            {searchQuery ? (
+              <>
+                <p className="text-lg font-medium text-gray-700">No emails match your search</p>
+                <p className="text-sm mt-1">
+                  Try a different search term or{" "}
+                  <button
+                    onClick={() => setSearchQuery("")}
+                    className="text-blue-600 hover:underline"
+                  >
+                    clear search
+                  </button>
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-lg font-medium text-gray-700">No emails yet</p>
+                <p className="text-sm mt-1">
+                  Send an email to the record address above, or compose a new email.
+                </p>
+              </>
+            )}
           </div>
         ) : (
           <div className="space-y-3">
-            {emails.map((email) => (
+            {displayedEmails.map((email) => (
               <div
                 key={email.id}
                 className={`border rounded-xl transition-all ${

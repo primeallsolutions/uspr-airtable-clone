@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { X, Save, Edit2, Loader2, Calendar, Hash, Mail, Phone, Link as LinkIcon, CheckSquare, FileText, Clock, Info, Paperclip, History, Send } from "lucide-react";
+import { X, Save, Edit2, Loader2, Calendar, Hash, Mail, Phone, Link as LinkIcon, CheckSquare, FileText, Clock, Info, Paperclip, History } from "lucide-react";
 import type { RecordRow, FieldRow, SavingCell, TableRow } from "@/lib/types/base-detail";
 import type { AuditLogRow } from "@/lib/services/audit-log-service";
 import { AuditLogService } from "@/lib/services/audit-log-service";
@@ -10,7 +10,6 @@ import { useTimezone } from "@/lib/hooks/useTimezone";
 import { RecordDocuments } from "./documents/RecordDocuments";
 import { RecordDocumentsService } from "@/lib/services/record-documents-service";
 import { getFieldTypeLabel } from "@/lib/utils/field-type-helpers";
-import { RecordEmails } from "./RecordEmails";
 
 interface RecordDetailsModalProps {
   isOpen: boolean;
@@ -19,7 +18,6 @@ interface RecordDetailsModalProps {
   tables: TableRow[];
   selectedTableId: string | null;
   baseId: string;
-  workspaceId?: string;
   savingCell: SavingCell;
   onUpdateCell: (recordId: string, fieldId: string, value: unknown) => void;
   onClose: () => void;
@@ -32,7 +30,6 @@ export const RecordDetailsModal = ({
   tables,
   selectedTableId,
   baseId,
-  workspaceId,
   savingCell,
   onUpdateCell,
   onClose,
@@ -42,9 +39,8 @@ export const RecordDetailsModal = ({
   const [editValue, setEditValue] = useState<unknown>("");
   const [localNameValue, setLocalNameValue] = useState<string>("");
   const nameFieldRef = useRef<HTMLInputElement>(null);
-  const [activeTab, setActiveTab] = useState<"fields" | "documents" | "emails">("fields");
+  const [activeTab, setActiveTab] = useState<"fields" | "documents">("fields");
   const [documentCount, setDocumentCount] = useState<number>(0);
-  const [emailCount, setEmailCount] = useState<number>(0);
   const [isAuditOpen, setIsAuditOpen] = useState<boolean>(false);
   const [auditLogs, setAuditLogs] = useState<AuditLogRow[]>([]);
   const [auditLoading, setAuditLoading] = useState<boolean>(false);
@@ -336,26 +332,6 @@ export const RecordDetailsModal = ({
     }
   }, [record?.id, record?.values]); // Reload count if record updates
 
-  // Load email count whenever record changes
-  useEffect(() => {
-    const loadEmailCount = async () => {
-      if (!record?.id) {
-        setEmailCount(0);
-        return;
-      }
-      try {
-        const response = await fetch(`/api/emails/record/${record.id}?limit=1`);
-        if (response.ok) {
-          const data = await response.json();
-          setEmailCount(data.total || 0);
-        }
-      } catch {
-        setEmailCount(0);
-      }
-    };
-    loadEmailCount();
-  }, [record?.id]);
-
   if (!isOpen || !record) return null;
 
   const isSaving = savingCell?.recordId === record.id && savingCell?.fieldId !== null;
@@ -480,48 +456,46 @@ export const RecordDetailsModal = ({
         </div>
 
         {/* Summary Section */}
-        {activeTab === "fields" && (
-          <div className="px-8 py-5 bg-gradient-to-r from-gray-50 to-blue-50/30 border-b border-gray-200">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="flex items-center gap-3 p-3 bg-white rounded-lg shadow-sm border border-gray-200">
-                <div className="p-2 bg-blue-100 rounded-lg">
-                  <Info className="w-5 h-5 text-blue-600" />
-                </div>
-                <div>
-                  <div className="text-xs text-gray-500 uppercase tracking-wide">Total Fields</div>
-                  <div className="text-lg font-bold text-gray-900">{fieldStats.total}</div>
-                </div>
+        <div className="px-8 py-5 bg-gradient-to-r from-gray-50 to-blue-50/30 border-b border-gray-200">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="flex items-center gap-3 p-3 bg-white rounded-lg shadow-sm border border-gray-200">
+              <div className="p-2 bg-blue-100 rounded-lg">
+                <Info className="w-5 h-5 text-blue-600" />
               </div>
-              <div className="flex items-center gap-3 p-3 bg-white rounded-lg shadow-sm border border-gray-200">
-                <div className="p-2 bg-green-100 rounded-lg">
-                  <CheckSquare className="w-5 h-5 text-green-600" />
-                </div>
-                <div>
-                  <div className="text-xs text-gray-500 uppercase tracking-wide">Filled</div>
-                  <div className="text-lg font-bold text-gray-900">{fieldStats.filled}</div>
-                </div>
+              <div>
+                <div className="text-xs text-gray-500 uppercase tracking-wide">Total Fields</div>
+                <div className="text-lg font-bold text-gray-900">{fieldStats.total}</div>
               </div>
-              <div className="flex items-center gap-3 p-3 bg-white rounded-lg shadow-sm border border-gray-200">
-                <div className="p-2 bg-gray-100 rounded-lg">
-                  <FileText className="w-5 h-5 text-gray-600" />
-                </div>
-                <div>
-                  <div className="text-xs text-gray-500 uppercase tracking-wide">Empty</div>
-                  <div className="text-lg font-bold text-gray-900">{fieldStats.empty}</div>
-                </div>
+            </div>
+            <div className="flex items-center gap-3 p-3 bg-white rounded-lg shadow-sm border border-gray-200">
+              <div className="p-2 bg-green-100 rounded-lg">
+                <CheckSquare className="w-5 h-5 text-green-600" />
               </div>
-              <div className="flex items-center gap-3 p-3 bg-white rounded-lg shadow-sm border border-gray-200">
-                <div className="p-2 bg-purple-100 rounded-lg">
-                  <Hash className="w-5 h-5 text-purple-600" />
-                </div>
-                <div>
-                  <div className="text-xs text-gray-500 uppercase tracking-wide">Completion</div>
-                  <div className="text-lg font-bold text-gray-900">{fieldStats.percentage}%</div>
-                </div>
+              <div>
+                <div className="text-xs text-gray-500 uppercase tracking-wide">Filled</div>
+                <div className="text-lg font-bold text-gray-900">{fieldStats.filled}</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 p-3 bg-white rounded-lg shadow-sm border border-gray-200">
+              <div className="p-2 bg-gray-100 rounded-lg">
+                <FileText className="w-5 h-5 text-gray-600" />
+              </div>
+              <div>
+                <div className="text-xs text-gray-500 uppercase tracking-wide">Empty</div>
+                <div className="text-lg font-bold text-gray-900">{fieldStats.empty}</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 p-3 bg-white rounded-lg shadow-sm border border-gray-200">
+              <div className="p-2 bg-purple-100 rounded-lg">
+                <Hash className="w-5 h-5 text-purple-600" />
+              </div>
+              <div>
+                <div className="text-xs text-gray-500 uppercase tracking-wide">Completion</div>
+                <div className="text-lg font-bold text-gray-900">{fieldStats.percentage}%</div>
               </div>
             </div>
           </div>
-        )}
+        </div>
 
         {/* Tab Navigation */}
         <div className="px-8 border-b border-gray-200 bg-white">
@@ -553,24 +527,6 @@ export const RecordDetailsModal = ({
                 {documentCount > 0 && (
                   <span className="px-1.5 py-0.5 text-xs bg-blue-100 text-blue-600 rounded-full">
                     {documentCount}
-                  </span>
-                )}
-              </span>
-            </button>
-            <button
-              onClick={() => setActiveTab("emails")}
-              className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-                activeTab === "emails"
-                  ? "border-blue-600 text-blue-600"
-                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-              }`}
-            >
-              <span className="flex items-center gap-2">
-                <Send className="w-4 h-4" />
-                Emails
-                {emailCount > 0 && (
-                  <span className="px-1.5 py-0.5 text-xs bg-blue-100 text-blue-600 rounded-full">
-                    {emailCount}
                   </span>
                 )}
               </span>
@@ -881,7 +837,7 @@ export const RecordDetailsModal = ({
                 </div>
               )}
             </>
-          ) : activeTab === "documents" ? (
+          ) : (
             <RecordDocuments
               recordId={record.id}
               baseId={baseId}
@@ -889,14 +845,6 @@ export const RecordDetailsModal = ({
               recordName={nameValue || "Record"}
               recordValues={record.values}
               fields={fields}
-            />
-          ) : (
-            <RecordEmails
-              recordId={record.id}
-              recordName={nameValue || "Record"}
-              recordValues={record.values}
-              fields={fields}
-              workspaceId={workspaceId}
             />
           )}
         </div>
@@ -906,13 +854,29 @@ export const RecordDetailsModal = ({
           <div className="flex items-center gap-6 text-xs text-gray-500">
             <div>
               <span className="font-medium text-gray-700">Record ID:</span>{" "}
-              <span className="font-mono bg-gray-100 px-2 py-1 rounded cursor-pointer hover:bg-gray-200" onClick={() => alert(record.id)}>{record.id.slice(0, 8)}...</span>
+              <span className="font-mono bg-gray-100 px-2 py-1 rounded">{record.id.slice(0, 8)}...</span>
             </div>
             <div>
               <span className="font-medium text-gray-700">Table ID:</span>{" "}
-              <span className="font-mono bg-gray-100 px-2 py-1 rounded cursor-pointer hover:bg-gray-200" onClick={() => alert(record.table_id)}>{record.table_id.slice(0, 8)}...</span>
+              <span className="font-mono bg-gray-100 px-2 py-1 rounded">{record.table_id.slice(0, 8)}...</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5" />
+              <span>
+                Created {formatInTimezone(record.created_at, timezone, {
+                  year: "numeric",
+                  month: "short",
+                  day: "numeric",
+                })}
+              </span>
             </div>
           </div>
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+          >
+            Close
+          </button>
         </div>
       </div>
 
